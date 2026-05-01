@@ -24,6 +24,11 @@ export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [analysis, setAnalysis] = useState<{ [key: number]: string }>({});
   const [searchLoading, setSearchLoading] = useState(false);
+  const [onlyTop, setOnlyTop] = useState(false);
+
+  const displayedJobs = jobs.filter(
+    (job) => !onlyTop || (job.score || 0) >= 80
+  );
 
   const toBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -42,14 +47,15 @@ export default function App() {
       alert("Carica prima il CV PDF");
       return;
     }
-  
+
     setSearchLoading(true);
     setJobs([]);
     setAnalysis({});
-  
+    setOnlyTop(false);
+
     try {
       const base64 = await toBase64(cvFile);
-  
+
       const response = await fetch(SUPABASE_SEARCH_JOBS_URL, {
         method: "POST",
         headers: {
@@ -63,21 +69,22 @@ export default function App() {
           location: "Zürich",
         }),
       });
-  
+
       const rawText = await response.text();
-  
+
       let data;
       try {
         data = JSON.parse(rawText);
       } catch {
         throw new Error(rawText.slice(0, 300));
       }
-  
+
       if (data.error) {
         throw new Error(data.error);
       }
-  
+
       setJobs(data.jobs || []);
+      console.log("AI Profile:", data.profile);
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
     } finally {
@@ -309,6 +316,26 @@ export default function App() {
             >
               {searchLoading ? "Jobs werden gesucht..." : "Passende Jobs suchen"}
             </button>
+
+            {jobs.length > 0 && (
+              <button
+                onClick={() => setOnlyTop(!onlyTop)}
+                style={{
+                  marginTop: 12,
+                  marginLeft: 10,
+                  background: onlyTop ? "#f59e0b" : "#334155",
+                  color: "white",
+                  border: "none",
+                  padding: "12px 18px",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  fontSize: 14,
+                }}
+              >
+                {onlyTop ? "Alle Jobs anzeigen" : "Nur Top Jobs"}
+              </button>
+            )}
           </div>
 
           {!searchLoading && jobs.length === 0 && (
@@ -317,7 +344,28 @@ export default function App() {
             </p>
           )}
 
-          {jobs.map((job) => (
+          {jobs.length > 0 && (
+            <div
+              style={{
+                background: "#1e293b",
+                padding: 20,
+                borderRadius: 14,
+                marginBottom: 24,
+              }}
+            >
+              <strong>AI Profil:</strong>
+              <p style={{ marginTop: 8 }}>
+                Jobs wurden basierend auf deinem CV gefiltert und priorisiert.
+              </p>
+              {onlyTop && (
+                <p style={{ marginTop: 8, color: "#fbbf24" }}>
+                  Du siehst aktuell nur Top Jobs ab 80% Match.
+                </p>
+              )}
+            </div>
+          )}
+
+          {displayedJobs.map((job) => (
             <div
               key={job.id}
               style={{
@@ -376,11 +424,11 @@ export default function App() {
                       height: 88,
                       borderRadius: "50%",
                       background:
-                        job.score >= 80
+                        (job.score || 0) >= 80
                           ? "#16a34a"
-                          : job.score >= 65
+                          : (job.score || 0) >= 65
                           ? "#f59e0b"
-                          : "#64748b",
+                          : "#ef4444",
                       color: "white",
                       display: "flex",
                       alignItems: "center",
