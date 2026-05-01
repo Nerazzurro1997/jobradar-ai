@@ -7,6 +7,11 @@ type Job = {
   location: string;
   url?: string;
   snippet?: string;
+  fullDescription?: string;
+  highlights?: string[];
+  riskFlags?: string[];
+  previewSummary?: string;
+  publishedDate?: string;
   keyword?: string;
   score?: number;
 };
@@ -1146,23 +1151,146 @@ export default function App() {
                         </span>
                       )}
 
-{job.snippet && (
-  <div
-    style={{
-      marginTop: 22,
-      color: "#334155",
-      lineHeight: 1.7,
-      fontSize: 15,
-      maxWidth: 1050,
-      maxHeight: 120,
-      overflowY: "auto",
-      paddingRight: 10,
-      whiteSpace: "pre-wrap",
-    }}
-  >
-    {job.snippet}
-  </div>
-)}
+                      {(job.previewSummary ||
+                        job.highlights?.length ||
+                        job.riskFlags?.length ||
+                        job.snippet) && (
+                        <div
+                          style={{
+                            marginTop: 22,
+                            maxWidth: 1050,
+                            display: "grid",
+                            gap: 14,
+                          }}
+                        >
+                          {job.previewSummary && (
+                            <div
+                              style={{
+                                padding: "13px 15px",
+                                borderRadius: 16,
+                                background: "rgba(37, 99, 235, 0.08)",
+                                border: "1px solid rgba(37, 99, 235, 0.16)",
+                                color: "#1e3a8a",
+                                fontWeight: 900,
+                                lineHeight: 1.55,
+                                fontSize: 14,
+                              }}
+                            >
+                              💡 {job.previewSummary}
+                            </div>
+                          )}
+
+                          {job.highlights && job.highlights.length > 0 ? (
+                            <div
+                              style={{
+                                padding: "16px 18px",
+                                borderRadius: 18,
+                                background: "rgba(15, 23, 42, 0.04)",
+                                border: "1px solid rgba(15, 23, 42, 0.08)",
+                              }}
+                            >
+                              <p
+                                style={{
+                                  margin: "0 0 10px",
+                                  color: "#0f172a",
+                                  fontSize: 13,
+                                  fontWeight: 950,
+                                  letterSpacing: 0.4,
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                Highlights
+                              </p>
+
+                              <div style={{ display: "grid", gap: 8 }}>
+                                {job.highlights.slice(0, 3).map((highlight, i) => (
+                                  <div
+                                    key={i}
+                                    style={{
+                                      display: "grid",
+                                      gridTemplateColumns: "22px 1fr",
+                                      gap: 8,
+                                      alignItems: "start",
+                                      color: "#334155",
+                                      fontSize: 14,
+                                      lineHeight: 1.55,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        color: "#15803d",
+                                        fontWeight: 950,
+                                      }}
+                                    >
+                                      ✓
+                                    </span>
+                                    <span>{highlight}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : job.snippet ? (
+                            <div
+                              style={{
+                                padding: "16px 18px",
+                                borderRadius: 18,
+                                background: "rgba(15, 23, 42, 0.04)",
+                                border: "1px solid rgba(15, 23, 42, 0.08)",
+                                color: "#334155",
+                                lineHeight: 1.65,
+                                fontSize: 14,
+                              }}
+                            >
+                              {job.snippet}
+                            </div>
+                          ) : null}
+
+                          {job.riskFlags && job.riskFlags.length > 0 && (
+                            <div
+                              style={{
+                                padding: "14px 16px",
+                                borderRadius: 18,
+                                background: "rgba(220, 38, 38, 0.07)",
+                                border: "1px solid rgba(220, 38, 38, 0.18)",
+                              }}
+                            >
+                              <p
+                                style={{
+                                  margin: "0 0 8px",
+                                  color: "#991b1b",
+                                  fontSize: 13,
+                                  fontWeight: 950,
+                                  letterSpacing: 0.4,
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                Achtung
+                              </p>
+
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                {job.riskFlags.slice(0, 3).map((risk, i) => (
+                                  <span
+                                    key={i}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 6,
+                                      padding: "7px 10px",
+                                      borderRadius: 999,
+                                      background: "rgba(220, 38, 38, 0.1)",
+                                      color: "#991b1b",
+                                      fontSize: 12,
+                                      fontWeight: 900,
+                                    }}
+                                  >
+                                    ⚠️ {risk}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div
                         style={{
