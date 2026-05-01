@@ -1146,19 +1146,23 @@ export default function App() {
                         </span>
                       )}
 
-                      {job.snippet && (
-                        <p
-                          style={{
-                            marginTop: 22,
-                            color: "#334155",
-                            lineHeight: 1.7,
-                            fontSize: 15,
-                            maxWidth: 1050,
-                          }}
-                        >
-                          {job.snippet}
-                        </p>
-                      )}
+{job.snippet && (
+  <div
+    style={{
+      marginTop: 22,
+      color: "#334155",
+      lineHeight: 1.7,
+      fontSize: 15,
+      maxWidth: 1050,
+      maxHeight: 120,
+      overflowY: "auto",
+      paddingRight: 10,
+      whiteSpace: "pre-wrap",
+    }}
+  >
+    {job.snippet}
+  </div>
+)}
 
                       <div
                         style={{
@@ -1287,4 +1291,3 @@ export default function App() {
     </div>
   );
 }
-
