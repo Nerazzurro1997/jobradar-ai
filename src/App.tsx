@@ -11,6 +11,12 @@ type Job = {
   score?: number;
 };
 
+type SearchStats = {
+  foundLinks?: number;
+  scanned?: number;
+  shown?: number;
+};
+
 const SUPABASE_FUNCTION_URL =
   "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/match-job";
 
@@ -25,6 +31,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState<{ [key: number]: string }>({});
   const [searchLoading, setSearchLoading] = useState(false);
   const [onlyTop, setOnlyTop] = useState(false);
+  const [stats, setStats] = useState<SearchStats>({});
 
   const displayedJobs = jobs.filter(
     (job) => !onlyTop || (job.score || 0) >= 80
@@ -52,6 +59,7 @@ export default function App() {
     setJobs([]);
     setAnalysis({});
     setOnlyTop(false);
+    setStats({});
 
     try {
       const base64 = await toBase64(cvFile);
@@ -84,6 +92,12 @@ export default function App() {
       }
 
       setJobs(data.jobs || []);
+      setStats({
+        foundLinks: data.foundLinks,
+        scanned: data.scanned,
+        shown: data.count,
+      });
+
       console.log("AI Profile:", data.profile);
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
@@ -130,10 +144,10 @@ export default function App() {
       }
 
       const raw =
-      data?.text ||
-      data?.output?.[0]?.content?.[0]?.text ||
-      data?.error ||
-      "Nessuna risposta";
+        data?.text ||
+        data?.output?.[0]?.content?.[0]?.text ||
+        data?.error ||
+        "Nessuna risposta";
 
       const formatted = raw
         .replace(/\*\*/g, "")
@@ -352,16 +366,32 @@ export default function App() {
                 padding: 20,
                 borderRadius: 14,
                 marginBottom: 24,
+                textAlign: "center",
               }}
             >
               <strong>AI Profil:</strong>
+
               <p style={{ marginTop: 8 }}>
                 Jobs wurden basierend auf deinem CV gefiltert und priorisiert.
               </p>
+
               {onlyTop && (
                 <p style={{ marginTop: 8, color: "#fbbf24" }}>
                   Du siehst aktuell nur Top Jobs ab 80% Match.
                 </p>
+              )}
+
+              {stats.foundLinks !== undefined && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    fontSize: 13,
+                    color: "#94a3b8",
+                  }}
+                >
+                  🔍 Gefunden: {stats.foundLinks} Links · 🧠 Analysiert:{" "}
+                  {stats.scanned} Jobs · 🎯 Angezeigt: {stats.shown}
+                </div>
               )}
             </div>
           )}
@@ -418,16 +448,16 @@ export default function App() {
                   )}
                 </div>
 
-                {job.score && (
+                {job.score !== undefined && (
                   <div
                     style={{
                       minWidth: 88,
                       height: 88,
                       borderRadius: "50%",
                       background:
-                        (job.score || 0) >= 80
+                        job.score >= 80
                           ? "#16a34a"
-                          : (job.score || 0) >= 65
+                          : job.score >= 65
                           ? "#f59e0b"
                           : "#ef4444",
                       color: "white",
