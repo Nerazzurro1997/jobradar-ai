@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Job = {
   id: number;
@@ -25,28 +25,85 @@ const SUPABASE_SEARCH_JOBS_URL =
 
 const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
 
+const STORAGE_KEY = "jobradar_saved_jobs";
+
 export default function App() {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [savedJobs, setSavedJobs] = useState<Job[]>([]);
   const [analysis, setAnalysis] = useState<{ [key: number]: string }>({});
   const [searchLoading, setSearchLoading] = useState(false);
   const [onlyTop, setOnlyTop] = useState(false);
   const [stats, setStats] = useState<SearchStats>({});
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [showSavedJobs, setShowSavedJobs] = useState(false);
 
-  const displayedJobs = jobs.filter(
+  useEffect(() => {
+    const storedJobs = localStorage.getItem(STORAGE_KEY);
+
+    if (storedJobs) {
+      try {
+        const parsedJobs = JSON.parse(storedJobs);
+        if (Array.isArray(parsedJobs)) {
+          setSavedJobs(parsedJobs);
+        }
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  }, []);
+
+  const activeJobs = showSavedJobs ? savedJobs : jobs;
+
+  const displayedJobs = activeJobs.filter(
     (job) => !onlyTop || (job.score || 0) >= 80
   );
 
-  const bestScore = jobs.length
-    ? Math.max(...jobs.map((job) => job.score || 0))
+  const bestScore = activeJobs.length
+    ? Math.max(...activeJobs.map((job) => job.score || 0))
     : 0;
 
-  const averageScore = jobs.length
+  const averageScore = activeJobs.length
     ? Math.round(
-        jobs.reduce((sum, job) => sum + (job.score || 0), 0) / jobs.length
+        activeJobs.reduce((sum, job) => sum + (job.score || 0), 0) /
+          activeJobs.length
       )
     : 0;
+
+  function saveJobsToStorage(newJobs: Job[]) {
+    if (!newJobs.length) return;
+
+    setSavedJobs((prev) => {
+      const normalizedNewJobs = newJobs
+        .filter((job) => job.url)
+        .map((job, index) => ({
+          ...job,
+          id: job.id || Date.now() + index,
+        }));
+
+      const merged = [...normalizedNewJobs, ...prev];
+
+      const unique = merged.filter((job, index, self) => {
+        if (!job.url) return false;
+        return index === self.findIndex((item) => item.url === job.url);
+      });
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
+      return unique;
+    });
+  }
+
+  function clearSavedJobs() {
+    const confirmDelete = confirm(
+      "Willst du wirklich alle gespeicherten Jobs löschen?"
+    );
+
+    if (!confirmDelete) return;
+
+    localStorage.removeItem(STORAGE_KEY);
+    setSavedJobs([]);
+    setShowSavedJobs(false);
+  }
 
   function scoreColor(score = 0) {
     if (score >= 85) return "#15803d";
@@ -86,9 +143,14 @@ export default function App() {
     setAnalysis({});
     setOnlyTop(false);
     setStats({});
+    setShowSavedJobs(false);
 
     try {
       const base64 = await toBase64(cvFile);
+
+      const knownUrls = savedJobs
+        .map((job) => job.url)
+        .filter((url): url is string => Boolean(url));
 
       const response = await fetch(SUPABASE_SEARCH_JOBS_URL, {
         method: "POST",
@@ -101,6 +163,7 @@ export default function App() {
           fileName: cvFile.name,
           fileBase64: base64,
           location: "Zürich",
+          knownUrls,
         }),
       });
 
@@ -117,7 +180,11 @@ export default function App() {
         throw new Error(data.error);
       }
 
-      setJobs(data.jobs || []);
+      const incomingJobs: Job[] = data.jobs || [];
+
+      setJobs(incomingJobs);
+      saveJobsToStorage(incomingJobs);
+
       setStats({
         foundLinks: data.foundLinks,
         scanned: data.scanned,
@@ -125,6 +192,7 @@ export default function App() {
       });
 
       console.log("AI Profile:", data.profile);
+      console.log("Known URLs sent:", knownUrls.length);
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
     } finally {
@@ -370,17 +438,21 @@ export default function App() {
 
           <button
             className="premium-btn"
+            onClick={() => setShowSavedJobs(!showSavedJobs)}
             style={{
               padding: "13px 14px",
-              background: "rgba(30, 41, 59, 0.8)",
+              background: showSavedJobs
+                ? "linear-gradient(135deg, #2563eb, #1d4ed8)"
+                : "rgba(30, 41, 59, 0.8)",
               color: "#e2e8f0",
               border: "1px solid rgba(148, 163, 184, 0.14)",
               borderRadius: 14,
               fontWeight: 900,
               textAlign: "left",
+              cursor: "pointer",
             }}
           >
-            📄 Mein CV
+            💾 Gespeichert ({savedJobs.length})
           </button>
         </div>
 
@@ -403,6 +475,18 @@ export default function App() {
           >
             {cvFile ? "CV geladen" : "CV fehlt"}
           </p>
+
+          {savedJobs.length > 0 && (
+            <p
+              style={{
+                margin: "8px 0 0",
+                color: "#94a3b8",
+                fontSize: 12,
+              }}
+            >
+              {savedJobs.length} Jobs im Speicher
+            </p>
+          )}
         </div>
       </aside>
 
@@ -457,7 +541,7 @@ export default function App() {
                   letterSpacing: -2.5,
                 }}
               >
-                Dashboard
+                {showSavedJobs ? "Gespeicherte Jobs" : "Dashboard"}
               </h1>
 
               <p
@@ -468,8 +552,9 @@ export default function App() {
                   maxWidth: 720,
                 }}
               >
-                Lade deinen CV hoch, finde passende Jobs auf jobs.ch und sortiere
-                die besten Chancen automatisch nach Match.
+                {showSavedJobs
+                  ? "Hier siehst du alle Jobs, die bereits in deinem Browser gespeichert wurden."
+                  : "Lade deinen CV hoch, finde passende Jobs auf jobs.ch und sortiere die besten Chancen automatisch nach Match."}
               </p>
 
               <div
@@ -502,10 +587,33 @@ export default function App() {
                 >
                   {searchLoading
                     ? "Jobs werden gesucht..."
-                    : "Passende Jobs suchen"}
+                    : "Neue Jobs suchen"}
                 </button>
 
-                {jobs.length > 0 && (
+                {savedJobs.length > 0 && (
+                  <button
+                    className="premium-btn"
+                    onClick={() => setShowSavedJobs(!showSavedJobs)}
+                    style={{
+                      background: showSavedJobs
+                        ? "linear-gradient(135deg, #2563eb, #1d4ed8)"
+                        : "rgba(51, 65, 85, 0.9)",
+                      color: "white",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      padding: "16px 22px",
+                      borderRadius: 16,
+                      cursor: "pointer",
+                      fontWeight: 950,
+                      fontSize: 15,
+                    }}
+                  >
+                    {showSavedJobs
+                      ? "Live Jobs anzeigen"
+                      : `Gespeicherte Jobs (${savedJobs.length})`}
+                  </button>
+                )}
+
+                {activeJobs.length > 0 && (
                   <button
                     className="premium-btn"
                     onClick={() => setOnlyTop(!onlyTop)}
@@ -523,6 +631,25 @@ export default function App() {
                     }}
                   >
                     {onlyTop ? "Alle Jobs anzeigen" : "Nur Top Jobs"}
+                  </button>
+                )}
+
+                {savedJobs.length > 0 && (
+                  <button
+                    className="premium-btn"
+                    onClick={clearSavedJobs}
+                    style={{
+                      background: "rgba(127, 29, 29, 0.85)",
+                      color: "white",
+                      border: "1px solid rgba(248,113,113,0.25)",
+                      padding: "16px 22px",
+                      borderRadius: 16,
+                      cursor: "pointer",
+                      fontWeight: 950,
+                      fontSize: 15,
+                    }}
+                  >
+                    Cache löschen
                   </button>
                 )}
               </div>
@@ -607,13 +734,13 @@ export default function App() {
               </div>
 
               <p style={{ margin: 0, color: "#94a3b8", fontSize: 13 }}>
-                Die Suche basiert auf deinem CV und priorisiert Jobs nach
-                Relevanz, nicht nur nach Keywords.
+                Die Suche merkt sich bereits gefundene Jobs und kann sie bei
+                neuen Suchen an den Backend Filter übergeben.
               </p>
             </div>
           </section>
 
-          {jobs.length > 0 && (
+          {activeJobs.length > 0 && (
             <section
               style={{
                 display: "grid",
@@ -623,9 +750,21 @@ export default function App() {
               }}
             >
               {[
-                ["Gefunden", stats.foundLinks ?? "-", "🔍"],
-                ["Analysiert", stats.scanned ?? "-", "🧠"],
-                ["Angezeigt", stats.shown ?? "-", "🎯"],
+                [
+                  showSavedJobs ? "Gespeichert" : "Gefunden",
+                  showSavedJobs ? savedJobs.length : stats.foundLinks ?? "-",
+                  showSavedJobs ? "💾" : "🔍",
+                ],
+                [
+                  showSavedJobs ? "Aktiv" : "Analysiert",
+                  showSavedJobs ? displayedJobs.length : stats.scanned ?? "-",
+                  "🧠",
+                ],
+                [
+                  showSavedJobs ? "Total" : "Angezeigt",
+                  showSavedJobs ? savedJobs.length : stats.shown ?? "-",
+                  "🎯",
+                ],
                 ["Top Score", `${bestScore}%`, "🚀"],
                 ["Ø Match", `${averageScore}%`, "📈"],
               ].map(([label, value, icon]) => (
@@ -738,7 +877,7 @@ export default function App() {
             </section>
           )}
 
-          {!searchLoading && jobs.length === 0 && (
+          {!searchLoading && activeJobs.length === 0 && (
             <div
               style={{
                 marginTop: 24,
@@ -751,11 +890,13 @@ export default function App() {
                 fontSize: 18,
               }}
             >
-              Noch keine Jobs geladen. Klicke auf “Passende Jobs suchen”.
+              {showSavedJobs
+                ? "Noch keine gespeicherten Jobs vorhanden."
+                : "Noch keine Jobs geladen. Klicke auf “Neue Jobs suchen”."}
             </div>
           )}
 
-          {jobs.length > 0 && (
+          {activeJobs.length > 0 && (
             <section
               style={{
                 padding: 22,
@@ -771,9 +912,13 @@ export default function App() {
               }}
             >
               <div>
-                <strong style={{ fontSize: 18 }}>AI Profil</strong>
+                <strong style={{ fontSize: 18 }}>
+                  {showSavedJobs ? "Gespeicherte Jobs" : "AI Profil"}
+                </strong>
                 <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
-                  Jobs wurden basierend auf deinem CV gefiltert und priorisiert.
+                  {showSavedJobs
+                    ? "Diese Jobs wurden lokal im Browser gespeichert."
+                    : "Jobs wurden basierend auf deinem CV gefiltert und priorisiert."}
                 </p>
                 {onlyTop && (
                   <p style={{ margin: "8px 0 0", color: "#fbbf24" }}>
@@ -794,7 +939,7 @@ export default function App() {
               return (
                 <div
                   className="job-card"
-                  key={job.id}
+                  key={job.url || job.id}
                   onMouseEnter={() => setHoveredId(job.id)}
                   onMouseLeave={() => setHoveredId(null)}
                   style={{
@@ -859,6 +1004,22 @@ export default function App() {
                             }}
                           >
                             ⭐ Best Match
+                          </span>
+                        )}
+
+                        {showSavedJobs && (
+                          <span
+                            style={{
+                              background: "rgba(37,99,235,0.1)",
+                              color: "#1d4ed8",
+                              border: "1px solid rgba(37,99,235,0.18)",
+                              padding: "6px 10px",
+                              borderRadius: 999,
+                              fontSize: 12,
+                              fontWeight: 900,
+                            }}
+                          >
+                            💾 Gespeichert
                           </span>
                         )}
 
@@ -1009,30 +1170,30 @@ export default function App() {
                   </div>
 
                   <div
-  style={{
-    maxHeight: analysis[job.id] ? 900 : 0,
-    opacity: analysis[job.id] ? 1 : 0,
-    overflow: "hidden",
-    transform: analysis[job.id]
-      ? "translateY(0)"
-      : "translateY(-10px)",
-    transition:
-      "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
-  }}
->
+                    style={{
+                      maxHeight: analysis[job.id] ? 900 : 0,
+                      opacity: analysis[job.id] ? 1 : 0,
+                      overflow: "hidden",
+                      transform: analysis[job.id]
+                        ? "translateY(0)"
+                        : "translateY(-10px)",
+                      transition:
+                        "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
+                    }}
+                  >
                     {analysis[job.id] && (
                       <div
-  style={{
-    marginTop: 26,
-    padding: 24,
-    background:
-      "linear-gradient(135deg, #eef2ff, #e2e8f0)",
-    border: "1px solid rgba(148,163,184,0.3)",
-    borderRadius: 22,
-    maxHeight: 520,
-    overflowY: "auto",
-  }}
->
+                        style={{
+                          marginTop: 26,
+                          padding: 24,
+                          background:
+                            "linear-gradient(135deg, #eef2ff, #e2e8f0)",
+                          border: "1px solid rgba(148,163,184,0.3)",
+                          borderRadius: 22,
+                          maxHeight: 520,
+                          overflowY: "auto",
+                        }}
+                      >
                         <strong
                           style={{
                             display: "block",
