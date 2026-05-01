@@ -82,7 +82,7 @@ export default function App() {
           .filter((job) => job.url)
           .map((job, index) => ({
             ...job,
-            id: job.id || Date.now() + index,
+            id: job.id || Math.floor(Math.random() * 1_000_000_000),
           }));
     
         const merged = [...normalizedNewJobs, ...prev];
