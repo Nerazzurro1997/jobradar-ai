@@ -226,15 +226,7 @@ export default function App() {
 
           if (cleanLine.toLowerCase().includes("warum")) {
             return (
-              <h3
-                key={i}
-                style={{
-                  color: "#2563eb",
-                  marginTop: 24,
-                  marginBottom: 10,
-                  fontSize: 20,
-                }}
-              >
+              <h3 key={i} style={{ color: "#2563eb", marginTop: 24 }}>
                 💡 {cleanLine}
               </h3>
             );
@@ -242,15 +234,7 @@ export default function App() {
 
           if (cleanLine.toLowerCase().includes("risiken")) {
             return (
-              <h3
-                key={i}
-                style={{
-                  color: "#dc2626",
-                  marginTop: 24,
-                  marginBottom: 10,
-                  fontSize: 20,
-                }}
-              >
+              <h3 key={i} style={{ color: "#dc2626", marginTop: 24 }}>
                 ⚠️ {cleanLine}
               </h3>
             );
@@ -258,15 +242,7 @@ export default function App() {
 
           if (cleanLine.toLowerCase().includes("empfehlung")) {
             return (
-              <h3
-                key={i}
-                style={{
-                  color: "#7c3aed",
-                  marginTop: 24,
-                  marginBottom: 10,
-                  fontSize: 20,
-                }}
-              >
+              <h3 key={i} style={{ color: "#7c3aed", marginTop: 24 }}>
                 🎯 {cleanLine}
               </h3>
             );
@@ -274,29 +250,14 @@ export default function App() {
 
           if (cleanLine.startsWith("-")) {
             return (
-              <p
-                key={i}
-                style={{
-                  marginLeft: 18,
-                  marginBottom: 8,
-                  color: "#334155",
-                  fontSize: 15,
-                }}
-              >
+              <p key={i} style={{ marginLeft: 18, color: "#334155" }}>
                 • {cleanLine.replace("-", "").trim()}
               </p>
             );
           }
 
           return (
-            <p
-              key={i}
-              style={{
-                marginBottom: 10,
-                color: "#1e293b",
-                fontSize: 15,
-              }}
-            >
+            <p key={i} style={{ marginBottom: 10, color: "#1e293b" }}>
               {cleanLine}
             </p>
           );
@@ -311,7 +272,7 @@ export default function App() {
         display: "flex",
         minHeight: "100vh",
         background:
-          "radial-gradient(circle at top left, #1e3a8a 0, transparent 32%), radial-gradient(circle at top right, #065f46 0, transparent 28%), #020617",
+          "radial-gradient(circle at top left, #1e3a8a 0, transparent 30%), radial-gradient(circle at top right, #065f46 0, transparent 28%), #020617",
         fontFamily:
           "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Arial",
       }}
@@ -319,10 +280,9 @@ export default function App() {
       <aside
         style={{
           width: 240,
-          background: "rgba(2, 6, 23, 0.82)",
-          backdropFilter: "blur(18px)",
+          background: "rgba(2, 6, 23, 0.86)",
           color: "white",
-          padding: 28,
+          padding: 26,
           position: "fixed",
           top: 0,
           bottom: 0,
@@ -330,52 +290,39 @@ export default function App() {
           borderRight: "1px solid rgba(148, 163, 184, 0.16)",
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 34,
-          }}
-        >
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div
             style={{
-              width: 42,
-              height: 42,
+              width: 44,
+              height: 44,
               borderRadius: 14,
               background: "linear-gradient(135deg, #2563eb, #22c55e)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 900,
-              fontSize: 20,
-              boxShadow: "0 18px 35px rgba(37,99,235,0.35)",
             }}
           >
             JR
           </div>
-
           <div>
-            <h2 style={{ margin: 0, fontSize: 22 }}>JobRadar AI</h2>
+            <h2 style={{ margin: 0 }}>JobRadar AI</h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
               Dein persönlicher Job Scout
             </p>
           </div>
         </div>
 
-        <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gap: 12, marginTop: 36 }}>
           <button
             style={{
-              width: "100%",
               padding: "13px 14px",
               background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
               color: "white",
-              border: "1px solid rgba(255,255,255,0.12)",
+              border: "none",
               borderRadius: 14,
-              fontWeight: 800,
-              cursor: "pointer",
+              fontWeight: 900,
               textAlign: "left",
-              boxShadow: "0 16px 30px rgba(37, 99, 235, 0.28)",
             }}
           >
             📊 Dashboard
@@ -383,14 +330,12 @@ export default function App() {
 
           <button
             style={{
-              width: "100%",
               padding: "13px 14px",
               background: "rgba(30, 41, 59, 0.8)",
               color: "#e2e8f0",
               border: "1px solid rgba(148, 163, 184, 0.14)",
               borderRadius: 14,
-              fontWeight: 800,
-              cursor: "pointer",
+              fontWeight: 900,
               textAlign: "left",
             }}
           >
@@ -407,9 +352,7 @@ export default function App() {
             border: "1px solid rgba(148, 163, 184, 0.14)",
           }}
         >
-          <p style={{ margin: 0, color: "#94a3b8", fontSize: 12 }}>
-            Status
-          </p>
+          <p style={{ margin: 0, color: "#94a3b8", fontSize: 12 }}>Status</p>
           <p
             style={{
               margin: "8px 0 0",
@@ -426,83 +369,143 @@ export default function App() {
         style={{
           flex: 1,
           marginLeft: 240,
-          padding: "42px 38px 70px",
+          padding: "34px 42px 70px",
           color: "#f8fafc",
         }}
       >
-        <div style={{ maxWidth: 1380, margin: "0 auto" }}>
+        <div style={{ width: "100%", maxWidth: 1500, margin: "0 auto" }}>
           <section
             style={{
-              padding: "42px 56px",
-              borderRadius: 30,
-              background:
-                "linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,41,59,0.64))",
-              border: "1px solid rgba(148, 163, 184, 0.18)",
-              boxShadow: "0 24px 70px rgba(0,0,0,0.32)",
-              marginBottom: 26,
+              display: "grid",
+              gridTemplateColumns: "1.45fr 0.85fr",
+              gap: 24,
+              marginBottom: 24,
             }}
           >
             <div
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 24,
-                alignItems: "center",
-                flexWrap: "wrap",
+                padding: "44px 48px",
+                borderRadius: 30,
+                background:
+                  "linear-gradient(135deg, rgba(15,23,42,0.94), rgba(30,41,59,0.68))",
+                border: "1px solid rgba(148, 163, 184, 0.18)",
+                boxShadow: "0 24px 70px rgba(0,0,0,0.32)",
               }}
             >
-              <div>
-                <div
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "7px 12px",
-                    borderRadius: 999,
-                    background: "rgba(37, 99, 235, 0.16)",
-                    border: "1px solid rgba(96, 165, 250, 0.25)",
-                    color: "#bfdbfe",
-                    fontSize: 13,
-                    fontWeight: 800,
-                    marginBottom: 16,
-                  }}
-                >
-                  ✨ AI powered job matching
-                </div>
-
-                <h1
-                  style={{
-                    fontSize: 58,
-                    lineHeight: 1,
-                    margin: 0,
-                    letterSpacing: -2,
-                  }}
-                >
-                  Dashboard
-                </h1>
-
-                <p
-                  style={{
-                    margin: "14px 0 0",
-                    color: "#cbd5e1",
-                    fontSize: 17,
-                    maxWidth: 560,
-                  }}
-                >
-                  Lade deinen CV hoch, analysiere passende Jobs und priorisiere
-                  die besten Chancen in wenigen Sekunden.
-                </p>
+              <div
+                style={{
+                  display: "inline-flex",
+                  padding: "7px 12px",
+                  borderRadius: 999,
+                  background: "rgba(37, 99, 235, 0.16)",
+                  border: "1px solid rgba(96, 165, 250, 0.25)",
+                  color: "#bfdbfe",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  marginBottom: 18,
+                }}
+              >
+                ✨ AI powered job matching
               </div>
+
+              <h1
+                style={{
+                  fontSize: 64,
+                  lineHeight: 1,
+                  margin: 0,
+                  letterSpacing: -2.5,
+                }}
+              >
+                Dashboard
+              </h1>
+
+              <p
+                style={{
+                  margin: "16px 0 0",
+                  color: "#cbd5e1",
+                  fontSize: 18,
+                  maxWidth: 720,
+                }}
+              >
+                Lade deinen CV hoch, finde passende Jobs auf jobs.ch und sortiere
+                die besten Chancen automatisch nach Match.
+              </p>
 
               <div
                 style={{
-                  minWidth: 360,
-                  padding: 18,
-                  borderRadius: 22,
-                  background: "rgba(2, 6, 23, 0.52)",
-                  border: "1px solid rgba(148, 163, 184, 0.16)",
+                  display: "flex",
+                  gap: 14,
+                  marginTop: 30,
+                  flexWrap: "wrap",
                 }}
               >
+                <button
+                  onClick={searchJobs}
+                  disabled={searchLoading}
+                  style={{
+                    background: searchLoading
+                      ? "#64748b"
+                      : "linear-gradient(135deg, #22c55e, #16a34a)",
+                    color: "white",
+                    border: "none",
+                    padding: "16px 24px",
+                    borderRadius: 16,
+                    cursor: searchLoading ? "not-allowed" : "pointer",
+                    fontWeight: 950,
+                    fontSize: 15,
+                    boxShadow: searchLoading
+                      ? "none"
+                      : "0 18px 35px rgba(34,197,94,0.25)",
+                  }}
+                >
+                  {searchLoading
+                    ? "Jobs werden gesucht..."
+                    : "Passende Jobs suchen"}
+                </button>
+
+                {jobs.length > 0 && (
+                  <button
+                    onClick={() => setOnlyTop(!onlyTop)}
+                    style={{
+                      background: onlyTop
+                        ? "linear-gradient(135deg, #f59e0b, #d97706)"
+                        : "rgba(51, 65, 85, 0.9)",
+                      color: "white",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      padding: "16px 22px",
+                      borderRadius: 16,
+                      cursor: "pointer",
+                      fontWeight: 950,
+                      fontSize: 15,
+                    }}
+                  >
+                    {onlyTop ? "Alle Jobs anzeigen" : "Nur Top Jobs"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: 26,
+                borderRadius: 30,
+                background: "rgba(15, 23, 42, 0.82)",
+                border: "1px solid rgba(148, 163, 184, 0.18)",
+                boxShadow: "0 24px 70px rgba(0,0,0,0.28)",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                gap: 18,
+              }}
+            >
+              <div>
+                <p style={{ margin: 0, color: "#94a3b8", fontWeight: 800 }}>
+                  CV Upload
+                </p>
+                <h2 style={{ margin: "8px 0 18px", fontSize: 28 }}>
+                  Dein Profil
+                </h2>
+
                 <input
                   type="file"
                   accept="application/pdf"
@@ -513,78 +516,33 @@ export default function App() {
                   style={{
                     width: "100%",
                     color: "#e2e8f0",
-                    marginBottom: 12,
+                    marginBottom: 14,
                   }}
                 />
 
                 <div
                   style={{
-                    padding: 12,
-                    borderRadius: 14,
+                    padding: 16,
+                    borderRadius: 18,
                     background: cvFile
                       ? "rgba(34, 197, 94, 0.13)"
                       : "rgba(239, 68, 68, 0.13)",
                     border: cvFile
                       ? "1px solid rgba(34, 197, 94, 0.24)"
                       : "1px solid rgba(239, 68, 68, 0.24)",
-                    fontWeight: 900,
+                    fontWeight: 950,
                     color: cvFile ? "#86efac" : "#fca5a5",
+                    fontSize: 18,
                   }}
                 >
                   {cvFile ? "Geladen ✅" : "Nicht geladen ❌"}
                 </div>
               </div>
-            </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 14,
-                marginTop: 28,
-                flexWrap: "wrap",
-              }}
-            >
-              <button
-                onClick={searchJobs}
-                disabled={searchLoading}
-                style={{
-                  background: searchLoading
-                    ? "#64748b"
-                    : "linear-gradient(135deg, #22c55e, #16a34a)",
-                  color: "white",
-                  border: "none",
-                  padding: "15px 22px",
-                  borderRadius: 16,
-                  cursor: searchLoading ? "not-allowed" : "pointer",
-                  fontWeight: 900,
-                  fontSize: 15,
-                  boxShadow: searchLoading
-                    ? "none"
-                    : "0 18px 35px rgba(34,197,94,0.25)",
-                }}
-              >
-                {searchLoading ? "Jobs werden gesucht..." : "Passende Jobs suchen"}
-              </button>
-
-              {jobs.length > 0 && (
-                <button
-                  onClick={() => setOnlyTop(!onlyTop)}
-                  style={{
-                    background: onlyTop
-                      ? "linear-gradient(135deg, #f59e0b, #d97706)"
-                      : "rgba(51, 65, 85, 0.9)",
-                    color: "white",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    padding: "15px 20px",
-                    borderRadius: 16,
-                    cursor: "pointer",
-                    fontWeight: 900,
-                    fontSize: 15,
-                  }}
-                >
-                  {onlyTop ? "Alle Jobs anzeigen" : "Nur Top Jobs"}
-                </button>
-              )}
+              <p style={{ margin: 0, color: "#94a3b8", fontSize: 13 }}>
+                Die Suche basiert auf deinem CV und priorisiert Jobs nach
+                Relevanz, nicht nur nach Keywords.
+              </p>
             </div>
           </section>
 
@@ -592,9 +550,9 @@ export default function App() {
             <section
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
                 gap: 16,
-                marginBottom: 26,
+                marginBottom: 24,
               }}
             >
               {[
@@ -602,6 +560,7 @@ export default function App() {
                 ["Analysiert", stats.scanned ?? "-", "🧠"],
                 ["Angezeigt", stats.shown ?? "-", "🎯"],
                 ["Top Score", `${bestScore}%`, "🚀"],
+                ["Ø Match", `${averageScore}%`, "📈"],
               ].map(([label, value, icon]) => (
                 <div
                   key={label}
@@ -627,7 +586,7 @@ export default function App() {
                   <p
                     style={{
                       margin: 0,
-                      fontSize: 26,
+                      fontSize: 28,
                       fontWeight: 950,
                       color: "#f8fafc",
                     }}
@@ -643,12 +602,13 @@ export default function App() {
             <div
               style={{
                 marginTop: 24,
-                padding: 28,
+                padding: 34,
                 textAlign: "center",
-                borderRadius: 24,
+                borderRadius: 26,
                 background: "rgba(30, 41, 59, 0.55)",
                 border: "1px solid rgba(148, 163, 184, 0.16)",
                 color: "#cbd5e1",
+                fontSize: 18,
               }}
             >
               Noch keine Jobs geladen. Klicke auf “Passende Jobs suchen”.
@@ -663,41 +623,23 @@ export default function App() {
                 background: "rgba(15, 23, 42, 0.72)",
                 border: "1px solid rgba(148, 163, 184, 0.16)",
                 marginBottom: 24,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 18,
+                flexWrap: "wrap",
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 18,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div>
-                  <strong style={{ fontSize: 18 }}>AI Profil</strong>
-                  <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
-                    Jobs wurden basierend auf deinem CV gefiltert und priorisiert.
+              <div>
+                <strong style={{ fontSize: 18 }}>AI Profil</strong>
+                <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
+                  Jobs wurden basierend auf deinem CV gefiltert und priorisiert.
+                </p>
+                {onlyTop && (
+                  <p style={{ margin: "8px 0 0", color: "#fbbf24" }}>
+                    Du siehst aktuell nur Top Jobs ab 80% Match.
                   </p>
-                  {onlyTop && (
-                    <p style={{ margin: "8px 0 0", color: "#fbbf24" }}>
-                      Du siehst aktuell nur Top Jobs ab 80% Match.
-                    </p>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 999,
-                    background: "rgba(37,99,235,0.14)",
-                    color: "#bfdbfe",
-                    border: "1px solid rgba(96,165,250,0.2)",
-                    fontWeight: 900,
-                  }}
-                >
-                  Ø Match {averageScore}%
-                </div>
+                )}
               </div>
             </section>
           )}
@@ -716,7 +658,7 @@ export default function App() {
                     background:
                       "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
                     color: "#0f172a",
-                    padding: 30,
+                    padding: 32,
                     borderRadius: 28,
                     border: isBest
                       ? "2px solid rgba(34,197,94,0.55)"
@@ -739,13 +681,13 @@ export default function App() {
 
                   <div
                     style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 24,
-                      alignItems: "flex-start",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 120px",
+                      gap: 26,
+                      alignItems: "start",
                     }}
                   >
-                    <div style={{ flex: 1 }}>
+                    <div>
                       <div
                         style={{
                           display: "flex",
@@ -787,7 +729,7 @@ export default function App() {
                       <h2
                         style={{
                           margin: 0,
-                          fontSize: 28,
+                          fontSize: 30,
                           lineHeight: 1.15,
                           letterSpacing: -0.5,
                         }}
@@ -822,13 +764,70 @@ export default function App() {
                           Gefunden mit: {job.keyword}
                         </span>
                       )}
+
+                      {job.snippet && (
+                        <p
+                          style={{
+                            marginTop: 22,
+                            color: "#334155",
+                            lineHeight: 1.7,
+                            fontSize: 15,
+                            maxWidth: 1050,
+                          }}
+                        >
+                          {job.snippet}
+                        </p>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 12,
+                          marginTop: 24,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {job.url && (
+                          <a
+                            href={job.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              background: "#0f172a",
+                              color: "white",
+                              textDecoration: "none",
+                              padding: "12px 16px",
+                              borderRadius: 14,
+                              fontWeight: 900,
+                            }}
+                          >
+                            Stelle öffnen
+                          </a>
+                        )}
+
+                        <button
+                          onClick={() => analyzeJob(job)}
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                            color: "white",
+                            border: "none",
+                            padding: "12px 16px",
+                            borderRadius: 14,
+                            cursor: "pointer",
+                            fontWeight: 900,
+                          }}
+                        >
+                          AI Analyse
+                        </button>
+                      </div>
                     </div>
 
                     <div
                       style={{
-                        minWidth: 96,
-                        height: 96,
-                        borderRadius: 26,
+                        width: 108,
+                        height: 108,
+                        borderRadius: 28,
                         background: scoreColor(score),
                         color: "white",
                         display: "flex",
@@ -839,70 +838,11 @@ export default function App() {
                         boxShadow: `0 20px 45px ${scoreColor(score)}55`,
                       }}
                     >
-                      <span style={{ fontSize: 30 }}>{score}%</span>
+                      <span style={{ fontSize: 32 }}>{score}%</span>
                       <span style={{ fontSize: 11, letterSpacing: 0.8 }}>
                         MATCH
                       </span>
                     </div>
-                  </div>
-
-                  {job.snippet && (
-                    <p
-                      style={{
-                        marginTop: 22,
-                        color: "#334155",
-                        lineHeight: 1.7,
-                        fontSize: 15,
-                        maxWidth: 840,
-                      }}
-                    >
-                      {job.snippet}
-                    </p>
-                  )}
-
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 12,
-                      marginTop: 24,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {job.url && (
-                      <a
-                        href={job.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          background: "#0f172a",
-                          color: "white",
-                          textDecoration: "none",
-                          padding: "12px 16px",
-                          borderRadius: 14,
-                          fontWeight: 900,
-                          boxShadow: "0 14px 30px rgba(15,23,42,0.25)",
-                        }}
-                      >
-                        Stelle öffnen
-                      </a>
-                    )}
-
-                    <button
-                      onClick={() => analyzeJob(job)}
-                      style={{
-                        background:
-                          "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                        color: "white",
-                        border: "none",
-                        padding: "12px 16px",
-                        borderRadius: 14,
-                        cursor: "pointer",
-                        fontWeight: 900,
-                        boxShadow: "0 14px 30px rgba(37,99,235,0.25)",
-                      }}
-                    >
-                      AI Analyse
-                    </button>
                   </div>
 
                   {analysis[job.id] && (
