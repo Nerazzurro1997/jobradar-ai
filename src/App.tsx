@@ -6,6 +6,9 @@ type Job = {
   company: string;
   location: string;
   url?: string;
+  snippet?: string;
+  keyword?: string;
+  score?: number;
 };
 
 const SUPABASE_FUNCTION_URL =
@@ -143,7 +146,6 @@ export default function App() {
       <div style={{ lineHeight: 1.6 }}>
         {text.split("\n").map((line, i) => {
           const cleanLine = line.trim();
-
           if (!cleanLine) return null;
 
           if (cleanLine.toLowerCase().includes("match score")) {
@@ -201,30 +203,37 @@ export default function App() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        background: "#111827",
+        background: "#0f172a",
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <div
+      <aside
         style={{
-          width: 220,
-          background: "#0f172a",
+          width: 230,
+          background: "#020617",
           color: "white",
-          padding: 20,
+          padding: 26,
+          position: "fixed",
+          top: 0,
+          bottom: 0,
+          left: 0,
         }}
       >
-        <h2>JobRadar AI</h2>
-        <p style={{ fontSize: 12 }}>Dein persönlicher Job Scout</p>
+        <h2 style={{ marginBottom: 6 }}>JobRadar AI</h2>
+        <p style={{ fontSize: 13, color: "#cbd5e1" }}>
+          Dein persönlicher Job Scout
+        </p>
 
         <button
           style={{
             width: "100%",
-            marginTop: 20,
-            padding: 10,
+            marginTop: 28,
+            padding: 12,
             background: "#2563eb",
             color: "white",
             border: "none",
-            borderRadius: 8,
+            borderRadius: 10,
+            fontWeight: "bold",
           }}
         >
           Dashboard
@@ -233,133 +242,222 @@ export default function App() {
         <button
           style={{
             width: "100%",
-            marginTop: 10,
-            padding: 10,
+            marginTop: 12,
+            padding: 12,
             background: "#1e293b",
             color: "white",
             border: "none",
-            borderRadius: 8,
+            borderRadius: 10,
+            fontWeight: "bold",
           }}
         >
           Mein CV
         </button>
-      </div>
+      </aside>
 
-      <div
+      <main
         style={{
           flex: 1,
-          padding: 30,
+          marginLeft: 230,
+          padding: "40px 32px",
           color: "#f8fafc",
-          maxWidth: 900,
-          margin: "0 auto",
         }}
       >
-        <h1 style={{ fontSize: 48, marginBottom: 10 }}>Dashboard</h1>
+        <div style={{ maxWidth: 980, margin: "0 auto" }}>
+          <h1 style={{ fontSize: 52, marginBottom: 8, textAlign: "center" }}>
+            Dashboard
+          </h1>
 
-        <div style={{ marginBottom: 24 }}>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) setCvFile(file);
-            }}
-          />
-
-          <p>
-            CV Status:{" "}
-            <strong>{cvFile ? "Geladen ✅" : "Nicht geladen ❌"}</strong>
-          </p>
-        </div>
-
-        <button
-          onClick={searchJobs}
-          disabled={searchLoading}
-          style={{
-            background: searchLoading ? "#64748b" : "#16a34a",
-            color: "white",
-            border: "none",
-            padding: "12px 18px",
-            borderRadius: 8,
-            cursor: searchLoading ? "not-allowed" : "pointer",
-            fontWeight: "bold",
-            marginBottom: 24,
-          }}
-        >
-          {searchLoading ? "Jobs werden gesucht..." : "Passende Jobs suchen"}
-        </button>
-
-        {!searchLoading && jobs.length === 0 && (
-          <p style={{ color: "#cbd5e1" }}>
-            Noch keine Jobs geladen. Klicke auf “Passende Jobs suchen”.
-          </p>
-        )}
-
-        {jobs.map((job) => (
-          <div
-            key={job.id}
-            style={{
-              background: "#f1f5f9",
-              color: "#334155",
-              padding: 28,
-              borderRadius: 16,
-              marginBottom: 24,
-              boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-            }}
-          >
-            <h2 style={{ margin: 0 }}>{job.title}</h2>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) setCvFile(file);
+              }}
+            />
 
             <p style={{ marginTop: 8 }}>
-              {job.company} · {job.location}
+              CV Status:{" "}
+              <strong>{cvFile ? "Geladen ✅" : "Nicht geladen ❌"}</strong>
             </p>
 
-            {job.url && (
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  color: "#2563eb",
-                  fontWeight: "bold",
-                  display: "block",
-                  marginBottom: 12,
-                }}
-              >
-                Stelle auf jobs.ch öffnen
-              </a>
-            )}
-
             <button
-              onClick={() => analyzeJob(job)}
+              onClick={searchJobs}
+              disabled={searchLoading}
               style={{
-                background: "#2563eb",
+                marginTop: 18,
+                background: searchLoading ? "#64748b" : "#16a34a",
                 color: "white",
                 border: "none",
-                padding: "10px 16px",
-                borderRadius: 8,
-                cursor: "pointer",
+                padding: "14px 22px",
+                borderRadius: 12,
+                cursor: searchLoading ? "not-allowed" : "pointer",
                 fontWeight: "bold",
+                fontSize: 15,
               }}
             >
-              AI Analyse
+              {searchLoading ? "Jobs werden gesucht..." : "Passende Jobs suchen"}
             </button>
+          </div>
 
-            {analysis[job.id] && (
+          {!searchLoading && jobs.length === 0 && (
+            <p style={{ textAlign: "center", color: "#cbd5e1" }}>
+              Noch keine Jobs geladen. Klicke auf “Passende Jobs suchen”.
+            </p>
+          )}
+
+          {jobs.map((job) => (
+            <div
+              key={job.id}
+              style={{
+                background: "#f8fafc",
+                color: "#0f172a",
+                padding: 28,
+                borderRadius: 22,
+                marginBottom: 24,
+                boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+              }}
+            >
               <div
                 style={{
-                  marginTop: 20,
-                  padding: 20,
-                  background: "#e2e8f0",
-                  borderRadius: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 20,
+                  alignItems: "flex-start",
                 }}
               >
-                <strong>AI Analyse:</strong>
-                {renderAnalysis(analysis[job.id])}
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 26 }}>{job.title}</h2>
+
+                  <p
+                    style={{
+                      marginTop: 10,
+                      fontSize: 16,
+                      color: "#475569",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {job.company} · {job.location}
+                  </p>
+
+                  {job.keyword && (
+                    <span
+                      style={{
+                        display: "inline-block",
+                        marginTop: 8,
+                        background: "#dbeafe",
+                        color: "#1d4ed8",
+                        padding: "6px 10px",
+                        borderRadius: 999,
+                        fontSize: 13,
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Gefunden mit: {job.keyword}
+                    </span>
+                  )}
+                </div>
+
+                {job.score && (
+                  <div
+                    style={{
+                      minWidth: 88,
+                      height: 88,
+                      borderRadius: "50%",
+                      background:
+                        job.score >= 80
+                          ? "#16a34a"
+                          : job.score >= 65
+                          ? "#f59e0b"
+                          : "#64748b",
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexDirection: "column",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    <span style={{ fontSize: 24 }}>{job.score}%</span>
+                    <span style={{ fontSize: 11 }}>Match</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+
+              {job.snippet && (
+                <p
+                  style={{
+                    marginTop: 18,
+                    color: "#334155",
+                    lineHeight: 1.6,
+                    fontSize: 15,
+                  }}
+                >
+                  {job.snippet}
+                </p>
+              )}
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  marginTop: 22,
+                  flexWrap: "wrap",
+                }}
+              >
+                {job.url && (
+                  <a
+                    href={job.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      background: "#0f172a",
+                      color: "white",
+                      textDecoration: "none",
+                      padding: "11px 15px",
+                      borderRadius: 10,
+                      fontWeight: "bold",
+                    }}
+                  >
+                    Stelle öffnen
+                  </a>
+                )}
+
+                <button
+                  onClick={() => analyzeJob(job)}
+                  style={{
+                    background: "#2563eb",
+                    color: "white",
+                    border: "none",
+                    padding: "11px 15px",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  AI Analyse
+                </button>
+              </div>
+
+              {analysis[job.id] && (
+                <div
+                  style={{
+                    marginTop: 22,
+                    padding: 20,
+                    background: "#e2e8f0",
+                    borderRadius: 14,
+                  }}
+                >
+                  <strong>AI Analyse:</strong>
+                  {renderAnalysis(analysis[job.id])}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </main>
     </div>
   );
 }
