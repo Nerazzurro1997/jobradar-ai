@@ -8,7 +8,7 @@ type Job = {
 };
 
 const SUPABASE_FUNCTION_URL =
-  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/match-job";
+  "https://splummvxjbyubbtiebl.supabase.co/functions/v1/match-job";
 
 const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
 
@@ -53,7 +53,7 @@ export default function App() {
 
     setAnalysis((prev) => ({
       ...prev,
-      [job.id]: "Analisi in corso...",
+      [job.id]: "⏳ Analisi in corso...",
     }));
 
     try {
@@ -74,26 +74,32 @@ export default function App() {
         }),
       });
 
-     const rawText = await response.text();
+      const rawText = await response.text();
 
-let data;
-try {
-  data = JSON.parse(rawText);
-} catch {
-  throw new Error(rawText.slice(0, 300));
-}
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(rawText.slice(0, 300));
+      }
 
       console.log("RISPOSTA AI:", data);
 
-      const text =
-        data?.output?.[0]?.content?.[0]?.text ||
-        data?.error ||
-        "Nessuna risposta";
+      const raw =
+  data?.output?.[0]?.content?.[0]?.text ||
+  data?.error ||
+  "Nessuna risposta";
 
-      setAnalysis((prev) => ({
-        ...prev,
-        [job.id]: text,
-      }));
+// pulizia base
+const formatted = raw
+  .replace(/\*\*/g, "") // rimuove markdown **
+  .replace(/\n/g, "\n");
+
+setAnalysis((prev) => ({
+  ...prev,
+  [job.id]: formatted,
+}));
+
     } catch (error) {
       setAnalysis((prev) => ({
         ...prev,
@@ -209,7 +215,9 @@ try {
                 }}
               >
                 <strong>AI Analyse:</strong>
-                <p>{analysis[job.id]}</p>
+                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+  {analysis[job.id]}
+</pre>
               </div>
             )}
           </div>
