@@ -8,7 +8,7 @@ type Job = {
 };
 
 const SUPABASE_FUNCTION_URL =
-  "https://splummvxjbyubbtiebl.supabase.co/functions/v1/match-job";
+  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/match-job";
 
 const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
 
