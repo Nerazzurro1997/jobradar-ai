@@ -529,12 +529,6 @@ export default function App() {
     style={{ display: "none" }}
   />
 </label>
-                  style={{
-                    width: "100%",
-                    color: "#e2e8f0",
-                    marginBottom: 14,
-                  }}
-                />
 
                 <div
                   style={{
