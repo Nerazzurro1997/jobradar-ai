@@ -442,36 +442,41 @@ export default function App() {
               Dein persönlicher Job Scout
             </p>
           </div>
-        </div>
 
         <div
-          style={{
-            display: "flex",
-            gap: 10,
-            alignItems: "center",
-            marginTop: 16,
-            padding: "10px 12px",
-            borderRadius: 14,
-            background: "rgba(15, 23, 42, 0.7)",
-            border: "1px solid rgba(148, 163, 184, 0.14)",
-          }}
-        >
-          <div
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 11,
-              background: "linear-gradient(135deg, #1d4ed8, #15803d)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 900,
-              fontSize: 13,
-              color: "white",
-            }}
-          >
-            {initials}
-          </div>
+  style={{
+    marginTop: 20,
+    paddingTop: 16,
+    borderTop: "1px solid rgba(148, 163, 184, 0.14)",
+  }}
+>
+  <p
+    style={{
+      margin: 0,
+      fontSize: 11,
+      color: "#64748b",
+      letterSpacing: 1.4,
+      textTransform: "uppercase",
+      fontWeight: 800,
+    }}
+  >
+    Created by
+  </p>
+
+  <p
+    style={{
+      margin: "6px 0 0",
+      fontSize: 18,
+      color: "#e2e8f0",
+      fontWeight: 900,
+      fontFamily: "Georgia, serif",
+      fontStyle: "italic",
+      letterSpacing: 0.4,
+    }}
+  >
+    Francesco Molea
+  </p>
+</div>
 
           <div>
             <p
