@@ -930,11 +930,14 @@ export default function App() {
                     accept="application/pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-
+                    
                       if (file) {
-                        setCvFile(file);
+                        // 🔥 prima resetti tutto
                         setCvProfile(null);
                         localStorage.removeItem(CV_PROFILE_KEY);
+                    
+                        // 👉 poi setti il nuovo file
+                        setCvFile(file);
                       }
                     }}
                     style={{ display: "none" }}
