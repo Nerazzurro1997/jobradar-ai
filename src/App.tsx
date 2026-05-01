@@ -506,13 +506,29 @@ export default function App() {
                   Dein Profil
                 </h2>
 
-                <input
-                  type="file"
-                  accept="application/pdf"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) setCvFile(file);
-                  }}
+                <label
+  style={{
+    display: "inline-block",
+    padding: "12px 16px",
+    borderRadius: 12,
+    background: "rgba(30,41,59,0.8)",
+    border: "1px solid rgba(148,163,184,0.2)",
+    cursor: "pointer",
+    fontWeight: 800,
+  }}
+>
+  📄 CV hochladen
+
+  <input
+    type="file"
+    accept="application/pdf"
+    onChange={(e) => {
+      const file = e.target.files?.[0];
+      if (file) setCvFile(file);
+    }}
+    style={{ display: "none" }}
+  />
+</label>
                   style={{
                     width: "100%",
                     color: "#e2e8f0",
