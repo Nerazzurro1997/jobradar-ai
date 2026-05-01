@@ -38,11 +38,18 @@ export default function App() {
   };
 
   async function searchJobs() {
+    if (!cvFile) {
+      alert("Carica prima il CV PDF");
+      return;
+    }
+  
     setSearchLoading(true);
     setJobs([]);
     setAnalysis({});
-
+  
     try {
+      const base64 = await toBase64(cvFile);
+  
       const response = await fetch(SUPABASE_SEARCH_JOBS_URL, {
         method: "POST",
         headers: {
@@ -51,23 +58,25 @@ export default function App() {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
+          fileName: cvFile.name,
+          fileBase64: base64,
           location: "Zürich",
         }),
       });
-
+  
       const rawText = await response.text();
-
+  
       let data;
       try {
         data = JSON.parse(rawText);
       } catch {
         throw new Error(rawText.slice(0, 300));
       }
-
+  
       if (data.error) {
         throw new Error(data.error);
       }
-
+  
       setJobs(data.jobs || []);
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
