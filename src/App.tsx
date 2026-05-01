@@ -8,7 +8,7 @@ type Job = {
 };
 
 const SUPABASE_FUNCTION_URL =
-  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/match-job";
+  "https://splummvxjbyubbtiebl.supabase.co/functions/v1/match-job";
 
 const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
 
@@ -31,7 +31,6 @@ export default function App() {
     },
   ];
 
-  // 🔥 CONVERTE PDF IN BASE64
   const toBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -44,7 +43,6 @@ export default function App() {
     });
   };
 
-  // 🔥 CHIAMATA ALLA EDGE FUNCTION
   async function analyzeJob(job: Job) {
     if (!cvFile) {
       alert("Carica prima il CV PDF");
@@ -66,7 +64,6 @@ export default function App() {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
-
         body: JSON.stringify({
           fileName: cvFile.name,
           fileBase64: base64,
@@ -83,25 +80,22 @@ export default function App() {
         throw new Error(rawText.slice(0, 300));
       }
 
-      console.log("RISPOSTA AI:", data);
-
       const raw =
-  data?.output?.[0]?.content?.[0]?.text ||
-  data?.error ||
-  "Nessuna risposta";
+        data?.output?.[0]?.content?.[0]?.text ||
+        data?.error ||
+        "Nessuna risposta";
 
-// pulizia base
-const formatted = raw
-  .replace(/\*\*/g, "")
-  .replace(/###/g, "")
-  .replace(/---/g, "")
-  .trim();
+      const formatted = raw
+        .replace(/\*\*/g, "")
+        .replace(/###/g, "")
+        .replace(/---/g, "")
+        .replace(/Vielen Dank.*?\./, "")
+        .trim();
 
-setAnalysis((prev) => ({
-  ...prev,
-  [job.id]: formatted,
-}));
-
+      setAnalysis((prev) => ({
+        ...prev,
+        [job.id]: formatted,
+      }));
     } catch (error) {
       setAnalysis((prev) => ({
         ...prev,
@@ -110,9 +104,77 @@ setAnalysis((prev) => ({
     }
   }
 
+  function renderAnalysis(text: string) {
+    if (text === "⏳ Analisi in corso...") {
+      return <p style={{ fontWeight: "bold" }}>⏳ Analisi in corso...</p>;
+    }
+
+    return (
+      <div style={{ lineHeight: 1.6 }}>
+        {text.split("\n").map((line, i) => {
+          const cleanLine = line.trim();
+
+          if (!cleanLine) return null;
+
+          if (cleanLine.toLowerCase().includes("match score")) {
+            return (
+              <h2 key={i} style={{ color: "#16a34a", marginTop: 10 }}>
+                {cleanLine}
+              </h2>
+            );
+          }
+
+          if (cleanLine.toLowerCase().includes("warum")) {
+            return (
+              <h3 key={i} style={{ color: "#2563eb", marginTop: 22 }}>
+                💡 {cleanLine}
+              </h3>
+            );
+          }
+
+          if (cleanLine.toLowerCase().includes("risiken")) {
+            return (
+              <h3 key={i} style={{ color: "#dc2626", marginTop: 22 }}>
+                ⚠️ {cleanLine}
+              </h3>
+            );
+          }
+
+          if (cleanLine.toLowerCase().includes("empfehlung")) {
+            return (
+              <h3 key={i} style={{ color: "#7c3aed", marginTop: 22 }}>
+                🎯 {cleanLine}
+              </h3>
+            );
+          }
+
+          if (cleanLine.startsWith("-")) {
+            return (
+              <p key={i} style={{ marginLeft: 18, marginBottom: 8 }}>
+                • {cleanLine.replace("-", "").trim()}
+              </p>
+            );
+          }
+
+          return (
+            <p key={i} style={{ marginBottom: 10 }}>
+              {cleanLine}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      {/* SIDEBAR */}
+    <div
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        background: "#111827",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
       <div
         style={{
           width: 220,
@@ -153,20 +215,24 @@ setAnalysis((prev) => ({
         </button>
       </div>
 
-      {/* MAIN */}
-      <div style={{ flex: 1, padding: 30 }}>
-        <h1>Dashboard</h1>
+      <div
+        style={{
+          flex: 1,
+          padding: 30,
+          color: "#f8fafc",
+          maxWidth: 900,
+          margin: "0 auto",
+        }}
+      >
+        <h1 style={{ fontSize: 48, marginBottom: 10 }}>Dashboard</h1>
 
-        {/* CV UPLOAD */}
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 24 }}>
           <input
             type="file"
             accept="application/pdf"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) {
-                setCvFile(file);
-              }
+              if (file) setCvFile(file);
             }}
           />
 
@@ -176,19 +242,20 @@ setAnalysis((prev) => ({
           </p>
         </div>
 
-        {/* JOBS */}
         {jobs.map((job) => (
           <div
             key={job.id}
             style={{
               background: "#f1f5f9",
-              padding: 20,
-              borderRadius: 12,
-              marginBottom: 20,
+              color: "#334155",
+              padding: 28,
+              borderRadius: 16,
+              marginBottom: 24,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
             }}
           >
-            <h3>{job.title}</h3>
-            <p>
+            <h2 style={{ margin: 0 }}>{job.title}</h2>
+            <p style={{ marginTop: 8 }}>
               {job.company} · {job.location}
             </p>
 
@@ -198,9 +265,10 @@ setAnalysis((prev) => ({
                 background: "#2563eb",
                 color: "white",
                 border: "none",
-                padding: "8px 12px",
+                padding: "10px 16px",
                 borderRadius: 8,
                 cursor: "pointer",
+                fontWeight: "bold",
               }}
             >
               AI Analyse
@@ -209,35 +277,14 @@ setAnalysis((prev) => ({
             {analysis[job.id] && (
               <div
                 style={{
-                  marginTop: 15,
-                  padding: 10,
+                  marginTop: 20,
+                  padding: 20,
                   background: "#e2e8f0",
-                  borderRadius: 8,
-                  whiteSpace: "pre-wrap",
+                  borderRadius: 12,
                 }}
               >
                 <strong>AI Analyse:</strong>
-                <div style={{ lineHeight: 1.6 }}>
-  {analysis[job.id].split("\n").map((line, i) => {
-    if (line.toLowerCase().includes("match score")) {
-      return (
-        <h2 key={i} style={{ color: "#16a34a" }}>
-          {line}
-        </h2>
-      );
-    }
-
-    if (line.toLowerCase().includes("warum")) {
-      return <h3 key={i}>💡 {line}</h3>;
-    }
-
-    if (line.toLowerCase().includes("risiken")) {
-      return <h3 key={i}>⚠️ {line}</h3>;
-    }
-
-    return <p key={i}>{line}</p>;
-  })}
-</div>
+                {renderAnalysis(analysis[job.id])}
               </div>
             )}
           </div>
