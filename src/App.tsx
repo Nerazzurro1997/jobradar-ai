@@ -70,7 +70,34 @@ export default function App() {
       )
     : 0;
 
-  function saveJobsToStorage(newJobs: Job[]) {
+    function sortJobsByScore(jobsToSort: Job[]) {
+      return [...jobsToSort].sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+    
+    function saveJobsToStorage(newJobs: Job[]) {
+      if (!newJobs.length) return;
+    
+      setSavedJobs((prev) => {
+        const normalizedNewJobs = newJobs
+          .filter((job) => job.url)
+          .map((job, index) => ({
+            ...job,
+            id: job.id || Date.now() + index,
+          }));
+    
+        const merged = [...normalizedNewJobs, ...prev];
+    
+        const unique = merged.filter((job, index, self) => {
+          if (!job.url) return false;
+          return index === self.findIndex((item) => item.url === job.url);
+        });
+    
+        const sorted = sortJobsByScore(unique);
+    
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+        return sorted;
+      });
+    }
     if (!newJobs.length) return;
 
     setSavedJobs((prev) => {
