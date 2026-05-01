@@ -1009,28 +1009,30 @@ export default function App() {
                   </div>
 
                   <div
-                    style={{
-                      maxHeight: analysis[job.id] ? 900 : 0,
-                      opacity: analysis[job.id] ? 1 : 0,
-                      overflow: "hidden",
-                      transform: analysis[job.id]
-                        ? "translateY(0)"
-                        : "translateY(-10px)",
-                      transition:
-                        "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
-                    }}
-                  >
+  style={{
+    maxHeight: analysis[job.id] ? 900 : 0,
+    opacity: analysis[job.id] ? 1 : 0,
+    overflow: "hidden",
+    transform: analysis[job.id]
+      ? "translateY(0)"
+      : "translateY(-10px)",
+    transition:
+      "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
+  }}
+>
                     {analysis[job.id] && (
                       <div
-                        style={{
-                          marginTop: 26,
-                          padding: 24,
-                          background:
-                            "linear-gradient(135deg, #eef2ff, #e2e8f0)",
-                          border: "1px solid rgba(148,163,184,0.3)",
-                          borderRadius: 22,
-                        }}
-                      >
+  style={{
+    marginTop: 26,
+    padding: 24,
+    background:
+      "linear-gradient(135deg, #eef2ff, #e2e8f0)",
+    border: "1px solid rgba(148,163,184,0.3)",
+    borderRadius: 22,
+    maxHeight: 520,
+    overflowY: "auto",
+  }}
+>
                         <strong
                           style={{
                             display: "block",
