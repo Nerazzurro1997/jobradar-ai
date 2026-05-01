@@ -74,7 +74,14 @@ export default function App() {
         }),
       });
 
-      const data = await response.json();
+     const rawText = await response.text();
+
+let data;
+try {
+  data = JSON.parse(rawText);
+} catch {
+  throw new Error(rawText.slice(0, 300));
+}
 
       console.log("RISPOSTA AI:", data);
 
