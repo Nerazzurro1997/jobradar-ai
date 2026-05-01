@@ -318,7 +318,7 @@ export default function App() {
     >
       <aside
         style={{
-          width: 270,
+          width: 240,
           background: "rgba(2, 6, 23, 0.82)",
           backdropFilter: "blur(18px)",
           color: "white",
@@ -425,15 +425,15 @@ export default function App() {
       <main
         style={{
           flex: 1,
-          marginLeft: 270,
+          marginLeft: 240,
           padding: "42px 38px 70px",
           color: "#f8fafc",
         }}
       >
-        <div style={{ maxWidth: 1120, margin: "0 auto" }}>
+        <div style={{ maxWidth: 1380, margin: "0 auto" }}>
           <section
             style={{
-              padding: 34,
+              padding: "42px 56px",
               borderRadius: 30,
               background:
                 "linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,41,59,0.64))",
@@ -496,7 +496,7 @@ export default function App() {
 
               <div
                 style={{
-                  minWidth: 280,
+                  minWidth: 360,
                   padding: 18,
                   borderRadius: 22,
                   background: "rgba(2, 6, 23, 0.52)",
