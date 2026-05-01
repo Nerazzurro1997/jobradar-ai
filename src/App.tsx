@@ -48,7 +48,7 @@ export default function App() {
     : 0;
 
   function scoreColor(score = 0) {
-    if (score >= 85) return "#22c55e";
+    if (score >= 85) return "#15803d";
     if (score >= 75) return "#84cc16";
     if (score >= 65) return "#f59e0b";
     return "#ef4444";
@@ -213,7 +213,7 @@ export default function App() {
               <h2
                 key={i}
                 style={{
-                  color: "#16a34a",
+                  color: "#166534",
                   marginTop: 12,
                   marginBottom: 14,
                   fontSize: 28,
@@ -296,7 +296,7 @@ export default function App() {
               width: 44,
               height: 44,
               borderRadius: 14,
-              background: "linear-gradient(135deg, #2563eb, #22c55e)",
+              background: "linear-gradient(135deg, #2563eb, #15803d)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -317,7 +317,7 @@ export default function App() {
           <button
             style={{
               padding: "13px 14px",
-              background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+              background: "linear-gradient(135deg, #15803d, #166534)",
               color: "white",
               border: "none",
               borderRadius: 14,
@@ -445,7 +445,7 @@ export default function App() {
                   style={{
                     background: searchLoading
                       ? "#64748b"
-                      : "linear-gradient(135deg, #22c55e, #16a34a)",
+                      : "linear-gradient(135deg, #15803d, #166534)",
                     color: "white",
                     border: "none",
                     padding: "16px 24px",
@@ -768,9 +768,9 @@ export default function App() {
                         {isBest && (
                           <span
                             style={{
-                              background: "rgba(34,197,94,0.12)",
-                              color: "#15803d",
-                              border: "1px solid rgba(34,197,94,0.24)",
+                              background: "rgba(21,128,61,0.12)",
+                              color: "#166534",
+                              border: "1px solid rgba(21,128,61,0.28)",
                               padding: "6px 10px",
                               borderRadius: 999,
                               fontSize: 12,
