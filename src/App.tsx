@@ -130,9 +130,10 @@ export default function App() {
       }
 
       const raw =
-        data?.output?.[0]?.content?.[0]?.text ||
-        data?.error ||
-        "Nessuna risposta";
+      data?.text ||
+      data?.output?.[0]?.content?.[0]?.text ||
+      data?.error ||
+      "Nessuna risposta";
 
       const formatted = raw
         .replace(/\*\*/g, "")
