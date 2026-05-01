@@ -209,8 +209,24 @@ export default function App() {
 
       const incomingJobs: Job[] = data.jobs || [];
 
-      setJobs(incomingJobs);
-      saveJobsToStorage(incomingJobs);
+      if (data.noNewJobs || incomingJobs.length === 0) {
+        setJobs([]);
+      
+        if (savedJobs.length > 0) {
+          const sortedSavedJobs = sortJobsByScore(savedJobs);
+          setSavedJobs(sortedSavedJobs);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedSavedJobs));
+          setShowSavedJobs(true);
+        } else {
+          alert("Keine neuen Jobs gefunden.");
+        }
+      } else {
+        const sortedIncomingJobs = sortJobsByScore(incomingJobs);
+      
+        setShowSavedJobs(false);
+        setJobs(sortedIncomingJobs);
+        saveJobsToStorage(sortedIncomingJobs);
+      }
 
       setStats({
         foundLinks: data.foundLinks,
