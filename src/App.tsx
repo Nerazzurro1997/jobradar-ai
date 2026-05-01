@@ -5,31 +5,22 @@ type Job = {
   title: string;
   company: string;
   location: string;
+  url?: string;
 };
 
 const SUPABASE_FUNCTION_URL =
   "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/match-job";
 
+const SUPABASE_SEARCH_JOBS_URL =
+  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/search-jobs";
+
 const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
 
 export default function App() {
   const [cvFile, setCvFile] = useState<File | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [analysis, setAnalysis] = useState<{ [key: number]: string }>({});
-
-  const jobs: Job[] = [
-    {
-      id: 1,
-      title: "Sachbearbeiter Versicherung",
-      company: "AXA",
-      location: "Zürich",
-    },
-    {
-      id: 2,
-      title: "Kundenberater Innendienst",
-      company: "Generali",
-      location: "Adliswil",
-    },
-  ];
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const toBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -42,6 +33,45 @@ export default function App() {
       reader.onerror = reject;
     });
   };
+
+  async function searchJobs() {
+    setSearchLoading(true);
+    setJobs([]);
+    setAnalysis({});
+
+    try {
+      const response = await fetch(SUPABASE_SEARCH_JOBS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          location: "Zürich",
+        }),
+      });
+
+      const rawText = await response.text();
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(rawText.slice(0, 300));
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setJobs(data.jobs || []);
+    } catch (error) {
+      alert("Fehler bei der Jobsuche: " + String(error));
+    } finally {
+      setSearchLoading(false);
+    }
+  }
 
   async function analyzeJob(job: Job) {
     if (!cvFile) {
@@ -242,6 +272,29 @@ export default function App() {
           </p>
         </div>
 
+        <button
+          onClick={searchJobs}
+          disabled={searchLoading}
+          style={{
+            background: searchLoading ? "#64748b" : "#16a34a",
+            color: "white",
+            border: "none",
+            padding: "12px 18px",
+            borderRadius: 8,
+            cursor: searchLoading ? "not-allowed" : "pointer",
+            fontWeight: "bold",
+            marginBottom: 24,
+          }}
+        >
+          {searchLoading ? "Jobs werden gesucht..." : "Passende Jobs suchen"}
+        </button>
+
+        {!searchLoading && jobs.length === 0 && (
+          <p style={{ color: "#cbd5e1" }}>
+            Noch keine Jobs geladen. Klicke auf “Passende Jobs suchen”.
+          </p>
+        )}
+
         {jobs.map((job) => (
           <div
             key={job.id}
@@ -255,9 +308,26 @@ export default function App() {
             }}
           >
             <h2 style={{ margin: 0 }}>{job.title}</h2>
+
             <p style={{ marginTop: 8 }}>
               {job.company} · {job.location}
             </p>
+
+            {job.url && (
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  color: "#2563eb",
+                  fontWeight: "bold",
+                  display: "block",
+                  marginBottom: 12,
+                }}
+              >
+                Stelle auf jobs.ch öffnen
+              </a>
+            )}
 
             <button
               onClick={() => analyzeJob(job)}
