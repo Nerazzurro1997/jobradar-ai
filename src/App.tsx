@@ -373,7 +373,7 @@ export default function App() {
           color: "#f8fafc",
         }}
       >
-        <div style={{ width: "100%", maxWidth: 1500, margin: "0 auto" }}>
+        <div style={{ width: "100%", maxWidth: "none", margin: 0 }}>
           <section
             style={{
               display: "grid",
@@ -597,7 +597,76 @@ export default function App() {
               ))}
             </section>
           )}
-
+{searchLoading && (
+  <section
+    style={{
+      marginTop: 24,
+      display: "grid",
+      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+      gap: 22,
+    }}
+  >
+    {[1, 2, 3, 4, 5, 6].map((item) => (
+      <div
+        key={item}
+        style={{
+          minHeight: 220,
+          borderRadius: 28,
+          background:
+            "linear-gradient(135deg, rgba(30,41,59,0.88), rgba(15,23,42,0.82))",
+          border: "1px solid rgba(148,163,184,0.18)",
+          boxShadow: "0 22px 55px rgba(0,0,0,0.22)",
+          padding: 26,
+        }}
+      >
+        <div
+          style={{
+            width: "65%",
+            height: 18,
+            borderRadius: 999,
+            background: "rgba(148,163,184,0.22)",
+            marginBottom: 18,
+          }}
+        />
+        <div
+          style={{
+            width: "42%",
+            height: 14,
+            borderRadius: 999,
+            background: "rgba(148,163,184,0.16)",
+            marginBottom: 32,
+          }}
+        />
+        <div
+          style={{
+            width: "100%",
+            height: 12,
+            borderRadius: 999,
+            background: "rgba(148,163,184,0.14)",
+            marginBottom: 12,
+          }}
+        />
+        <div
+          style={{
+            width: "82%",
+            height: 12,
+            borderRadius: 999,
+            background: "rgba(148,163,184,0.14)",
+            marginBottom: 32,
+          }}
+        />
+        <div
+          style={{
+            width: 120,
+            height: 38,
+            borderRadius: 14,
+            background: "rgba(34,197,94,0.22)",
+          }}
+        />
+      </div>
+    ))}
+  </section>
+)}
           {!searchLoading && jobs.length === 0 && (
             <div
               style={{
