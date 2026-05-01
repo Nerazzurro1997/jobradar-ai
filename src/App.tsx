@@ -131,13 +131,21 @@ export default function App() {
 
   function clearSavedJobs() {
     const confirmDelete = confirm(
-      "Willst du wirklich alle gespeicherten Jobs löschen?"
+      "Willst du wirklich alles löschen? Gespeicherte Jobs und CV Profil werden entfernt."
     );
-
+  
     if (!confirmDelete) return;
-
+  
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(CV_PROFILE_KEY);
+  
     setSavedJobs([]);
+    setJobs([]);
+    setCvProfile(null);
+    setCvFile(null);
+    setAnalysis({});
+    setStats({});
+    setOnlyTop(false);
     setShowSavedJobs(false);
   }
 
