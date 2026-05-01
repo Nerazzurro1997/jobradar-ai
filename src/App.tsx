@@ -32,6 +32,7 @@ export default function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [onlyTop, setOnlyTop] = useState(false);
   const [stats, setStats] = useState<SearchStats>({});
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
 
   const displayedJobs = jobs.filter(
     (job) => !onlyTop || (job.score || 0) >= 80
@@ -49,9 +50,9 @@ export default function App() {
 
   function scoreColor(score = 0) {
     if (score >= 85) return "#15803d";
-    if (score >= 75) return "#84cc16";
-    if (score >= 65) return "#f59e0b";
-    return "#ef4444";
+    if (score >= 75) return "#65a30d";
+    if (score >= 65) return "#d97706";
+    return "#dc2626";
   }
 
   function scoreLabel(score = 0) {
@@ -272,11 +273,47 @@ export default function App() {
         display: "flex",
         minHeight: "100vh",
         background:
-          "radial-gradient(circle at top left, #1e3a8a 0, transparent 30%), radial-gradient(circle at top right, #065f46 0, transparent 28%), #020617",
+          "radial-gradient(circle at top left, #1e3a8a 0, transparent 30%), radial-gradient(circle at top right, #064e3b 0, transparent 28%), #020617",
         fontFamily:
           "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Arial",
       }}
     >
+      <style>
+        {`
+          .premium-btn, .premium-link, .upload-label {
+            transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+          }
+
+          .premium-btn:hover, .premium-link:hover, .upload-label:hover {
+            transform: translateY(-2px);
+            opacity: 0.96;
+          }
+
+          .premium-btn:active, .premium-link:active, .upload-label:active {
+            transform: translateY(0);
+          }
+
+          @keyframes softPulse {
+            0% { opacity: 0.45; transform: scale(1); }
+            50% { opacity: 0.95; transform: scale(1.015); }
+            100% { opacity: 0.45; transform: scale(1); }
+          }
+
+          @keyframes slideIn {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+
+          .skeleton-card {
+            animation: softPulse 1.6s ease-in-out infinite;
+          }
+
+          .job-card {
+            animation: slideIn 0.35s ease both;
+          }
+        `}
+      </style>
+
       <aside
         style={{
           width: 240,
@@ -301,6 +338,7 @@ export default function App() {
               alignItems: "center",
               justifyContent: "center",
               fontWeight: 900,
+              boxShadow: "0 18px 35px rgba(37,99,235,0.22)",
             }}
           >
             JR
@@ -315,6 +353,7 @@ export default function App() {
 
         <div style={{ display: "grid", gap: 12, marginTop: 36 }}>
           <button
+            className="premium-btn"
             style={{
               padding: "13px 14px",
               background: "linear-gradient(135deg, #15803d, #166534)",
@@ -323,12 +362,14 @@ export default function App() {
               borderRadius: 14,
               fontWeight: 900,
               textAlign: "left",
+              boxShadow: "0 12px 25px rgba(21,128,61,0.18)",
             }}
           >
             📊 Dashboard
           </button>
 
           <button
+            className="premium-btn"
             style={{
               padding: "13px 14px",
               background: "rgba(30, 41, 59, 0.8)",
@@ -357,7 +398,7 @@ export default function App() {
             style={{
               margin: "8px 0 0",
               fontWeight: 900,
-              color: cvFile ? "#86efac" : "#fca5a5",
+              color: cvFile ? "#bbf7d0" : "#fca5a5",
             }}
           >
             {cvFile ? "CV geladen" : "CV fehlt"}
@@ -440,6 +481,7 @@ export default function App() {
                 }}
               >
                 <button
+                  className="premium-btn"
                   onClick={searchJobs}
                   disabled={searchLoading}
                   style={{
@@ -455,7 +497,7 @@ export default function App() {
                     fontSize: 15,
                     boxShadow: searchLoading
                       ? "none"
-                      : "0 18px 35px rgba(34,197,94,0.25)",
+                      : "0 12px 25px rgba(21,128,61,0.25)",
                   }}
                 >
                   {searchLoading
@@ -465,6 +507,7 @@ export default function App() {
 
                 {jobs.length > 0 && (
                   <button
+                    className="premium-btn"
                     onClick={() => setOnlyTop(!onlyTop)}
                     style={{
                       background: onlyTop
@@ -507,41 +550,55 @@ export default function App() {
                 </h2>
 
                 <label
-  style={{
-    display: "inline-block",
-    padding: "12px 16px",
-    borderRadius: 12,
-    background: "rgba(30,41,59,0.8)",
-    border: "1px solid rgba(148,163,184,0.2)",
-    cursor: "pointer",
-    fontWeight: 800,
-  }}
->
-  📄 CV hochladen
+                  className="upload-label"
+                  style={{
+                    display: "inline-block",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    background: "rgba(30,41,59,0.8)",
+                    border: "1px solid rgba(148,163,184,0.2)",
+                    cursor: "pointer",
+                    fontWeight: 800,
+                    marginBottom: 14,
+                  }}
+                >
+                  📄 CV hochladen
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setCvFile(file);
+                    }}
+                    style={{ display: "none" }}
+                  />
+                </label>
 
-  <input
-    type="file"
-    accept="application/pdf"
-    onChange={(e) => {
-      const file = e.target.files?.[0];
-      if (file) setCvFile(file);
-    }}
-    style={{ display: "none" }}
-  />
-</label>
+                {cvFile && (
+                  <p
+                    style={{
+                      margin: "0 0 12px",
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {cvFile.name}
+                  </p>
+                )}
 
                 <div
                   style={{
                     padding: 16,
                     borderRadius: 18,
                     background: cvFile
-                      ? "rgba(34, 197, 94, 0.13)"
+                      ? "rgba(21, 128, 61, 0.15)"
                       : "rgba(239, 68, 68, 0.13)",
                     border: cvFile
-                      ? "1px solid rgba(34, 197, 94, 0.24)"
+                      ? "1px solid rgba(21, 128, 61, 0.35)"
                       : "1px solid rgba(239, 68, 68, 0.24)",
                     fontWeight: 950,
-                    color: cvFile ? "#86efac" : "#fca5a5",
+                    color: cvFile ? "#bbf7d0" : "#fca5a5",
                     fontSize: 18,
                   }}
                 >
@@ -574,6 +631,7 @@ export default function App() {
               ].map(([label, value, icon]) => (
                 <div
                   key={label}
+                  className="premium-btn"
                   style={{
                     padding: 18,
                     borderRadius: 22,
@@ -607,76 +665,79 @@ export default function App() {
               ))}
             </section>
           )}
-{searchLoading && (
-  <section
-    style={{
-      marginTop: 24,
-      display: "grid",
-      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-      gap: 22,
-    }}
-  >
-    {[1, 2, 3, 4, 5, 6].map((item) => (
-      <div
-        key={item}
-        style={{
-          minHeight: 220,
-          borderRadius: 28,
-          background:
-            "linear-gradient(135deg, rgba(30,41,59,0.88), rgba(15,23,42,0.82))",
-          border: "1px solid rgba(148,163,184,0.18)",
-          boxShadow: "0 22px 55px rgba(0,0,0,0.22)",
-          padding: 26,
-        }}
-      >
-        <div
-          style={{
-            width: "65%",
-            height: 18,
-            borderRadius: 999,
-            background: "rgba(148,163,184,0.22)",
-            marginBottom: 18,
-          }}
-        />
-        <div
-          style={{
-            width: "42%",
-            height: 14,
-            borderRadius: 999,
-            background: "rgba(148,163,184,0.16)",
-            marginBottom: 32,
-          }}
-        />
-        <div
-          style={{
-            width: "100%",
-            height: 12,
-            borderRadius: 999,
-            background: "rgba(148,163,184,0.14)",
-            marginBottom: 12,
-          }}
-        />
-        <div
-          style={{
-            width: "82%",
-            height: 12,
-            borderRadius: 999,
-            background: "rgba(148,163,184,0.14)",
-            marginBottom: 32,
-          }}
-        />
-        <div
-          style={{
-            width: 120,
-            height: 38,
-            borderRadius: 14,
-            background: "rgba(34,197,94,0.22)",
-          }}
-        />
-      </div>
-    ))}
-  </section>
-)}
+
+          {searchLoading && (
+            <section
+              style={{
+                marginTop: 24,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 22,
+              }}
+            >
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <div
+                  className="skeleton-card"
+                  key={item}
+                  style={{
+                    minHeight: 220,
+                    borderRadius: 28,
+                    background:
+                      "linear-gradient(135deg, rgba(30,41,59,0.88), rgba(15,23,42,0.82))",
+                    border: "1px solid rgba(148,163,184,0.18)",
+                    boxShadow: "0 22px 55px rgba(0,0,0,0.22)",
+                    padding: 26,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "65%",
+                      height: 18,
+                      borderRadius: 999,
+                      background: "rgba(148,163,184,0.22)",
+                      marginBottom: 18,
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: "42%",
+                      height: 14,
+                      borderRadius: 999,
+                      background: "rgba(148,163,184,0.16)",
+                      marginBottom: 32,
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: "100%",
+                      height: 12,
+                      borderRadius: 999,
+                      background: "rgba(148,163,184,0.14)",
+                      marginBottom: 12,
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: "82%",
+                      height: 12,
+                      borderRadius: 999,
+                      background: "rgba(148,163,184,0.14)",
+                      marginBottom: 32,
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: 120,
+                      height: 38,
+                      borderRadius: 14,
+                      background: "rgba(21,128,61,0.22)",
+                    }}
+                  />
+                </div>
+              ))}
+            </section>
+          )}
+
           {!searchLoading && jobs.length === 0 && (
             <div
               style={{
@@ -727,10 +788,15 @@ export default function App() {
             {displayedJobs.map((job, index) => {
               const score = job.score || 0;
               const isBest = index < 3;
+              const isHovered = hoveredId === job.id;
+              const isAnalyzing = analysis[job.id] === "⏳ Analisi in corso...";
 
               return (
                 <div
+                  className="job-card"
                   key={job.id}
+                  onMouseEnter={() => setHoveredId(job.id)}
+                  onMouseLeave={() => setHoveredId(null)}
                   style={{
                     position: "relative",
                     overflow: "hidden",
@@ -740,11 +806,16 @@ export default function App() {
                     padding: 32,
                     borderRadius: 28,
                     border: isBest
-                      ? "2px solid rgba(34,197,94,0.55)"
+                      ? "2px solid rgba(21,128,61,0.38)"
                       : "1px solid rgba(226,232,240,0.8)",
-                    boxShadow: isBest
-                      ? "0 28px 70px rgba(34,197,94,0.18)"
+                    boxShadow: isHovered
+                      ? "0 35px 85px rgba(0,0,0,0.34)"
+                      : isBest
+                      ? "0 28px 70px rgba(21,128,61,0.12)"
                       : "0 22px 55px rgba(0,0,0,0.22)",
+                    transform: isHovered ? "translateY(-6px)" : "translateY(0)",
+                    transition:
+                      "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
                   }}
                 >
                   <div
@@ -868,6 +939,7 @@ export default function App() {
                       >
                         {job.url && (
                           <a
+                            className="premium-link"
                             href={job.url}
                             target="_blank"
                             rel="noreferrer"
@@ -878,6 +950,7 @@ export default function App() {
                               padding: "12px 16px",
                               borderRadius: 14,
                               fontWeight: 900,
+                              boxShadow: "0 12px 24px rgba(15,23,42,0.22)",
                             }}
                           >
                             Stelle öffnen
@@ -885,19 +958,25 @@ export default function App() {
                         )}
 
                         <button
+                          className="premium-btn"
                           onClick={() => analyzeJob(job)}
+                          disabled={isAnalyzing}
                           style={{
-                            background:
-                              "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                            background: isAnalyzing
+                              ? "#64748b"
+                              : "linear-gradient(135deg, #2563eb, #1d4ed8)",
                             color: "white",
                             border: "none",
                             padding: "12px 16px",
                             borderRadius: 14,
-                            cursor: "pointer",
+                            cursor: isAnalyzing ? "not-allowed" : "pointer",
                             fontWeight: 900,
+                            boxShadow: isAnalyzing
+                              ? "none"
+                              : "0 12px 24px rgba(37,99,235,0.25)",
                           }}
                         >
-                          AI Analyse
+                          {isAnalyzing ? "Analyse läuft..." : "AI Analyse"}
                         </button>
                       </div>
                     </div>
@@ -914,7 +993,12 @@ export default function App() {
                         justifyContent: "center",
                         flexDirection: "column",
                         fontWeight: 950,
-                        boxShadow: `0 20px 45px ${scoreColor(score)}55`,
+                        boxShadow: isHovered
+                          ? `0 24px 55px ${scoreColor(score)}66`
+                          : `0 18px 38px ${scoreColor(score)}44`,
+                        transform: isHovered ? "scale(1.04)" : "scale(1)",
+                        transition:
+                          "transform 0.25s ease, box-shadow 0.25s ease",
                       }}
                     >
                       <span style={{ fontSize: 32 }}>{score}%</span>
@@ -924,30 +1008,43 @@ export default function App() {
                     </div>
                   </div>
 
-                  {analysis[job.id] && (
-                    <div
-                      style={{
-                        marginTop: 26,
-                        padding: 24,
-                        background:
-                          "linear-gradient(135deg, #eef2ff, #e2e8f0)",
-                        border: "1px solid rgba(148,163,184,0.3)",
-                        borderRadius: 22,
-                      }}
-                    >
-                      <strong
+                  <div
+                    style={{
+                      maxHeight: analysis[job.id] ? 900 : 0,
+                      opacity: analysis[job.id] ? 1 : 0,
+                      overflow: "hidden",
+                      transform: analysis[job.id]
+                        ? "translateY(0)"
+                        : "translateY(-10px)",
+                      transition:
+                        "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
+                    }}
+                  >
+                    {analysis[job.id] && (
+                      <div
                         style={{
-                          display: "block",
-                          marginBottom: 8,
-                          color: "#0f172a",
-                          fontSize: 18,
+                          marginTop: 26,
+                          padding: 24,
+                          background:
+                            "linear-gradient(135deg, #eef2ff, #e2e8f0)",
+                          border: "1px solid rgba(148,163,184,0.3)",
+                          borderRadius: 22,
                         }}
                       >
-                        AI Analyse
-                      </strong>
-                      {renderAnalysis(analysis[job.id])}
-                    </div>
-                  )}
+                        <strong
+                          style={{
+                            display: "block",
+                            marginBottom: 8,
+                            color: "#0f172a",
+                            fontSize: 18,
+                          }}
+                        >
+                          AI Analyse
+                        </strong>
+                        {renderAnalysis(analysis[job.id])}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
