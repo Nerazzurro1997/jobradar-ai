@@ -78,12 +78,12 @@ export default function App() {
       if (!newJobs.length) return;
     
       setSavedJobs((prev) => {
-        const normalizedNewJobs = newJobs
-          .filter((job) => job.url)
-          .map((job, index) => ({
-            ...job,
-            id: job.id || Math.floor(Math.random() * 1_000_000_000),
-          }));
+const normalizedNewJobs = newJobs
+  .filter((job) => job.url)
+  .map((job) => ({
+    ...job,
+    id: job.id || Math.floor(Math.random() * 1_000_000_000),
+  }));
     
         const merged = [...normalizedNewJobs, ...prev];
     
