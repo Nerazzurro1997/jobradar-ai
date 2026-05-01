@@ -38,6 +38,8 @@ export default function App() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [showSavedJobs, setShowSavedJobs] = useState(false);
 
+  const initials = "FM";
+
   useEffect(() => {
     const storedJobs = localStorage.getItem(STORAGE_KEY);
 
@@ -45,7 +47,7 @@ export default function App() {
       try {
         const parsedJobs = JSON.parse(storedJobs);
         if (Array.isArray(parsedJobs)) {
-          setSavedJobs(parsedJobs);
+          setSavedJobs(sortJobsByScore(parsedJobs));
         }
       } catch {
         localStorage.removeItem(STORAGE_KEY);
@@ -70,34 +72,34 @@ export default function App() {
       )
     : 0;
 
-    function sortJobsByScore(jobsToSort: Job[]) {
-      return [...jobsToSort].sort((a, b) => (b.score || 0) - (a.score || 0));
-    }
-    
-    function saveJobsToStorage(newJobs: Job[]) {
-      if (!newJobs.length) return;
-    
-      setSavedJobs((prev) => {
-const normalizedNewJobs = newJobs
-  .filter((job) => job.url)
-  .map((job) => ({
-    ...job,
-    id: job.id || Math.floor(Math.random() * 1_000_000_000),
-  }));
-    
-        const merged = [...normalizedNewJobs, ...prev];
-    
-        const unique = merged.filter((job, index, self) => {
-          if (!job.url) return false;
-          return index === self.findIndex((item) => item.url === job.url);
-        });
-    
-        const sorted = sortJobsByScore(unique);
-    
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
-        return sorted;
+  function sortJobsByScore(jobsToSort: Job[]) {
+    return [...jobsToSort].sort((a, b) => (b.score || 0) - (a.score || 0));
+  }
+
+  function saveJobsToStorage(newJobs: Job[]) {
+    if (!newJobs.length) return;
+
+    setSavedJobs((prev) => {
+      const normalizedNewJobs = newJobs
+        .filter((job) => job.url)
+        .map((job) => ({
+          ...job,
+          id: job.id || Math.floor(Math.random() * 1_000_000_000),
+        }));
+
+      const merged = [...normalizedNewJobs, ...prev];
+
+      const unique = merged.filter((job, index, self) => {
+        if (!job.url) return false;
+        return index === self.findIndex((item) => item.url === job.url);
       });
-    }
+
+      const sorted = sortJobsByScore(unique);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+      return sorted;
+    });
+  }
 
   function clearSavedJobs() {
     const confirmDelete = confirm(
@@ -190,7 +192,7 @@ const normalizedNewJobs = newJobs
 
       if (data.noNewJobs || incomingJobs.length === 0) {
         setJobs([]);
-      
+
         if (savedJobs.length > 0) {
           const sortedSavedJobs = sortJobsByScore(savedJobs);
           setSavedJobs(sortedSavedJobs);
@@ -201,7 +203,7 @@ const normalizedNewJobs = newJobs
         }
       } else {
         const sortedIncomingJobs = sortJobsByScore(incomingJobs);
-      
+
         setShowSavedJobs(false);
         setJobs(sortedIncomingJobs);
         saveJobsToStorage(sortedIncomingJobs);
@@ -433,10 +435,57 @@ const normalizedNewJobs = newJobs
           >
             JR
           </div>
+
           <div>
             <h2 style={{ margin: 0 }}>JobRadar AI</h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
               Dein persönlicher Job Scout
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            marginTop: 16,
+            padding: "10px 12px",
+            borderRadius: 14,
+            background: "rgba(15, 23, 42, 0.7)",
+            border: "1px solid rgba(148, 163, 184, 0.14)",
+          }}
+        >
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 11,
+              background: "linear-gradient(135deg, #1d4ed8, #15803d)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 900,
+              fontSize: 13,
+              color: "white",
+            }}
+          >
+            {initials}
+          </div>
+
+          <div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                color: "#e2e8f0",
+                fontWeight: 800,
+              }}
+            >
+              by Francesco
+            </p>
+            <p style={{ margin: "2px 0 0", fontSize: 11, color: "#94a3b8" }}>
+              personal build
             </p>
           </div>
         </div>
@@ -607,9 +656,7 @@ const normalizedNewJobs = newJobs
                       : "0 12px 25px rgba(21,128,61,0.25)",
                   }}
                 >
-                  {searchLoading
-                    ? "Jobs werden gesucht..."
-                    : "Neue Jobs suchen"}
+                  {searchLoading ? "Jobs werden gesucht..." : "Neue Jobs suchen"}
                 </button>
 
                 {savedJobs.length > 0 && (
@@ -791,7 +838,7 @@ const normalizedNewJobs = newJobs
                 ["Ø Match", `${averageScore}%`, "📈"],
               ].map(([label, value, icon]) => (
                 <div
-                  key={label}
+                  key={String(label)}
                   className="premium-btn"
                   style={{
                     padding: 18,
