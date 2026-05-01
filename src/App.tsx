@@ -16,6 +16,14 @@ type Job = {
   score?: number;
 };
 
+type CvProfile = {
+  searchTerms: string[];
+  strongKeywords: string[];
+  avoidKeywords: string[];
+  locations: string[];
+  profileSummary: string;
+};
+
 type SearchStats = {
   foundLinks?: number;
   scanned?: number;
@@ -28,12 +36,18 @@ const SUPABASE_FUNCTION_URL =
 const SUPABASE_SEARCH_JOBS_URL =
   "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/search-jobs";
 
+const SUPABASE_ANALYZE_CV_URL =
+  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/analyze-cv";
+
 const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
 
 const STORAGE_KEY = "jobradar_saved_jobs";
+const CV_PROFILE_KEY = "jobradar_cv_profile";
 
 export default function App() {
   const [cvFile, setCvFile] = useState<File | null>(null);
+  const [cvProfile, setCvProfile] = useState<CvProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [savedJobs, setSavedJobs] = useState<Job[]>([]);
   const [analysis, setAnalysis] = useState<{ [key: number]: string }>({});
@@ -54,6 +68,17 @@ export default function App() {
         }
       } catch {
         localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    const storedProfile = localStorage.getItem(CV_PROFILE_KEY);
+
+    if (storedProfile) {
+      try {
+        const parsedProfile = JSON.parse(storedProfile);
+        setCvProfile(parsedProfile);
+      } catch {
+        localStorage.removeItem(CV_PROFILE_KEY);
       }
     }
   }, []);
@@ -116,6 +141,11 @@ export default function App() {
     setShowSavedJobs(false);
   }
 
+  function clearCvProfile() {
+    localStorage.removeItem(CV_PROFILE_KEY);
+    setCvProfile(null);
+  }
+
   function scoreColor(score = 0) {
     if (score >= 85) return "#15803d";
     if (score >= 75) return "#65a30d";
@@ -143,6 +173,55 @@ export default function App() {
     });
   };
 
+  async function analyzeCv(fileOverride?: File): Promise<CvProfile> {
+    const file = fileOverride || cvFile;
+
+    if (!file) {
+      throw new Error("Carica prima il CV PDF");
+    }
+
+    setProfileLoading(true);
+
+    try {
+      const base64 = await toBase64(file);
+
+      const response = await fetch(SUPABASE_ANALYZE_CV_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileBase64: base64,
+        }),
+      });
+
+      const rawText = await response.text();
+
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(rawText.slice(0, 300));
+      }
+
+      if (!data.success || !data.profile) {
+        throw new Error(data.error || "CV Profil konnte nicht erstellt werden.");
+      }
+
+      setCvProfile(data.profile);
+      localStorage.setItem(CV_PROFILE_KEY, JSON.stringify(data.profile));
+
+      console.log("CV Profile erstellt:", data.profile);
+
+      return data.profile;
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
   async function searchJobs() {
     if (!cvFile) {
       alert("Carica prima il CV PDF");
@@ -159,6 +238,12 @@ export default function App() {
     try {
       const base64 = await toBase64(cvFile);
 
+      let profileToUse = cvProfile;
+
+      if (!profileToUse) {
+        profileToUse = await analyzeCv(cvFile);
+      }
+
       const knownUrls = savedJobs
         .map((job) => job.url)
         .filter((url): url is string => Boolean(url));
@@ -171,6 +256,7 @@ export default function App() {
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         },
         body: JSON.stringify({
+          profile: profileToUse,
           fileName: cvFile.name,
           fileBase64: base64,
           location: "Zürich",
@@ -218,7 +304,7 @@ export default function App() {
         shown: data.count,
       });
 
-      console.log("AI Profile:", data.profile);
+      console.log("AI Profile:", data.profile || profileToUse);
       console.log("Known URLs sent:", knownUrls.length);
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
@@ -251,6 +337,7 @@ export default function App() {
         body: JSON.stringify({
           fileName: cvFile.name,
           fileBase64: base64,
+          profile: cvProfile,
           job,
         }),
       });
@@ -553,6 +640,21 @@ export default function App() {
             {cvFile ? "CV geladen" : "CV fehlt"}
           </p>
 
+          <p
+            style={{
+              margin: "8px 0 0",
+              fontWeight: 900,
+              color: cvProfile ? "#bfdbfe" : "#94a3b8",
+              fontSize: 13,
+            }}
+          >
+            {profileLoading
+              ? "Profil wird analysiert..."
+              : cvProfile
+              ? "Profil analysiert"
+              : "Profil noch nicht analysiert"}
+          </p>
+
           {savedJobs.length > 0 && (
             <p
               style={{
@@ -645,25 +747,75 @@ export default function App() {
                 <button
                   className="premium-btn"
                   onClick={searchJobs}
-                  disabled={searchLoading}
+                  disabled={searchLoading || profileLoading}
                   style={{
-                    background: searchLoading
-                      ? "#64748b"
-                      : "linear-gradient(135deg, #15803d, #166534)",
+                    background:
+                      searchLoading || profileLoading
+                        ? "#64748b"
+                        : "linear-gradient(135deg, #15803d, #166534)",
                     color: "white",
                     border: "none",
                     padding: "16px 24px",
                     borderRadius: 16,
-                    cursor: searchLoading ? "not-allowed" : "pointer",
+                    cursor:
+                      searchLoading || profileLoading ? "not-allowed" : "pointer",
                     fontWeight: 950,
                     fontSize: 15,
-                    boxShadow: searchLoading
-                      ? "none"
-                      : "0 12px 25px rgba(21,128,61,0.25)",
+                    boxShadow:
+                      searchLoading || profileLoading
+                        ? "none"
+                        : "0 12px 25px rgba(21,128,61,0.25)",
                   }}
                 >
-                  {searchLoading ? "Jobs werden gesucht..." : "Neue Jobs suchen"}
+                  {profileLoading
+                    ? "CV wird analysiert..."
+                    : searchLoading
+                    ? "Jobs werden gesucht..."
+                    : "Neue Jobs suchen"}
                 </button>
+
+                {cvFile && !cvProfile && (
+                  <button
+                    className="premium-btn"
+                    onClick={() =>
+                      analyzeCv().catch((error) =>
+                        alert("Errore CV Analysis: " + String(error))
+                      )
+                    }
+                    disabled={profileLoading}
+                    style={{
+                      background: "rgba(37, 99, 235, 0.9)",
+                      color: "white",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      padding: "16px 22px",
+                      borderRadius: 16,
+                      cursor: profileLoading ? "not-allowed" : "pointer",
+                      fontWeight: 950,
+                      fontSize: 15,
+                    }}
+                  >
+                    Profil analysieren
+                  </button>
+                )}
+
+                {cvProfile && (
+                  <button
+                    className="premium-btn"
+                    onClick={clearCvProfile}
+                    style={{
+                      background: "rgba(51, 65, 85, 0.9)",
+                      color: "white",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      padding: "16px 22px",
+                      borderRadius: 16,
+                      cursor: "pointer",
+                      fontWeight: 950,
+                      fontSize: 15,
+                    }}
+                  >
+                    Profil neu analysieren
+                  </button>
+                )}
 
                 {savedJobs.length > 0 && (
                   <button
@@ -770,7 +922,12 @@ export default function App() {
                     accept="application/pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (file) setCvFile(file);
+
+                      if (file) {
+                        setCvFile(file);
+                        setCvProfile(null);
+                        localStorage.removeItem(CV_PROFILE_KEY);
+                      }
                     }}
                     style={{ display: "none" }}
                   />
@@ -806,11 +963,31 @@ export default function App() {
                 >
                   {cvFile ? "Geladen ✅" : "Nicht geladen ❌"}
                 </div>
+
+                {cvProfile && (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      padding: 14,
+                      borderRadius: 16,
+                      background: "rgba(37, 99, 235, 0.12)",
+                      border: "1px solid rgba(37, 99, 235, 0.2)",
+                      color: "#bfdbfe",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <strong>Profil bereit</strong>
+                    <p style={{ margin: "6px 0 0" }}>
+                      {cvProfile.profileSummary || "CV Profil wurde analysiert."}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <p style={{ margin: 0, color: "#94a3b8", fontSize: 13 }}>
-                Die Suche merkt sich bereits gefundene Jobs und kann sie bei
-                neuen Suchen an den Backend Filter übergeben.
+                Die Suche nutzt dein gespeichertes CV Profil und muss den CV
+                nicht bei jeder Suche neu analysieren.
               </p>
             </div>
           </section>
@@ -902,52 +1079,7 @@ export default function App() {
                     boxShadow: "0 22px 55px rgba(0,0,0,0.22)",
                     padding: 26,
                   }}
-                >
-                  <div
-                    style={{
-                      width: "65%",
-                      height: 18,
-                      borderRadius: 999,
-                      background: "rgba(148,163,184,0.22)",
-                      marginBottom: 18,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: "42%",
-                      height: 14,
-                      borderRadius: 999,
-                      background: "rgba(148,163,184,0.16)",
-                      marginBottom: 32,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: "100%",
-                      height: 12,
-                      borderRadius: 999,
-                      background: "rgba(148,163,184,0.14)",
-                      marginBottom: 12,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: "82%",
-                      height: 12,
-                      borderRadius: 999,
-                      background: "rgba(148,163,184,0.14)",
-                      marginBottom: 32,
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: 120,
-                      height: 38,
-                      borderRadius: 14,
-                      background: "rgba(21,128,61,0.22)",
-                    }}
-                  />
-                </div>
+                />
               ))}
             </section>
           )}
@@ -979,28 +1111,16 @@ export default function App() {
                 background: "rgba(15, 23, 42, 0.72)",
                 border: "1px solid rgba(148, 163, 184, 0.16)",
                 marginBottom: 24,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 18,
-                flexWrap: "wrap",
               }}
             >
-              <div>
-                <strong style={{ fontSize: 18 }}>
-                  {showSavedJobs ? "Gespeicherte Jobs" : "AI Profil"}
-                </strong>
-                <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
-                  {showSavedJobs
-                    ? "Diese Jobs wurden lokal im Browser gespeichert."
-                    : "Jobs wurden basierend auf deinem CV gefiltert und priorisiert."}
-                </p>
-                {onlyTop && (
-                  <p style={{ margin: "8px 0 0", color: "#fbbf24" }}>
-                    Du siehst aktuell nur Top Jobs ab 80% Match.
-                  </p>
-                )}
-              </div>
+              <strong style={{ fontSize: 18 }}>
+                {showSavedJobs ? "Gespeicherte Jobs" : "AI Profil"}
+              </strong>
+              <p style={{ margin: "8px 0 0", color: "#cbd5e1" }}>
+                {showSavedJobs
+                  ? "Diese Jobs wurden lokal im Browser gespeichert."
+                  : "Jobs wurden basierend auf deinem CV Profil gefiltert und priorisiert."}
+              </p>
             </section>
           )}
 
@@ -1203,30 +1323,32 @@ export default function App() {
                               </p>
 
                               <div style={{ display: "grid", gap: 8 }}>
-                                {job.highlights.slice(0, 3).map((highlight, i) => (
-                                  <div
-                                    key={i}
-                                    style={{
-                                      display: "grid",
-                                      gridTemplateColumns: "22px 1fr",
-                                      gap: 8,
-                                      alignItems: "start",
-                                      color: "#334155",
-                                      fontSize: 14,
-                                      lineHeight: 1.55,
-                                    }}
-                                  >
-                                    <span
+                                {job.highlights
+                                  .slice(0, 3)
+                                  .map((highlight, i) => (
+                                    <div
+                                      key={i}
                                       style={{
-                                        color: "#15803d",
-                                        fontWeight: 950,
+                                        display: "grid",
+                                        gridTemplateColumns: "22px 1fr",
+                                        gap: 8,
+                                        alignItems: "start",
+                                        color: "#334155",
+                                        fontSize: 14,
+                                        lineHeight: 1.55,
                                       }}
                                     >
-                                      ✓
-                                    </span>
-                                    <span>{highlight}</span>
-                                  </div>
-                                ))}
+                                      <span
+                                        style={{
+                                          color: "#15803d",
+                                          fontWeight: 950,
+                                        }}
+                                      >
+                                        ✓
+                                      </span>
+                                      <span>{highlight}</span>
+                                    </div>
+                                  ))}
                               </div>
                             </div>
                           ) : job.snippet ? (
@@ -1267,7 +1389,13 @@ export default function App() {
                                 Achtung
                               </p>
 
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 8,
+                                  flexWrap: "wrap",
+                                }}
+                              >
                                 {job.riskFlags.slice(0, 3).map((risk, i) => (
                                   <span
                                     key={i}
