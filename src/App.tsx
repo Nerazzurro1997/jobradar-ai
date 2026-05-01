@@ -98,27 +98,6 @@ export default function App() {
         return sorted;
       });
     }
-    if (!newJobs.length) return;
-
-    setSavedJobs((prev) => {
-      const normalizedNewJobs = newJobs
-        .filter((job) => job.url)
-        .map((job, index) => ({
-          ...job,
-          id: job.id || Date.now() + index,
-        }));
-
-      const merged = [...normalizedNewJobs, ...prev];
-
-      const unique = merged.filter((job, index, self) => {
-        if (!job.url) return false;
-        return index === self.findIndex((item) => item.url === job.url);
-      });
-
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
-      return unique;
-    });
-  }
 
   function clearSavedJobs() {
     const confirmDelete = confirm(
