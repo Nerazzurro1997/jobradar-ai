@@ -92,8 +92,10 @@ export default function App() {
 
 // pulizia base
 const formatted = raw
-  .replace(/\*\*/g, "") // rimuove markdown **
-  .replace(/\n/g, "\n");
+  .replace(/\*\*/g, "")
+  .replace(/###/g, "")
+  .replace(/---/g, "")
+  .trim();
 
 setAnalysis((prev) => ({
   ...prev,
@@ -215,9 +217,27 @@ setAnalysis((prev) => ({
                 }}
               >
                 <strong>AI Analyse:</strong>
-                <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
-  {analysis[job.id]}
-</pre>
+                <div style={{ lineHeight: 1.6 }}>
+  {analysis[job.id].split("\n").map((line, i) => {
+    if (line.toLowerCase().includes("match score")) {
+      return (
+        <h2 key={i} style={{ color: "#16a34a" }}>
+          {line}
+        </h2>
+      );
+    }
+
+    if (line.toLowerCase().includes("warum")) {
+      return <h3 key={i}>💡 {line}</h3>;
+    }
+
+    if (line.toLowerCase().includes("risiken")) {
+      return <h3 key={i}>⚠️ {line}</h3>;
+    }
+
+    return <p key={i}>{line}</p>;
+  })}
+</div>
               </div>
             )}
           </div>
