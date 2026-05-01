@@ -38,8 +38,6 @@ export default function App() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [showSavedJobs, setShowSavedJobs] = useState(false);
 
-  const initials = "FM";
-
   useEffect(() => {
     const storedJobs = localStorage.getItem(STORAGE_KEY);
 
