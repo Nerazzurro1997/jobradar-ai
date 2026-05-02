@@ -1,47 +1,15 @@
 import { useEffect, useState } from "react";
+import type { CvProfile, Job, SearchStats } from "./types";
+import { getSavedJobs, saveJobs, clearJobs } from "./utils/storage";
+import { scoreColor, scoreLabel } from "./utils/score";
 
-type Job = {
-  id: number;
-  title: string;
-  company: string;
-  location: string;
-  url?: string;
-  snippet?: string;
-  fullDescription?: string;
-  highlights?: string[];
-  riskFlags?: string[];
-  previewSummary?: string;
-  publishedDate?: string;
-  keyword?: string;
-  score?: number;
-};
+import {
+  SUPABASE_ANALYZE_CV_URL,
+  SUPABASE_ANON_KEY,
+  SUPABASE_FUNCTION_URL,
+  SUPABASE_SEARCH_JOBS_URL,
+} from "./config/supabase";
 
-type CvProfile = {
-  searchTerms: string[];
-  strongKeywords: string[];
-  avoidKeywords: string[];
-  locations: string[];
-  profileSummary: string;
-};
-
-type SearchStats = {
-  foundLinks?: number;
-  scanned?: number;
-  shown?: number;
-};
-
-const SUPABASE_FUNCTION_URL =
-  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/match-job";
-
-const SUPABASE_SEARCH_JOBS_URL =
-  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/search-jobs";
-
-const SUPABASE_ANALYZE_CV_URL =
-  "https://splummvxjbyubbtiiebl.supabase.co/functions/v1/analyze-cv";
-
-const SUPABASE_ANON_KEY = "sb_publishable_Kc7qxUo7qpHaRz3w-wOCWg_rVqIeixX";
-
-const STORAGE_KEY = "jobradar_saved_jobs";
 const CV_PROFILE_KEY = "jobradar_cv_profile";
 
 export default function App() {
@@ -58,18 +26,8 @@ export default function App() {
   const [showSavedJobs, setShowSavedJobs] = useState(false);
 
   useEffect(() => {
-    const storedJobs = localStorage.getItem(STORAGE_KEY);
-
-    if (storedJobs) {
-      try {
-        const parsedJobs = JSON.parse(storedJobs);
-        if (Array.isArray(parsedJobs)) {
-          setSavedJobs(sortJobsByScore(parsedJobs));
-        }
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
+    const storedJobs = getSavedJobs();
+    setSavedJobs(sortJobsByScore(storedJobs));
 
     const storedProfile = localStorage.getItem(CV_PROFILE_KEY);
 
@@ -124,7 +82,7 @@ export default function App() {
 
       const sorted = sortJobsByScore(unique);
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sorted));
+      saveJobs(sorted);
       return sorted;
     });
   }
@@ -133,12 +91,12 @@ export default function App() {
     const confirmDelete = confirm(
       "Willst du wirklich alles löschen? Gespeicherte Jobs und CV Profil werden entfernt."
     );
-  
+
     if (!confirmDelete) return;
-  
-    localStorage.removeItem(STORAGE_KEY);
+
+    clearJobs();
     localStorage.removeItem(CV_PROFILE_KEY);
-  
+
     setSavedJobs([]);
     setJobs([]);
     setCvProfile(null);
@@ -154,20 +112,6 @@ export default function App() {
     setCvProfile(null);
   }
 
-  function scoreColor(score = 0) {
-    if (score >= 85) return "#15803d";
-    if (score >= 75) return "#65a30d";
-    if (score >= 65) return "#d97706";
-    return "#dc2626";
-  }
-
-  function scoreLabel(score = 0) {
-    if (score >= 90) return "Elite Match";
-    if (score >= 80) return "Top Match";
-    if (score >= 70) return "Good Match";
-    if (score >= 65) return "Possible";
-    return "Weak";
-  }
 
   const toBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -293,7 +237,7 @@ export default function App() {
         if (savedJobs.length > 0) {
           const sortedSavedJobs = sortJobsByScore(savedJobs);
           setSavedJobs(sortedSavedJobs);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedSavedJobs));
+          saveJobs(sortedSavedJobs);
           setShowSavedJobs(true);
         } else {
           alert("Keine neuen Jobs gefunden.");
@@ -930,13 +874,10 @@ export default function App() {
                     accept="application/pdf"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
-                    
+
                       if (file) {
-                        // 🔥 prima resetti tutto
                         setCvProfile(null);
                         localStorage.removeItem(CV_PROFILE_KEY);
-                    
-                        // 👉 poi setti il nuovo file
                         setCvFile(file);
                       }
                     }}
