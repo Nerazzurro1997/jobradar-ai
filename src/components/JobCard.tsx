@@ -12,6 +12,61 @@ type JobCardProps = {
   onAnalyze: (job: Job) => void;
 };
 
+type JobWithOptionalWorkload = Job & {
+  workload?: string;
+  workloadPercent?: string;
+  employmentLevel?: string;
+  pensum?: string;
+};
+
+function normalizeWorkload(value: string) {
+  return value
+    .replace(/\s+/g, "")
+    .replace(/-/g, "–")
+    .trim();
+}
+
+function extractWorkloadFromTitle(title: string) {
+  const cleanTitle = title.trim();
+
+  const parenthesisMatch = cleanTitle.match(
+    /\s*\((\d{1,3}\s*(?:[-–]\s*\d{1,3})?\s*%)\)\s*$/
+  );
+
+  if (parenthesisMatch) {
+    return {
+      title: cleanTitle.replace(parenthesisMatch[0], "").trim(),
+      workload: normalizeWorkload(parenthesisMatch[1]),
+    };
+  }
+
+  const trailingMatch = cleanTitle.match(
+    /\s+(\d{1,3}\s*(?:[-–]\s*\d{1,3})?\s*%)\s*$/
+  );
+
+  if (trailingMatch) {
+    return {
+      title: cleanTitle.replace(trailingMatch[0], "").trim(),
+      workload: normalizeWorkload(trailingMatch[1]),
+    };
+  }
+
+  return {
+    title: cleanTitle,
+    workload: "",
+  };
+}
+
+function getExplicitWorkload(job: JobWithOptionalWorkload) {
+  return (
+    job.workload ||
+    job.workloadPercent ||
+    job.employmentLevel ||
+    job.pensum ||
+    ""
+  ).trim();
+}
+
 export function JobCard({
   job,
   index,
@@ -24,7 +79,16 @@ export function JobCard({
   const score = job.score || 0;
   const isBest = index < 3;
   const isHovered = hoveredId === job.id;
-  const isAnalyzing = analysisText === "⏳ Analisi in corso...";
+
+  const titleData = extractWorkloadFromTitle(job.title || "Untitled job");
+  const explicitWorkload = getExplicitWorkload(job as JobWithOptionalWorkload);
+  const workload = titleData.workload || explicitWorkload;
+
+  const normalizedAnalysis = analysisText?.toLowerCase() || "";
+  const isAnalyzing =
+    analysisText === "⏳ Analisi in corso..." ||
+    normalizedAnalysis.includes("analisi in corso") ||
+    normalizedAnalysis.includes("ai is analyzing");
 
   const handleMouseEnter = () => {
     if (typeof job.id === "number") {
@@ -130,6 +194,22 @@ export function JobCard({
               {scoreLabel(score)}
             </span>
 
+            {workload && (
+              <span
+                style={{
+                  background: "rgba(245,158,11,0.12)",
+                  color: "#92400e",
+                  border: "1px solid rgba(245,158,11,0.28)",
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 900,
+                }}
+              >
+                🕒 Workload {workload}
+              </span>
+            )}
+
             {job.keyword && (
               <span
                 style={{
@@ -154,7 +234,7 @@ export function JobCard({
               letterSpacing: -0.5,
             }}
           >
-            {job.title}
+            {titleData.title}
           </h2>
 
           <p
