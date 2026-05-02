@@ -3,6 +3,11 @@ import type { CvProfile, Job, SearchStats } from "../types";
 import { toBase64 } from "../utils/file";
 import { saveJobs } from "../utils/storage";
 import { analyzeCvAPI, searchJobsAPI, analyzeJobAPI } from "../services/api";
+import {
+  sortJobsByScore,
+  getUniqueJobsByUrl,
+  normalizeJobs,
+} from "../utils/jobs";
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -62,9 +67,12 @@ export function useJobs() {
       }
 
       const incomingJobs: Job[] = data.jobs || [];
+const normalizedJobs = normalizeJobs(incomingJobs);
+const uniqueJobs = getUniqueJobsByUrl(normalizedJobs);
+const sortedJobs = sortJobsByScore(uniqueJobs);
 
-      setJobs(incomingJobs);
-      saveJobs(incomingJobs);
+setJobs(sortedJobs);
+saveJobs(sortedJobs);
 
       setStats({
         foundLinks: data.foundLinks,
