@@ -7,8 +7,42 @@ type Stats = {
   shown?: number;
 };
 
-type CvProfileWithSkills = CvProfile & {
-  skills?: string[];
+type ProfileSignals = {
+  skillTags?: string[];
+  strongKeywords?: string[];
+  cvHighlights?: string[];
+  profileSummary?: string;
+  languageProfile?: {
+    languages?: string[];
+    strongestLanguages?: string[];
+    businessLanguages?: string[];
+    languageKeywords?: string[];
+    languageSummary?: string;
+  };
+  skills?:
+    | string[]
+    | {
+        hardSkills?: string[];
+        softSkills?: string[];
+        tools?: string[];
+        languages?: string[];
+        certifications?: string[];
+      };
+  matching?: {
+    bestFitRoles?: string[];
+    acceptableRoles?: string[];
+    weakFitRoles?: string[];
+    dealBreakers?: string[];
+    scoringHints?: string[];
+    sellingPoints?: string[];
+    applicationPositioning?: string[];
+  };
+  search?: {
+    strongKeywords?: string[];
+    searchTerms?: string[];
+    preferredRoles?: string[];
+    preferredLocations?: string[];
+  };
 };
 
 type Props = {
@@ -38,6 +72,104 @@ type Props = {
 };
 
 const CV_PROFILE_KEY = "jobradar_cv_profile";
+
+function safeArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function uniqueItems(items: string[], limit = 16): string[] {
+  return [...new Set(items)].slice(0, limit);
+}
+
+function getProfileSignals(cvProfile: CvProfile | null) {
+  const profile = cvProfile as unknown as ProfileSignals | null;
+
+  if (!profile) {
+    return {
+      skillSignals: [],
+      languageSignals: [],
+      roleSignals: [],
+      highlightSignals: [],
+    };
+  }
+
+  const skillsValue = profile.skills;
+
+  const skillSignals = uniqueItems(
+    [
+      ...safeArray(profile.skillTags),
+      ...safeArray(profile.strongKeywords),
+      ...safeArray(profile.search?.strongKeywords),
+      ...(Array.isArray(skillsValue) ? safeArray(skillsValue) : []),
+      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.hardSkills) : []),
+      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.softSkills) : []),
+      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.tools) : []),
+      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.certifications) : []),
+    ],
+    18
+  );
+
+  const languageSignals = uniqueItems(
+    [
+      ...safeArray(profile.languageProfile?.languages),
+      ...safeArray(profile.languageProfile?.strongestLanguages),
+      ...safeArray(profile.languageProfile?.businessLanguages),
+      ...safeArray(profile.languageProfile?.languageKeywords),
+      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.languages) : []),
+    ],
+    12
+  );
+
+  const roleSignals = uniqueItems(
+    [
+      ...safeArray(profile.matching?.bestFitRoles),
+      ...safeArray(profile.matching?.acceptableRoles),
+      ...safeArray(profile.search?.preferredRoles),
+      ...safeArray(profile.search?.searchTerms),
+    ],
+    10
+  );
+
+  const highlightSignals = uniqueItems(
+    [
+      ...safeArray(profile.cvHighlights),
+      ...safeArray(profile.matching?.sellingPoints),
+      ...safeArray(profile.matching?.scoringHints),
+    ],
+    8
+  );
+
+  return {
+    skillSignals,
+    languageSignals,
+    roleSignals,
+    highlightSignals,
+  };
+}
+
+function SignalPill({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        padding: "7px 10px",
+        borderRadius: 999,
+        background: "rgba(59,130,246,0.16)",
+        border: "1px solid rgba(59,130,246,0.24)",
+        color: "#bfdbfe",
+        fontSize: 12,
+        fontWeight: 800,
+        lineHeight: 1,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
 
 export function JobDashboard({
   cvFile,
@@ -81,7 +213,14 @@ export function JobDashboard({
         )
       : 0;
 
-  const skills = (cvProfile as CvProfileWithSkills | null)?.skills ?? [];
+  const { skillSignals, languageSignals, roleSignals, highlightSignals } =
+    getProfileSignals(cvProfile);
+
+  const hasProfileSignals =
+    skillSignals.length > 0 ||
+    languageSignals.length > 0 ||
+    roleSignals.length > 0 ||
+    highlightSignals.length > 0;
 
   return (
     <main
@@ -157,6 +296,7 @@ export function JobDashboard({
       >
         <div>
           <h2 style={{ margin: 0, fontSize: 24 }}>🧠 CV Intelligence</h2>
+
           <p
             style={{
               margin: "8px 0 18px",
@@ -193,6 +333,7 @@ export function JobDashboard({
               }}
             >
               <strong style={{ color: "#22c55e" }}>✅ Profile ready</strong>
+
               <p
                 style={{
                   margin: "8px 0 0",
@@ -261,29 +402,115 @@ export function JobDashboard({
             Profile signals
           </h3>
 
-          {skills.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {skills.slice(0, 12).map((skill, index) => (
-                <span
-                  key={`${skill}-${index}`}
-                  style={{
-                    padding: "7px 10px",
-                    borderRadius: 999,
-                    background: "rgba(59,130,246,0.16)",
-                    border: "1px solid rgba(59,130,246,0.24)",
-                    color: "#bfdbfe",
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
-                >
-                  {skill}
-                </span>
-              ))}
+          {hasProfileSignals ? (
+            <div style={{ display: "grid", gap: 16 }}>
+              {skillSignals.length > 0 && (
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 8px",
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Skills & keywords
+                  </p>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {skillSignals.slice(0, 14).map((signal, index) => (
+                      <SignalPill key={`skill-${signal}-${index}`} label={signal} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {languageSignals.length > 0 && (
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 8px",
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Languages
+                  </p>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {languageSignals.slice(0, 10).map((signal, index) => (
+                      <SignalPill
+                        key={`language-${signal}-${index}`}
+                        label={signal}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {roleSignals.length > 0 && (
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 8px",
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Best-fit roles
+                  </p>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {roleSignals.slice(0, 8).map((signal, index) => (
+                      <SignalPill key={`role-${signal}-${index}`} label={signal} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {highlightSignals.length > 0 && (
+                <div>
+                  <p
+                    style={{
+                      margin: "0 0 8px",
+                      color: "#94a3b8",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    Highlights
+                  </p>
+
+                  <ul
+                    style={{
+                      margin: 0,
+                      paddingLeft: 18,
+                      color: "#cbd5e1",
+                      lineHeight: 1.6,
+                      fontSize: 13,
+                    }}
+                  >
+                    {highlightSignals.slice(0, 5).map((highlight, index) => (
+                      <li key={`highlight-${index}`}>{highlight}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           ) : (
             <p style={{ margin: 0, color: "#94a3b8", lineHeight: 1.5 }}>
-              Skills will appear here after CV analysis if they are returned by
-              your AI function.
+              Skills, languages and matching signals will appear here after the
+              CV profile is created.
             </p>
           )}
         </div>
@@ -346,6 +573,7 @@ export function JobDashboard({
           ].map(([icon, label, value]) => (
             <div key={String(label)} className="card">
               <div style={{ fontSize: 22 }}>{icon}</div>
+
               <p
                 style={{
                   margin: "10px 0 4px",
@@ -356,6 +584,7 @@ export function JobDashboard({
               >
                 {label}
               </p>
+
               <p style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
                 {value}
               </p>
@@ -393,6 +622,7 @@ export function JobDashboard({
           }}
         >
           <h3 style={{ margin: 0, fontSize: 22 }}>No jobs loaded yet</h3>
+
           <p style={{ margin: "10px 0 0", color: "#94a3b8" }}>
             Upload your CV and start a search to see AI-ranked jobs here.
           </p>
