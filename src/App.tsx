@@ -3,13 +3,7 @@ import type { CvProfile, Job, SearchStats } from "./types";
 import { getSavedJobs, saveJobs, clearJobs } from "./utils/storage";
 import { toBase64 } from "./utils/file";
 import { JobCard } from "./components/JobCard";
-
-import {
-  SUPABASE_ANALYZE_CV_URL,
-  SUPABASE_ANON_KEY,
-  SUPABASE_FUNCTION_URL,
-  SUPABASE_SEARCH_JOBS_URL,
-} from "./config/supabase";
+import { analyzeCvAPI, searchJobsAPI, analyzeJobAPI } from "./services/api";
 
 const CV_PROFILE_KEY = "jobradar_cv_profile";
 
@@ -124,28 +118,7 @@ export default function App() {
 
     try {
       const base64 = await toBase64(file);
-
-      const response = await fetch(SUPABASE_ANALYZE_CV_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileBase64: base64,
-        }),
-      });
-
-      const rawText = await response.text();
-
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(rawText.slice(0, 300));
-      }
+      const data = await analyzeCvAPI(base64, file.name);
 
       if (!data.success || !data.profile) {
         throw new Error(data.error || "CV Profil konnte nicht erstellt werden.");
@@ -186,30 +159,12 @@ export default function App() {
         .map((job) => job.url)
         .filter((url): url is string => Boolean(url));
 
-      const response = await fetch(SUPABASE_SEARCH_JOBS_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          profile: profileToUse,
-          fileName: cvFile.name,
-          fileBase64: base64,
-          location: "Zürich",
-          knownUrls,
-        }),
-      });
-
-      const rawText = await response.text();
-
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(rawText.slice(0, 300));
-      }
+      const data = await searchJobsAPI(
+        base64,
+        cvFile.name,
+        profileToUse,
+        knownUrls
+      );
 
       if (data.error) {
         throw new Error(data.error);
@@ -262,29 +217,7 @@ export default function App() {
     try {
       const base64 = await toBase64(cvFile);
 
-      const response = await fetch(SUPABASE_FUNCTION_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          fileName: cvFile.name,
-          fileBase64: base64,
-          profile: cvProfile,
-          job,
-        }),
-      });
-
-      const rawText = await response.text();
-
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(rawText.slice(0, 300));
-      }
+      const data = await analyzeJobAPI(base64, cvFile.name, cvProfile, job);
 
       const raw =
         data?.text ||
