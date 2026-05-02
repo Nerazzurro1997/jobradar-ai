@@ -3,6 +3,7 @@ import type { CvProfile, Job, SearchStats } from "./types";
 import { getSavedJobs, saveJobs, clearJobs } from "./utils/storage";
 import { scoreColor, scoreLabel } from "./utils/score";
 import { renderAnalysis } from "./utils/renderAnalysis";
+import { toBase64 } from "./utils/file";
 
 import {
   SUPABASE_ANALYZE_CV_URL,
@@ -112,19 +113,6 @@ export default function App() {
     localStorage.removeItem(CV_PROFILE_KEY);
     setCvProfile(null);
   }
-
-
-  const toBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const base64 = reader.result?.toString().split(",")[1];
-        resolve(base64 || "");
-      };
-      reader.onerror = reject;
-    });
-  };
 
   async function analyzeCv(fileOverride?: File): Promise<CvProfile> {
     const file = fileOverride || cvFile;
