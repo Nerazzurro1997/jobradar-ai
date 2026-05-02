@@ -26,11 +26,16 @@ export function JobCard({
   const isHovered = hoveredId === job.id;
   const isAnalyzing = analysisText === "⏳ Analisi in corso...";
 
+  const handleMouseEnter = () => {
+    if (typeof job.id === "number") {
+      onHover(job.id);
+    }
+  };
+
   return (
-    <div
-      className="job-card"
-      key={job.url || job.id}
-      onMouseEnter={() => onHover(job.id)}
+    <article
+      className="job-card fade-in"
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={() => onHover(null)}
       style={{
         position: "relative",
@@ -40,12 +45,12 @@ export function JobCard({
         padding: 32,
         borderRadius: 28,
         border: isBest
-          ? "2px solid rgba(21,128,61,0.38)"
-          : "1px solid rgba(226,232,240,0.8)",
+          ? "2px solid rgba(34,197,94,0.42)"
+          : "1px solid rgba(226,232,240,0.85)",
         boxShadow: isHovered
           ? "0 35px 85px rgba(0,0,0,0.34)"
           : isBest
-          ? "0 28px 70px rgba(21,128,61,0.12)"
+          ? "0 28px 70px rgba(34,197,94,0.14)"
           : "0 22px 55px rgba(0,0,0,0.22)",
         transform: isHovered ? "translateY(-6px)" : "translateY(0)",
         transition:
@@ -58,7 +63,7 @@ export function JobCard({
           top: 0,
           left: 0,
           right: 0,
-          height: 5,
+          height: 6,
           background: scoreColor(score),
         }}
       />
@@ -66,8 +71,8 @@ export function JobCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 120px",
-          gap: 26,
+          gridTemplateColumns: "1fr 128px",
+          gap: 28,
           alignItems: "start",
         }}
       >
@@ -77,15 +82,15 @@ export function JobCard({
               display: "flex",
               gap: 10,
               flexWrap: "wrap",
-              marginBottom: 12,
+              marginBottom: 14,
             }}
           >
             {isBest && (
               <span
                 style={{
-                  background: "rgba(21,128,61,0.12)",
+                  background: "rgba(34,197,94,0.12)",
                   color: "#166534",
-                  border: "1px solid rgba(21,128,61,0.28)",
+                  border: "1px solid rgba(34,197,94,0.28)",
                   padding: "6px 10px",
                   borderRadius: 999,
                   fontSize: 12,
@@ -108,7 +113,7 @@ export function JobCard({
                   fontWeight: 900,
                 }}
               >
-                💾 Gespeichert
+                💾 Saved
               </span>
             )}
 
@@ -124,6 +129,21 @@ export function JobCard({
             >
               {scoreLabel(score)}
             </span>
+
+            {job.keyword && (
+              <span
+                style={{
+                  background: "#dbeafe",
+                  color: "#1d4ed8",
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 900,
+                }}
+              >
+                Keyword: {job.keyword}
+              </span>
+            )}
           </div>
 
           <h2
@@ -148,23 +168,6 @@ export function JobCard({
             {job.company} · {job.location}
           </p>
 
-          {job.keyword && (
-            <span
-              style={{
-                display: "inline-block",
-                marginTop: 8,
-                background: "#dbeafe",
-                color: "#1d4ed8",
-                padding: "7px 12px",
-                borderRadius: 999,
-                fontSize: 13,
-                fontWeight: 900,
-              }}
-            >
-              Gefunden mit: {job.keyword}
-            </span>
-          )}
-
           {(job.previewSummary ||
             job.highlights?.length ||
             job.riskFlags?.length ||
@@ -182,8 +185,8 @@ export function JobCard({
                   style={{
                     padding: "13px 15px",
                     borderRadius: 16,
-                    background: "rgba(37, 99, 235, 0.08)",
-                    border: "1px solid rgba(37, 99, 235, 0.16)",
+                    background: "rgba(37,99,235,0.08)",
+                    border: "1px solid rgba(37,99,235,0.16)",
                     color: "#1e3a8a",
                     fontWeight: 900,
                     lineHeight: 1.55,
@@ -199,8 +202,8 @@ export function JobCard({
                   style={{
                     padding: "16px 18px",
                     borderRadius: 18,
-                    background: "rgba(15, 23, 42, 0.04)",
-                    border: "1px solid rgba(15, 23, 42, 0.08)",
+                    background: "rgba(15,23,42,0.04)",
+                    border: "1px solid rgba(15,23,42,0.08)",
                   }}
                 >
                   <p
@@ -219,7 +222,7 @@ export function JobCard({
                   <div style={{ display: "grid", gap: 8 }}>
                     {job.highlights.slice(0, 3).map((highlight, i) => (
                       <div
-                        key={i}
+                        key={`${highlight}-${i}`}
                         style={{
                           display: "grid",
                           gridTemplateColumns: "22px 1fr",
@@ -243,8 +246,8 @@ export function JobCard({
                   style={{
                     padding: "16px 18px",
                     borderRadius: 18,
-                    background: "rgba(15, 23, 42, 0.04)",
-                    border: "1px solid rgba(15, 23, 42, 0.08)",
+                    background: "rgba(15,23,42,0.04)",
+                    border: "1px solid rgba(15,23,42,0.08)",
                     color: "#334155",
                     lineHeight: 1.65,
                     fontSize: 14,
@@ -259,8 +262,8 @@ export function JobCard({
                   style={{
                     padding: "14px 16px",
                     borderRadius: 18,
-                    background: "rgba(220, 38, 38, 0.07)",
-                    border: "1px solid rgba(220, 38, 38, 0.18)",
+                    background: "rgba(220,38,38,0.07)",
+                    border: "1px solid rgba(220,38,38,0.18)",
                   }}
                 >
                   <p
@@ -273,26 +276,17 @@ export function JobCard({
                       textTransform: "uppercase",
                     }}
                   >
-                    Achtung
+                    Watch out
                   </p>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      flexWrap: "wrap",
-                    }}
-                  >
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {job.riskFlags.slice(0, 3).map((risk, i) => (
                       <span
-                        key={i}
+                        key={`${risk}-${i}`}
                         style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
                           padding: "7px 10px",
                           borderRadius: 999,
-                          background: "rgba(220, 38, 38, 0.1)",
+                          background: "rgba(220,38,38,0.1)",
                           color: "#991b1b",
                           fontSize: 12,
                           fontWeight: 900,
@@ -317,53 +311,35 @@ export function JobCard({
           >
             {job.url && (
               <a
-                className="premium-link"
+                className="btn btn-dark"
                 href={job.url}
                 target="_blank"
                 rel="noreferrer"
-                style={{
-                  background: "#0f172a",
-                  color: "white",
-                  textDecoration: "none",
-                  padding: "12px 16px",
-                  borderRadius: 14,
-                  fontWeight: 900,
-                  boxShadow: "0 12px 24px rgba(15,23,42,0.22)",
-                }}
+                style={{ textDecoration: "none" }}
               >
-                Stelle öffnen
+                Open Job
               </a>
             )}
 
             <button
-              className="premium-btn"
+              className="btn btn-blue"
               onClick={() => onAnalyze(job)}
               disabled={isAnalyzing}
               style={{
-                background: isAnalyzing
-                  ? "#64748b"
-                  : "linear-gradient(135deg, #2563eb, #1d4ed8)",
-                color: "white",
-                border: "none",
-                padding: "12px 16px",
-                borderRadius: 14,
+                opacity: isAnalyzing ? 0.75 : 1,
                 cursor: isAnalyzing ? "not-allowed" : "pointer",
-                fontWeight: 900,
-                boxShadow: isAnalyzing
-                  ? "none"
-                  : "0 12px 24px rgba(37,99,235,0.25)",
               }}
             >
-              {isAnalyzing ? "Analyse läuft..." : "AI Analyse"}
+              {isAnalyzing ? "🔄 AI analyzing..." : "🤖 AI Analysis"}
             </button>
           </div>
         </div>
 
         <div
           style={{
-            width: 108,
-            height: 108,
-            borderRadius: 28,
+            width: 116,
+            height: 116,
+            borderRadius: 30,
             background: scoreColor(score),
             color: "white",
             display: "flex",
@@ -374,11 +350,11 @@ export function JobCard({
             boxShadow: isHovered
               ? `0 24px 55px ${scoreColor(score)}66`
               : `0 18px 38px ${scoreColor(score)}44`,
-            transform: isHovered ? "scale(1.04)" : "scale(1)",
+            transform: isHovered ? "scale(1.08)" : "scale(1)",
             transition: "transform 0.25s ease, box-shadow 0.25s ease",
           }}
         >
-          <span style={{ fontSize: 32 }}>{score}%</span>
+          <span style={{ fontSize: 34 }}>{score}%</span>
           <span style={{ fontSize: 11, letterSpacing: 0.8 }}>MATCH</span>
         </div>
       </div>
@@ -408,17 +384,24 @@ export function JobCard({
             <strong
               style={{
                 display: "block",
-                marginBottom: 8,
+                marginBottom: 10,
                 color: "#0f172a",
                 fontSize: 18,
               }}
             >
-              AI Analyse
+              🤖 AI Analysis
             </strong>
-            {renderAnalysis(analysisText)}
+
+            {isAnalyzing ? (
+              <p style={{ margin: 0, color: "#475569", fontWeight: 800 }}>
+                AI is analyzing this job...
+              </p>
+            ) : (
+              renderAnalysis(analysisText)
+            )}
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }

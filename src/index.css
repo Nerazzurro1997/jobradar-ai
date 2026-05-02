@@ -1,12 +1,16 @@
+/* ========================= */
+/* RESET + BASE */
+/* ========================= */
+
 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
 html,
 body,
 #root {
-  margin: 0;
-  padding: 0;
   width: 100%;
   min-height: 100vh;
 }
@@ -25,6 +29,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ========================= */
+/* GLOBAL ELEMENTS */
+/* ========================= */
+
 button,
 input,
 textarea,
@@ -32,8 +40,9 @@ select {
   font-family: inherit;
 }
 
+/* BUTTON BASE */
 button {
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 button:hover {
@@ -44,18 +53,24 @@ button:active {
   transform: translateY(0);
 }
 
+/* LINKS */
 a {
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 a:hover {
   transform: translateY(-1px);
 }
 
+/* TEXT SELECTION */
 ::selection {
   background: rgba(37, 99, 235, 0.35);
   color: #ffffff;
 }
+
+/* ========================= */
+/* SCROLLBAR */
+/* ========================= */
 
 ::-webkit-scrollbar {
   width: 10px;
@@ -73,4 +88,140 @@ a:hover {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
+}
+
+/* ========================= */
+/* BUTTON SYSTEM (PRO LEVEL) */
+/* ========================= */
+
+.btn {
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-weight: 800;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+/* GREEN (Search Jobs) */
+.btn-primary {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  box-shadow: 0 10px 25px rgba(34, 197, 94, 0.25);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 14px 35px rgba(34, 197, 94, 0.45);
+}
+
+/* BLUE (Analyze CV) */
+.btn-blue {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.25);
+}
+
+.btn-blue:hover {
+  box-shadow: 0 14px 35px rgba(59, 130, 246, 0.45);
+}
+
+/* DARK BUTTON */
+.btn-dark {
+  background: rgba(30, 41, 59, 0.8);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.btn-dark:hover {
+  background: rgba(51, 65, 85, 0.9);
+}
+
+/* DANGER BUTTON */
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  box-shadow: 0 10px 25px rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger:hover {
+  box-shadow: 0 14px 35px rgba(239, 68, 68, 0.45);
+}
+
+/* ========================= */
+/* FILE INPUT (CUSTOM STYLE) */
+/* ========================= */
+
+input[type="file"] {
+  display: none;
+}
+
+.file-upload {
+  display: inline-block;
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.8);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-upload:hover {
+  background: rgba(51, 65, 85, 0.9);
+  transform: translateY(-1px);
+}
+
+/* ========================= */
+/* CARD STYLE */
+/* ========================= */
+
+.card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 18px;
+  padding: 20px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+/* ========================= */
+/* LOADING ANIMATION */
+/* ========================= */
+
+@keyframes pulse {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+.loading {
+  animation: pulse 1.4s infinite;
+  color: #facc15;
+  font-weight: 700;
+}
+
+/* ========================= */
+/* FADE IN ANIMATION */
+/* ========================= */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeInUp 0.35s ease;
 }
