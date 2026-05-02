@@ -97,15 +97,6 @@ function readStoredCvProfile(): StoredCvProfile | null {
       return null;
     }
 
-    /**
-     * New storage format:
-     * {
-     *   version: 1,
-     *   profile,
-     *   fileMeta,
-     *   savedAt
-     * }
-     */
     if ("profile" in parsed) {
       const stored = parsed as Partial<StoredCvProfile>;
 
@@ -125,10 +116,6 @@ function readStoredCvProfile(): StoredCvProfile | null {
       };
     }
 
-    /**
-     * Legacy support:
-     * before this upgrade, the app stored only the CvProfile directly.
-     */
     return {
       version: 1,
       profile: parsed as CvProfile,
@@ -216,10 +203,6 @@ export default function App() {
     return nextSavedJobs;
   }, []);
 
-  /**
-   * Keeps the stored CV profile connected to the actual uploaded file.
-   * If the user selects another CV, the old profile is invalidated.
-   */
   useEffect(() => {
     if (!cvFile) return;
 
@@ -245,9 +228,6 @@ export default function App() {
     removeStoredCvProfile();
   }, [cvFile, cvProfileFileMeta]);
 
-  /**
-   * Persists CV profile changes.
-   */
   useEffect(() => {
     if (!cvProfile) {
       removeStoredCvProfile();
@@ -489,7 +469,7 @@ export default function App() {
         open={clearConfirmOpen}
         title="Clear all saved data?"
         description="This will remove your saved jobs, CV profile and current CV selection from Job Radar AI."
-        confirmLabel="Yes, clear everything"
+        confirmLabel="Clear everything"
         cancelLabel="Keep my data"
         danger
         onConfirm={confirmClearSavedJobs}
