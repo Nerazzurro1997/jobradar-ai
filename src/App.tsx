@@ -1,24 +1,29 @@
 import { useEffect, useState } from "react";
-import type { CvProfile, Job, SearchStats } from "./types";
+import type { CvProfile, Job } from "./types";
 import { getSavedJobs, saveJobs, clearJobs } from "./utils/storage";
-import { toBase64 } from "./utils/file";
 import { JobCard } from "./components/JobCard";
-import { analyzeCvAPI, searchJobsAPI, analyzeJobAPI } from "./services/api";
+import { useJobs } from "./hooks/useJobs";
 
 const CV_PROFILE_KEY = "jobradar_cv_profile";
 
 export default function App() {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvProfile, setCvProfile] = useState<CvProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [savedJobs, setSavedJobs] = useState<Job[]>([]);
-  const [analysis, setAnalysis] = useState<Record<number, string>>({});
-  const [searchLoading, setSearchLoading] = useState(false);
   const [onlyTop, setOnlyTop] = useState(false);
-  const [stats, setStats] = useState<SearchStats>({});
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [showSavedJobs, setShowSavedJobs] = useState(false);
+
+  const {
+    jobs,
+    analysis,
+    stats,
+    searchLoading,
+    profileLoading,
+    searchJobs: searchJobsFromHook,
+    analyzeJob: analyzeJobFromHook,
+    analyzeCv: analyzeCvFromHook,
+  } = useJobs();
 
   useEffect(() => {
     const storedJobs = getSavedJobs();
@@ -93,13 +98,10 @@ export default function App() {
     localStorage.removeItem(CV_PROFILE_KEY);
 
     setSavedJobs([]);
-    setJobs([]);
     setCvProfile(null);
     setCvFile(null);
-    setAnalysis({});
-    setStats({});
     setOnlyTop(false);
-    setShowSavedJobs(false);
+    setShowSavedJobs(true);
   }
 
   function clearCvProfile() {
@@ -107,141 +109,67 @@ export default function App() {
     setCvProfile(null);
   }
 
-  async function analyzeCv(fileOverride?: File): Promise<CvProfile> {
+  async function handleAnalyzeCv(fileOverride?: File): Promise<CvProfile> {
     const file = fileOverride || cvFile;
 
     if (!file) {
       throw new Error("Carica prima il CV PDF");
     }
 
-    setProfileLoading(true);
+    const profile = await analyzeCvFromHook(file);
 
-    try {
-      const base64 = await toBase64(file);
-      const data = await analyzeCvAPI(base64, file.name);
+    setCvProfile(profile);
+    localStorage.setItem(CV_PROFILE_KEY, JSON.stringify(profile));
 
-      if (!data.success || !data.profile) {
-        throw new Error(data.error || "CV Profil konnte nicht erstellt werden.");
-      }
-
-      setCvProfile(data.profile);
-      localStorage.setItem(CV_PROFILE_KEY, JSON.stringify(data.profile));
-
-      return data.profile;
-    } finally {
-      setProfileLoading(false);
-    }
+    return profile;
   }
 
-  async function searchJobs() {
+  async function handleSearchJobs() {
     if (!cvFile) {
       alert("Carica prima il CV PDF");
       return;
     }
 
-    setSearchLoading(true);
-    setJobs([]);
-    setAnalysis({});
     setOnlyTop(false);
-    setStats({});
     setShowSavedJobs(false);
 
     try {
-      const base64 = await toBase64(cvFile);
-
       let profileToUse = cvProfile;
 
       if (!profileToUse) {
-        profileToUse = await analyzeCv(cvFile);
+        profileToUse = await handleAnalyzeCv(cvFile);
       }
 
-      const knownUrls = savedJobs
-        .map((job) => job.url)
-        .filter((url): url is string => Boolean(url));
-
-      const data = await searchJobsAPI(
-        base64,
-        cvFile.name,
+      const incomingJobs = await searchJobsFromHook(
+        cvFile,
         profileToUse,
-        knownUrls
+        savedJobs
       );
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      const incomingJobs: Job[] = data.jobs || [];
-
-      if (data.noNewJobs || incomingJobs.length === 0) {
-        setJobs([]);
-
-        if (savedJobs.length > 0) {
-          const sortedSavedJobs = sortJobsByScore(savedJobs);
-          setSavedJobs(sortedSavedJobs);
-          saveJobs(sortedSavedJobs);
-          setShowSavedJobs(true);
-        } else {
-          alert("Keine neuen Jobs gefunden.");
-        }
-      } else {
+      if (incomingJobs.length > 0) {
         const sortedIncomingJobs = sortJobsByScore(incomingJobs);
-
-        setShowSavedJobs(false);
-        setJobs(sortedIncomingJobs);
         saveJobsToStorage(sortedIncomingJobs);
+        setShowSavedJobs(false);
+      } else if (savedJobs.length > 0) {
+        const sortedSavedJobs = sortJobsByScore(savedJobs);
+        setSavedJobs(sortedSavedJobs);
+        saveJobs(sortedSavedJobs);
+        setShowSavedJobs(true);
+      } else {
+        alert("Keine neuen Jobs gefunden.");
       }
-
-      setStats({
-        foundLinks: data.foundLinks,
-        scanned: data.scanned,
-        shown: data.count,
-      });
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
-    } finally {
-      setSearchLoading(false);
     }
   }
 
-  async function analyzeJob(job: Job) {
+  async function handleAnalyzeJob(job: Job) {
     if (!cvFile) {
       alert("Carica prima il CV PDF");
       return;
     }
 
-    setAnalysis((prev) => ({
-      ...prev,
-      [job.id]: "⏳ Analisi in corso...",
-    }));
-
-    try {
-      const base64 = await toBase64(cvFile);
-
-      const data = await analyzeJobAPI(base64, cvFile.name, cvProfile, job);
-
-      const raw =
-        data?.text ||
-        data?.output?.[0]?.content?.[0]?.text ||
-        data?.error ||
-        "Nessuna risposta";
-
-      const formatted = raw
-        .replace(/\*\*/g, "")
-        .replace(/###/g, "")
-        .replace(/---/g, "")
-        .replace(/Vielen Dank.*?\./, "")
-        .trim();
-
-      setAnalysis((prev) => ({
-        ...prev,
-        [job.id]: formatted,
-      }));
-    } catch (error) {
-      setAnalysis((prev) => ({
-        ...prev,
-        [job.id]: "Errore: " + String(error),
-      }));
-    }
+    await analyzeJobFromHook(job, cvFile, cvProfile);
   }
 
   return (
@@ -541,7 +469,7 @@ export default function App() {
               >
                 <button
                   className="premium-btn"
-                  onClick={searchJobs}
+                  onClick={handleSearchJobs}
                   disabled={searchLoading || profileLoading}
                   style={{
                     background:
@@ -573,7 +501,7 @@ export default function App() {
                   <button
                     className="premium-btn"
                     onClick={() =>
-                      analyzeCv().catch((error) =>
+                      handleAnalyzeCv().catch((error) =>
                         alert("Errore CV Analysis: " + String(error))
                       )
                     }
@@ -929,7 +857,7 @@ export default function App() {
                 hoveredId={hoveredId}
                 showSavedJobs={showSavedJobs}
                 onHover={setHoveredId}
-                onAnalyze={analyzeJob}
+                onAnalyze={handleAnalyzeJob}
               />
             ))}
           </div>
