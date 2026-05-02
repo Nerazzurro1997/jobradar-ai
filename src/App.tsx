@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CvProfile, Job } from "./types";
 import { getSavedJobs, saveJobs, clearJobs } from "./utils/storage";
+import { sortJobsByScore } from "./utils/jobs";
 import { JobCard } from "./components/JobCard";
 import { useJobs } from "./hooks/useJobs";
 
@@ -26,15 +27,13 @@ export default function App() {
   } = useJobs();
 
   useEffect(() => {
-    const storedJobs = getSavedJobs();
-    setSavedJobs(sortJobsByScore(storedJobs));
+    setSavedJobs(sortJobsByScore(getSavedJobs()));
 
     const storedProfile = localStorage.getItem(CV_PROFILE_KEY);
 
     if (storedProfile) {
       try {
-        const parsedProfile = JSON.parse(storedProfile);
-        setCvProfile(parsedProfile);
+        setCvProfile(JSON.parse(storedProfile));
       } catch {
         localStorage.removeItem(CV_PROFILE_KEY);
       }
@@ -57,35 +56,6 @@ export default function App() {
           activeJobs.length
       )
     : 0;
-
-  function sortJobsByScore(jobsToSort: Job[]) {
-    return [...jobsToSort].sort((a, b) => (b.score || 0) - (a.score || 0));
-  }
-
-  function saveJobsToStorage(newJobs: Job[]) {
-    if (!newJobs.length) return;
-
-    setSavedJobs((prev) => {
-      const normalizedNewJobs = newJobs
-        .filter((job) => job.url)
-        .map((job) => ({
-          ...job,
-          id: job.id ?? Math.floor(Date.now() + Math.random() * 1_000_000),
-        }));
-
-      const merged = [...normalizedNewJobs, ...prev];
-
-      const unique = merged.filter((job, index, self) => {
-        if (!job.url) return false;
-        return index === self.findIndex((item) => item.url === job.url);
-      });
-
-      const sorted = sortJobsByScore(unique);
-
-      saveJobs(sorted);
-      return sorted;
-    });
-  }
 
   function clearSavedJobs() {
     const confirmDelete = confirm(
@@ -146,18 +116,21 @@ export default function App() {
         savedJobs
       );
 
+      const refreshedSavedJobs = sortJobsByScore(getSavedJobs());
+      setSavedJobs(refreshedSavedJobs);
+
       if (incomingJobs.length > 0) {
-        const sortedIncomingJobs = sortJobsByScore(incomingJobs);
-        saveJobsToStorage(sortedIncomingJobs);
         setShowSavedJobs(false);
-      } else if (savedJobs.length > 0) {
-        const sortedSavedJobs = sortJobsByScore(savedJobs);
-        setSavedJobs(sortedSavedJobs);
-        saveJobs(sortedSavedJobs);
-        setShowSavedJobs(true);
-      } else {
-        alert("Keine neuen Jobs gefunden.");
+        return;
       }
+
+      if (refreshedSavedJobs.length > 0) {
+        saveJobs(refreshedSavedJobs);
+        setShowSavedJobs(true);
+        return;
+      }
+
+      alert("Keine neuen Jobs gefunden.");
     } catch (error) {
       alert("Fehler bei der Jobsuche: " + String(error));
     }
