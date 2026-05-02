@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { ChangeEvent, MouseEvent } from "react";
 import type { Job, CvProfile } from "../types";
 import { JobCard } from "./JobCard";
 
@@ -73,6 +75,16 @@ type Props = {
 
 const CV_PROFILE_KEY = "jobradar_cv_profile";
 
+function removeStoredCvProfile() {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.removeItem(CV_PROFILE_KEY);
+  } catch (error) {
+    console.error("Failed to remove stored CV profile", error);
+  }
+}
+
 function safeArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
 
@@ -109,7 +121,9 @@ function getProfileSignals(cvProfile: CvProfile | null) {
       ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.hardSkills) : []),
       ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.softSkills) : []),
       ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.tools) : []),
-      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.certifications) : []),
+      ...(!Array.isArray(skillsValue)
+        ? safeArray(skillsValue?.certifications)
+        : []),
     ],
     18
   );
@@ -194,27 +208,92 @@ export function JobDashboard({
   setCvFile,
   setCvProfile,
 }: Props) {
-  const activeJobs = showSavedJobs ? savedJobs : jobs;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const displayedJobs = activeJobs.filter(
-    (job) => !onlyTop || (job.score || 0) >= 80
+  const isBusy = searchLoading || profileLoading;
+  const canClearCache =
+    savedJobs.length > 0 || Boolean(cvFile) || Boolean(cvProfile);
+
+  const clearFileInput = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  /**
+   * Importantissimo:
+   * dopo Clear Cache, React mette cvFile a null,
+   * ma il vero input file del browser può ancora tenere lo stesso file.
+   * Questo resetta fisicamente l'input.
+   */
+  useEffect(() => {
+    if (!cvFile) {
+      clearFileInput();
+    }
+  }, [cvFile, clearFileInput]);
+
+  const handleFileInputClick = useCallback(
+    (event: MouseEvent<HTMLInputElement>) => {
+      /**
+       * Permette di ricaricare lo stesso identico file.
+       * Senza questo, il browser spesso non scatena onChange
+       * se il file selezionato è uguale al precedente.
+       */
+      event.currentTarget.value = "";
+    },
+    []
   );
 
-  const bestScore =
-    activeJobs.length > 0
-      ? Math.max(...activeJobs.map((job) => job.score || 0))
-      : 0;
+  const handleCvFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0] ?? null;
 
-  const avgScore =
-    activeJobs.length > 0
-      ? Math.round(
-          activeJobs.reduce((sum, job) => sum + (job.score || 0), 0) /
-            activeJobs.length
-        )
-      : 0;
+      if (!file) {
+        event.currentTarget.value = "";
+        return;
+      }
+
+      setCvProfile(null);
+      removeStoredCvProfile();
+      setCvFile(file);
+
+      /**
+       * Reset finale dell'input:
+       * lo stato React mantiene il file,
+       * ma il browser input torna vuoto.
+       */
+      event.currentTarget.value = "";
+    },
+    [setCvFile, setCvProfile]
+  );
+
+  const activeJobs = useMemo(
+    () => (showSavedJobs ? savedJobs : jobs),
+    [showSavedJobs, savedJobs, jobs]
+  );
+
+  const displayedJobs = useMemo(
+    () => activeJobs.filter((job) => !onlyTop || (job.score || 0) >= 80),
+    [activeJobs, onlyTop]
+  );
+
+  const bestScore = useMemo(() => {
+    if (activeJobs.length === 0) return 0;
+
+    return Math.max(...activeJobs.map((job) => job.score || 0));
+  }, [activeJobs]);
+
+  const avgScore = useMemo(() => {
+    if (activeJobs.length === 0) return 0;
+
+    return Math.round(
+      activeJobs.reduce((sum, job) => sum + (job.score || 0), 0) /
+        activeJobs.length
+    );
+  }, [activeJobs]);
 
   const { skillSignals, languageSignals, roleSignals, highlightSignals } =
-    getProfileSignals(cvProfile);
+    useMemo(() => getProfileSignals(cvProfile), [cvProfile]);
 
   const hasProfileSignals =
     skillSignals.length > 0 ||
@@ -353,20 +432,21 @@ export function JobDashboard({
           )}
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <label className="file-upload">
+            <label
+              className="file-upload"
+              style={{
+                opacity: isBusy ? 0.7 : 1,
+                cursor: isBusy ? "not-allowed" : "pointer",
+              }}
+            >
               📄 Upload CV
               <input
+                ref={fileInputRef}
                 type="file"
-                accept="application/pdf"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-
-                  if (file) {
-                    setCvProfile(null);
-                    localStorage.removeItem(CV_PROFILE_KEY);
-                    setCvFile(file);
-                  }
-                }}
+                accept="application/pdf,.pdf"
+                disabled={isBusy}
+                onClick={handleFileInputClick}
+                onChange={handleCvFileChange}
               />
             </label>
 
@@ -421,7 +501,10 @@ export function JobDashboard({
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {skillSignals.slice(0, 14).map((signal, index) => (
-                      <SignalPill key={`skill-${signal}-${index}`} label={signal} />
+                      <SignalPill
+                        key={`skill-${signal}-${index}`}
+                        label={signal}
+                      />
                     ))}
                   </div>
                 </div>
@@ -470,7 +553,10 @@ export function JobDashboard({
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {roleSignals.slice(0, 8).map((signal, index) => (
-                      <SignalPill key={`role-${signal}-${index}`} label={signal} />
+                      <SignalPill
+                        key={`role-${signal}-${index}`}
+                        label={signal}
+                      />
                     ))}
                   </div>
                 </div>
@@ -501,7 +587,9 @@ export function JobDashboard({
                     }}
                   >
                     {highlightSignals.slice(0, 5).map((highlight, index) => (
-                      <li key={`highlight-${index}`}>{highlight}</li>
+                      <li key={`highlight-${highlight}-${index}`}>
+                        {highlight}
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -527,10 +615,10 @@ export function JobDashboard({
         <button
           className="btn btn-primary"
           onClick={onSearch}
-          disabled={searchLoading || profileLoading}
+          disabled={isBusy}
           style={{
-            opacity: searchLoading || profileLoading ? 0.7 : 1,
-            cursor: searchLoading || profileLoading ? "not-allowed" : "pointer",
+            opacity: isBusy ? 0.7 : 1,
+            cursor: isBusy ? "not-allowed" : "pointer",
           }}
         >
           {searchLoading ? "🔄 Searching..." : "🔍 Search Jobs"}
@@ -548,8 +636,16 @@ export function JobDashboard({
           </button>
         )}
 
-        {savedJobs.length > 0 && (
-          <button className="btn btn-danger" onClick={onClearCache}>
+        {canClearCache && (
+          <button
+            className="btn btn-danger"
+            onClick={onClearCache}
+            disabled={isBusy}
+            style={{
+              opacity: isBusy ? 0.7 : 1,
+              cursor: isBusy ? "not-allowed" : "pointer",
+            }}
+          >
             🗑 Clear Cache
           </button>
         )}
@@ -603,11 +699,7 @@ export function JobDashboard({
           }}
         >
           {[1, 2, 3].map((item) => (
-            <div
-              key={item}
-              className="card loading"
-              style={{ minHeight: 160 }}
-            />
+            <div key={item} className="card loading" style={{ minHeight: 160 }} />
           ))}
         </section>
       )}
