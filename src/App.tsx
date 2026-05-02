@@ -175,6 +175,7 @@ export default function App() {
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [showSavedJobs, setShowSavedJobs] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [workspaceResetAt, setWorkspaceResetAt] = useState<string | null>(null);
 
   const {
     jobs,
@@ -303,6 +304,14 @@ export default function App() {
       setOnlyTop(false);
       setShowSavedJobs(false);
       setHoveredId(null);
+
+      /**
+       * Important:
+       * jobs from useJobs live in memory, not in localStorage.
+       * This flag tells the dashboard to hide old search results
+       * and show a premium reset state instead.
+       */
+      setWorkspaceResetAt(new Date().toISOString());
     } catch (error) {
       console.error("Failed to clear saved data", error);
       window.alert("Could not clear saved data. Please try again.");
@@ -399,11 +408,13 @@ export default function App() {
       const refreshedSavedJobs = refreshSavedJobs(true);
 
       if (incomingJobs.length > 0) {
+        setWorkspaceResetAt(null);
         setShowSavedJobs(false);
         return;
       }
 
       if (refreshedSavedJobs.length > 0) {
+        setWorkspaceResetAt(null);
         setShowSavedJobs(true);
         return;
       }
@@ -453,6 +464,7 @@ export default function App() {
         stats={stats}
         searchLoading={searchLoading}
         profileLoading={profileLoading}
+        workspaceResetAt={workspaceResetAt}
         onSearch={handleSearchJobs}
         onAnalyzeCv={() => handleAnalyzeCv()}
         onClearCv={clearCvProfile}
