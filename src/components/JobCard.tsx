@@ -20,10 +20,7 @@ type JobWithOptionalWorkload = Job & {
 };
 
 function normalizeWorkload(value: string) {
-  return value
-    .replace(/\s+/g, "")
-    .replace(/-/g, "–")
-    .trim();
+  return value.replace(/\s+/g, "").replace(/-/g, "–").trim();
 }
 
 function extractWorkloadFromTitle(title: string) {
@@ -67,6 +64,93 @@ function getExplicitWorkload(job: JobWithOptionalWorkload) {
   ).trim();
 }
 
+function cleanAnalysisText(text?: string) {
+  if (!text) return "";
+
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/###/g, "")
+    .replace(/---/g, "")
+    .trim();
+}
+
+function isSectionTitle(line: string) {
+  const lower = line.toLowerCase();
+
+  return (
+    line.endsWith(":") ||
+    lower.includes("match score") ||
+    lower.includes("kurzfazit") ||
+    lower.includes("passung") ||
+    lower.includes("kritische") ||
+    lower.includes("risiken") ||
+    lower.includes("realistische chance") ||
+    lower.includes("empfehlung") ||
+    lower.includes("begründung") ||
+    lower.includes("positionierung") ||
+    lower.includes("bewerbungsstrategie") ||
+    lower.includes("direkter tipp") ||
+    lower.includes("warum")
+  );
+}
+
+function getAnalysisSummary(text?: string) {
+  const clean = cleanAnalysisText(text);
+
+  if (!clean) return "";
+
+  const firstUsefulLine = clean
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => {
+      if (!line) return false;
+      if (line.startsWith("-") || line.startsWith("•")) return false;
+      if (isSectionTitle(line)) return false;
+      return line.length > 18;
+    });
+
+  return firstUsefulLine || "AI analysis completed. Review the detailed recommendation below.";
+}
+
+function getRecommendationStyle(text?: string) {
+  const lower = (text || "").toLowerCase();
+
+  if (
+    lower.includes("nicht bewerben") ||
+    lower.includes("abraten") ||
+    lower.includes("geringe chance") ||
+    lower.includes("schwache passung")
+  ) {
+    return {
+      label: "Review carefully",
+      background: "rgba(239,68,68,0.12)",
+      border: "1px solid rgba(239,68,68,0.26)",
+      color: "#991b1b",
+    };
+  }
+
+  if (
+    lower.includes("bewerben") ||
+    lower.includes("hohe chance") ||
+    lower.includes("sehr gut") ||
+    lower.includes("starke passung")
+  ) {
+    return {
+      label: "Recommended",
+      background: "rgba(34,197,94,0.14)",
+      border: "1px solid rgba(34,197,94,0.3)",
+      color: "#166534",
+    };
+  }
+
+  return {
+    label: "AI reviewed",
+    background: "rgba(37,99,235,0.12)",
+    border: "1px solid rgba(37,99,235,0.24)",
+    color: "#1d4ed8",
+  };
+}
+
 export function JobCard({
   job,
   index,
@@ -89,6 +173,10 @@ export function JobCard({
     analysisText === "⏳ Analisi in corso..." ||
     normalizedAnalysis.includes("analisi in corso") ||
     normalizedAnalysis.includes("ai is analyzing");
+
+  const hasFinishedAnalysis = Boolean(analysisText && !isAnalyzing);
+  const analysisSummary = getAnalysisSummary(analysisText);
+  const recommendationStyle = getRecommendationStyle(analysisText);
 
   const handleMouseEnter = () => {
     if (typeof job.id === "number") {
@@ -207,6 +295,22 @@ export function JobCard({
                 }}
               >
                 🕒 Workload {workload}
+              </span>
+            )}
+
+            {hasFinishedAnalysis && (
+              <span
+                style={{
+                  background: "rgba(124,58,237,0.12)",
+                  color: "#5b21b6",
+                  border: "1px solid rgba(124,58,237,0.24)",
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 900,
+                }}
+              >
+                🤖 AI reviewed
               </span>
             )}
 
@@ -441,7 +545,7 @@ export function JobCard({
 
       <div
         style={{
-          maxHeight: analysisText ? 900 : 0,
+          maxHeight: analysisText ? 980 : 0,
           opacity: analysisText ? 1 : 0,
           overflow: "hidden",
           transform: analysisText ? "translateY(0)" : "translateY(-10px)",
@@ -453,32 +557,133 @@ export function JobCard({
           <div
             style={{
               marginTop: 26,
-              padding: 24,
+              padding: 0,
               background: "linear-gradient(135deg, #eef2ff, #e2e8f0)",
-              border: "1px solid rgba(148,163,184,0.3)",
-              borderRadius: 22,
-              maxHeight: 520,
-              overflowY: "auto",
+              border: "1px solid rgba(148,163,184,0.35)",
+              borderRadius: 24,
+              overflow: "hidden",
+              boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
             }}
           >
-            <strong
+            <div
               style={{
-                display: "block",
-                marginBottom: 10,
-                color: "#0f172a",
-                fontSize: 18,
+                padding: "18px 22px",
+                background:
+                  "linear-gradient(135deg, rgba(37,99,235,0.12), rgba(124,58,237,0.10))",
+                borderBottom: "1px solid rgba(148,163,184,0.28)",
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 16,
+                alignItems: "center",
               }}
             >
-              🤖 AI Analysis
-            </strong>
+              <div>
+                <strong
+                  style={{
+                    display: "block",
+                    color: "#0f172a",
+                    fontSize: 19,
+                    letterSpacing: -0.3,
+                  }}
+                >
+                  🤖 AI Matching Insight
+                </strong>
 
-            {isAnalyzing ? (
-              <p style={{ margin: 0, color: "#475569", fontWeight: 800 }}>
-                AI is analyzing this job...
-              </p>
-            ) : (
-              renderAnalysis(analysisText)
-            )}
+                <p
+                  style={{
+                    margin: "6px 0 0",
+                    color: "#475569",
+                    fontSize: 13,
+                    fontWeight: 700,
+                  }}
+                >
+                  Personalized analysis based on your CV profile.
+                </p>
+              </div>
+
+              <span
+                style={{
+                  padding: "7px 11px",
+                  borderRadius: 999,
+                  background: isAnalyzing
+                    ? "rgba(245,158,11,0.14)"
+                    : recommendationStyle.background,
+                  color: isAnalyzing ? "#92400e" : recommendationStyle.color,
+                  border: isAnalyzing
+                    ? "1px solid rgba(245,158,11,0.28)"
+                    : recommendationStyle.border,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isAnalyzing ? "Analyzing" : recommendationStyle.label}
+              </span>
+            </div>
+
+            <div
+              style={{
+                padding: 22,
+                maxHeight: 620,
+                overflowY: "auto",
+              }}
+            >
+              {isAnalyzing ? (
+                <div style={{ display: "grid", gap: 12 }}>
+                  <p
+                    className="loading"
+                    style={{
+                      margin: 0,
+                      color: "#475569",
+                      fontWeight: 900,
+                    }}
+                  >
+                    AI is analyzing this job...
+                  </p>
+
+                  {[1, 2, 3].map((item) => (
+                    <div
+                      key={item}
+                      style={{
+                        height: 14,
+                        borderRadius: 999,
+                        background:
+                          item === 1
+                            ? "rgba(37,99,235,0.20)"
+                            : "rgba(100,116,139,0.20)",
+                        width: item === 1 ? "85%" : item === 2 ? "70%" : "55%",
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      marginBottom: 18,
+                      padding: 16,
+                      borderRadius: 18,
+                      background: "rgba(255,255,255,0.7)",
+                      border: "1px solid rgba(148,163,184,0.25)",
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#0f172a",
+                        fontSize: 14,
+                        fontWeight: 900,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      {analysisSummary}
+                    </p>
+                  </div>
+
+                  {renderAnalysis(analysisText)}
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
