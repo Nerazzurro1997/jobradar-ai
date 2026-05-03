@@ -1,3 +1,7 @@
+/* ========================= */
+/* RESET + BASE */
+/* ========================= */
+
 * {
   margin: 0;
   padding: 0;
@@ -65,6 +69,10 @@ select:focus-visible,
   color: #ffffff;
 }
 
+/* ========================= */
+/* SCROLLBAR */
+/* ========================= */
+
 ::-webkit-scrollbar {
   width: 10px;
 }
@@ -83,11 +91,15 @@ select:focus-visible,
   background: #475569;
 }
 
+/* ========================= */
+/* BUTTON SYSTEM */
+/* ========================= */
+
 .btn {
-  border-radius: 12px;
-  padding: 11px 16px;
-  font-size: 14px;
-  font-weight: 800;
+  border-radius: 11px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 850;
   cursor: pointer;
   border: none;
   line-height: 1;
@@ -135,19 +147,23 @@ select:focus-visible,
   box-shadow: 0 14px 35px rgba(239, 68, 68, 0.36);
 }
 
+/* ========================= */
+/* FILE INPUT */
+/* ========================= */
+
 input[type="file"] {
   display: none;
 }
 
 .file-upload {
   display: inline-block;
-  padding: 11px 16px;
-  border-radius: 12px;
+  padding: 10px 14px;
+  border-radius: 11px;
   background: rgba(30, 41, 59, 0.82);
   color: #e2e8f0;
   border: 1px solid rgba(148, 163, 184, 0.22);
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 850;
   cursor: pointer;
   line-height: 1;
   transition: transform 0.18s ease, background 0.18s ease,
@@ -159,23 +175,27 @@ input[type="file"] {
   transform: translateY(-1px);
 }
 
+/* ========================= */
+/* CARD STYLE */
+/* ========================= */
+
 .card {
   min-width: 0;
   background: rgba(15, 23, 42, 0.75);
   border: 1px solid rgba(148, 163, 184, 0.15);
-  border-radius: 18px;
+  border-radius: 16px;
   padding: 18px;
   backdrop-filter: blur(12px);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .card * {
   min-width: 0;
 }
 
-.dashboard-shell {
-  min-width: 0;
-}
+/* ========================= */
+/* JOB CARD */
+/* ========================= */
 
 .job-card {
   min-width: 0;
@@ -186,7 +206,9 @@ input[type="file"] {
   min-width: 0;
 }
 
+.job-card h1,
 .job-card h2,
+.job-card h3,
 .job-card p,
 .job-card span,
 .job-card div {
@@ -208,20 +230,81 @@ input[type="file"] {
   border-color: rgba(34, 197, 94, 0.34);
 }
 
-main {
-  min-width: 0;
+/* ========================= */
+/* AI ANALYSIS */
+/* ========================= */
+
+.jr-analysis-head {
+  padding: 13px 15px;
+  background: linear-gradient(
+    135deg,
+    rgba(37, 99, 235, 0.11),
+    rgba(124, 58, 237, 0.08)
+  );
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
 }
 
-section {
-  min-width: 0;
+.jr-analysis-title {
+  display: block;
+  color: #0f172a;
+  font-size: 16px;
+  letter-spacing: 0;
 }
+
+.jr-analysis-subtitle {
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.jr-analysis-status {
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.jr-analysis-body {
+  padding: 15px;
+}
+
+.jr-analysis-summary {
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.jr-analysis-summary p {
+  margin: 0;
+  color: #0f172a;
+  font-size: 13.5px;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+.jr-analysis-mobile-overlay {
+  display: none;
+}
+
+/* ========================= */
+/* SELECTS */
+/* ========================= */
 
 select {
   appearance: none;
   min-width: 132px;
   background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%),
     linear-gradient(135deg, #94a3b8 50%, transparent 50%);
-  background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px;
+  background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px;
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
   padding-right: 34px !important;
@@ -231,6 +314,10 @@ option {
   background: #0f172a;
   color: #e2e8f0;
 }
+
+/* ========================= */
+/* LOADING ANIMATION */
+/* ========================= */
 
 @keyframes pulse {
   0% {
@@ -250,6 +337,10 @@ option {
   font-weight: 700;
 }
 
+/* ========================= */
+/* FADE IN ANIMATION */
+/* ========================= */
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -265,8 +356,13 @@ option {
   animation: fadeInUp 0.35s ease;
 }
 
+/* ========================= */
+/* RESPONSIVE */
+/* ========================= */
+
 @media (max-width: 1180px) {
   main {
+    margin-left: 0 !important;
     padding: 24px !important;
   }
 
@@ -276,10 +372,6 @@ option {
 
   main > section[style*="grid-template-columns"] {
     grid-template-columns: 1fr !important;
-  }
-
-  main > section > div[style*="repeat(4"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .job-card > div[style*="grid-template-columns"] {
@@ -302,23 +394,22 @@ option {
     left: 0 !important;
     right: 0 !important;
     bottom: auto !important;
-    z-index: 1000 !important;
+    z-index: 50 !important;
     width: 100% !important;
-    min-height: 0 !important;
     height: auto !important;
-    padding: 12px !important;
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
-    gap: 12px !important;
-    align-items: center !important;
+    min-height: 0 !important;
+    padding: 12px 14px !important;
     overflow: visible !important;
-    border-right: none !important;
+    border-right: 0 !important;
     border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
-    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32) !important;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28) !important;
   }
 
-  .jr-wow > div:first-of-type {
-    display: contents !important;
+  .jr-wow > div:first-child {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    justify-content: space-between !important;
   }
 
   .jr-wow-brand {
@@ -326,9 +417,9 @@ option {
   }
 
   .jr-wow-logo {
-    width: 40px !important;
-    height: 40px !important;
-    border-radius: 14px !important;
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 15px !important;
   }
 
   .jr-wow-title {
@@ -336,7 +427,9 @@ option {
   }
 
   .jr-wow-subtitle,
-  .jr-wow-chip {
+  .jr-wow-chip,
+  .jr-wow-status,
+  .jr-wow-footer {
     display: none !important;
   }
 
@@ -350,19 +443,17 @@ option {
     min-height: 46px !important;
     width: auto !important;
     padding: 8px 10px !important;
-    border-radius: 16px !important;
-  }
-
-  .jr-wow-nav-card-description,
-  .jr-wow-status,
-  .jr-wow-footer {
-    display: none !important;
+    border-radius: 15px !important;
   }
 
   .jr-wow-nav-card-icon {
     width: 30px !important;
     height: 30px !important;
-    border-radius: 11px !important;
+    border-radius: 12px !important;
+  }
+
+  .jr-wow-nav-card-description {
+    display: none !important;
   }
 
   .jr-wow-nav-card-title {
@@ -371,8 +462,7 @@ option {
 
   main {
     margin-left: 0 !important;
-    padding: 18px !important;
-    width: 100% !important;
+    padding: 20px !important;
   }
 
   main h1 {
@@ -380,7 +470,7 @@ option {
   }
 
   main h2 {
-    font-size: 22px !important;
+    font-size: 21px !important;
   }
 
   .card {
@@ -391,13 +481,8 @@ option {
     border-radius: 18px !important;
   }
 
-  .job-card > div[style*="grid-template-columns"] {
-    gap: 14px !important;
-    padding: 18px !important;
-  }
-
   .job-card h2 {
-    font-size: 21px !important;
+    font-size: 20px !important;
   }
 
   .job-card p {
@@ -411,11 +496,11 @@ option {
   }
 
   main h1 {
-    font-size: 32px !important;
+    font-size: 31px !important;
   }
 
   main > section {
-    border-radius: 20px !important;
+    border-radius: 18px !important;
     padding: 16px !important;
   }
 
@@ -428,8 +513,7 @@ option {
     grid-template-columns: 1fr !important;
   }
 
-  main > section[style*="repeat(4"],
-  main > section > div[style*="repeat(4"] {
+  main > section[style*="repeat(4"] {
     grid-template-columns: 1fr !important;
   }
 
@@ -447,17 +531,30 @@ option {
     width: 100%;
   }
 
-  label[style*="display: flex"] {
-    align-items: stretch !important;
-    flex-direction: column !important;
+  .job-card {
+    border-radius: 18px !important;
   }
 
-  .job-card > div[style*="grid-template-columns"] {
+  .jr-job-card-main {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
     padding: 16px !important;
   }
 
-  .job-card h2 {
-    font-size: 20px !important;
+  .jr-score-column {
+    justify-content: flex-start !important;
+    order: -1;
+  }
+
+  .jr-score-box {
+    width: 76px !important;
+    height: 76px !important;
+    border-radius: 19px !important;
+  }
+
+  .jr-job-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
   }
 
   .job-card a,
@@ -465,48 +562,154 @@ option {
     width: 100%;
   }
 
-  .job-card > div > div:last-child {
-    justify-content: flex-start !important;
+  .jr-job-card-content {
+    gap: 8px !important;
   }
 
-  .job-card > div > div:last-child > div {
-    width: 76px !important;
-    height: 76px !important;
-    border-radius: 20px !important;
+  .jr-analysis-desktop-panel {
+    display: none !important;
+  }
+
+  .jr-analysis-mobile-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0 12px 12px;
+    background: rgba(2, 6, 23, 0.62);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .jr-analysis-mobile-sheet {
+    position: relative;
+    width: calc(100vw - 24px);
+    max-width: none;
+    max-height: 80vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-radius: 22px 22px 18px 18px;
+    background: linear-gradient(135deg, #eef2ff, #e2e8f0);
+    border: 1px solid rgba(226, 232, 240, 0.88);
+    box-shadow: 0 26px 80px rgba(0, 0, 0, 0.48);
+    color: #0f172a;
+    animation: jr-analysis-sheet-in 0.22s ease;
+  }
+
+  .jr-analysis-mobile-sheet,
+  .jr-analysis-mobile-sheet * {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .jr-analysis-mobile-close {
+    position: sticky;
+    top: 10px;
+    float: right;
+    z-index: 3;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    margin: 10px 10px -46px auto;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #0f172a;
+    font-size: 26px;
+    line-height: 1;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  }
+
+  .jr-analysis-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 14px 54px 13px 14px;
+    align-items: flex-start;
+    background: linear-gradient(135deg, #eff6ff, #e0e7ff);
+  }
+
+  .jr-analysis-title {
+    font-size: 15.5px;
+  }
+
+  .jr-analysis-subtitle {
+    font-size: 12px;
+  }
+
+  .jr-analysis-status {
+    align-self: flex-start;
+    padding: 6px 8px;
+    font-size: 10.5px;
+    white-space: normal;
+    text-align: right;
+  }
+
+  .jr-analysis-body {
+    padding: 14px;
+  }
+
+  .jr-analysis-summary {
+    margin-bottom: 12px;
+    padding: 11px;
+    border-radius: 13px;
+  }
+
+  .jr-analysis-summary p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .jr-analysis-mobile-sheet h3 {
+    font-size: 15px !important;
+    line-height: 1.25 !important;
+  }
+
+  .jr-analysis-mobile-sheet p,
+  .jr-analysis-mobile-sheet span,
+  .jr-analysis-mobile-sheet div {
+    font-size: 13px;
+  }
+
+  .jr-analysis-mobile-sheet [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .jr-analysis-mobile-sheet [style*="padding: 18px"] {
+    padding: 13px !important;
+  }
+
+  .jr-analysis-mobile-sheet [style*="padding: 16px"] {
+    padding: 12px !important;
   }
 }
 
 @media (max-width: 520px) {
   main {
-    padding: 12px !important;
+    padding: 10px !important;
   }
 
   main h1 {
-    font-size: 29px !important;
+    font-size: 28px !important;
   }
 
   main > section {
     padding: 14px !important;
   }
 
-  .jr-wow {
-    grid-template-columns: 1fr !important;
-  }
-
-  .jr-wow-nav {
-    width: 100% !important;
-  }
-
-  .jr-wow-nav-card {
-    flex: 1 1 0 !important;
-  }
-
   .jr-wow-nav-card-copy {
     display: none !important;
   }
 
-  .job-card > div[style*="grid-template-columns"] {
-    padding: 14px !important;
+  .jr-wow-nav-card-count {
+    min-width: 28px !important;
+    height: 28px !important;
+    padding: 0 8px !important;
   }
 
   .job-card h2 {
@@ -516,7 +719,36 @@ option {
   .job-card span {
     max-width: 100%;
   }
+
+  .jr-analysis-mobile-overlay {
+    padding: 0 8px 8px;
+  }
+
+  .jr-analysis-mobile-sheet {
+    width: calc(100vw - 16px);
+    max-height: 82vh;
+    border-radius: 20px 20px 16px 16px;
+  }
 }
+
+/* ========================= */
+/* ANALYSIS SHEET ANIMATION */
+/* ========================= */
+
+@keyframes jr-analysis-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ========================= */
+/* REDUCED MOTION */
+/* ========================= */
 
 @media (prefers-reduced-motion: reduce) {
   *,
