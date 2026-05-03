@@ -101,6 +101,22 @@ const NEW_SAVED_JOB_KEYS_KEY = "jobradar_new_saved_job_keys";
 const LATEST_SEARCH_JOB_KEYS_KEY = "jobradar_latest_search_job_keys";
 const LATEST_SEARCH_LIMIT = 3;
 
+function resetPageOverflow() {
+  if (typeof document === "undefined") return;
+
+  document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+  console.log("BODY OVERFLOW RESET");
+}
+
+function closeOpenAiAnalysis() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("jobradar:close-ai-analysis"));
+  }
+
+  resetPageOverflow();
+}
+
 function getStorage(): Storage | null {
   if (typeof window === "undefined") return null;
 
@@ -636,118 +652,27 @@ function ResetIllustration() {
           </linearGradient>
         </defs>
 
-        <circle
-          cx="210"
-          cy="116"
-          r="76"
-          stroke="rgba(147,197,253,0.15)"
-          strokeWidth="1.5"
-        />
-        <circle
-          cx="210"
-          cy="116"
-          r="48"
-          stroke="rgba(147,197,253,0.18)"
-          strokeWidth="1.5"
-        />
-        <circle
-          cx="210"
-          cy="116"
-          r="18"
-          stroke="rgba(147,197,253,0.22)"
-          strokeWidth="1.5"
-        />
-
-        <path
-          d="M210 116L265 70"
-          stroke="url(#radarLine)"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-
+        <circle cx="210" cy="116" r="76" stroke="rgba(147,197,253,0.15)" strokeWidth="1.5" />
+        <circle cx="210" cy="116" r="48" stroke="rgba(147,197,253,0.18)" strokeWidth="1.5" />
+        <circle cx="210" cy="116" r="18" stroke="rgba(147,197,253,0.22)" strokeWidth="1.5" />
+        <path d="M210 116L265 70" stroke="url(#radarLine)" strokeWidth="3" strokeLinecap="round" />
         <circle cx="265" cy="70" r="8" fill="#22C55E" />
         <circle cx="265" cy="70" r="16" fill="#22C55E" opacity="0.12" />
 
-        <rect
-          x="74"
-          y="62"
-          width="92"
-          height="52"
-          rx="16"
-          fill="url(#cardGlow)"
-          stroke="rgba(191,219,254,0.18)"
-        />
-        <rect
-          x="94"
-          y="80"
-          width="48"
-          height="5"
-          rx="2.5"
-          fill="rgba(191,219,254,0.52)"
-        />
-        <rect
-          x="94"
-          y="94"
-          width="34"
-          height="5"
-          rx="2.5"
-          fill="rgba(191,219,254,0.22)"
-        />
+        <rect x="74" y="62" width="92" height="52" rx="16" fill="url(#cardGlow)" stroke="rgba(191,219,254,0.18)" />
+        <rect x="94" y="80" width="48" height="5" rx="2.5" fill="rgba(191,219,254,0.52)" />
+        <rect x="94" y="94" width="34" height="5" rx="2.5" fill="rgba(191,219,254,0.22)" />
 
-        <rect
-          x="252"
-          y="132"
-          width="96"
-          height="54"
-          rx="16"
-          fill="url(#cardGlow)"
-          stroke="rgba(191,219,254,0.18)"
-        />
-        <rect
-          x="273"
-          y="151"
-          width="50"
-          height="5"
-          rx="2.5"
-          fill="rgba(191,219,254,0.52)"
-        />
-        <rect
-          x="273"
-          y="165"
-          width="36"
-          height="5"
-          rx="2.5"
-          fill="rgba(191,219,254,0.22)"
-        />
+        <rect x="252" y="132" width="96" height="54" rx="16" fill="url(#cardGlow)" stroke="rgba(191,219,254,0.18)" />
+        <rect x="273" y="151" width="50" height="5" rx="2.5" fill="rgba(191,219,254,0.52)" />
+        <rect x="273" y="165" width="36" height="5" rx="2.5" fill="rgba(191,219,254,0.22)" />
 
-        <path
-          d="M134 154C160 181 247 191 291 130"
-          stroke="rgba(34,197,94,0.38)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray="5 7"
-        />
-
+        <path d="M134 154C160 181 247 191 291 130" stroke="rgba(34,197,94,0.38)" strokeWidth="2" strokeLinecap="round" strokeDasharray="5 7" />
         <circle cx="132" cy="154" r="6" fill="#60A5FA" />
         <circle cx="291" cy="130" r="6" fill="#22C55E" />
 
-        <rect
-          x="165"
-          y="92"
-          width="90"
-          height="74"
-          rx="22"
-          fill="rgba(15,23,42,0.72)"
-          stroke="rgba(148,163,184,0.22)"
-        />
-
-        <path
-          d="M196 126L207 137L229 111"
-          stroke="#22C55E"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <rect x="165" y="92" width="90" height="74" rx="22" fill="rgba(15,23,42,0.72)" stroke="rgba(148,163,184,0.22)" />
+        <path d="M196 126L207 137L229 111" stroke="#22C55E" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </div>
   );
@@ -1266,13 +1191,7 @@ function AllSavedJobsSection({
           }}
         >
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                color: "#94a3b8",
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
+            <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 900 }}>
               Sort
             </span>
 
@@ -1301,13 +1220,7 @@ function AllSavedJobsSection({
           </label>
 
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                color: "#94a3b8",
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
+            <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 900 }}>
               Filter
             </span>
 
@@ -1335,13 +1248,7 @@ function AllSavedJobsSection({
           </label>
 
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span
-              style={{
-                color: "#94a3b8",
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
+            <span style={{ color: "#94a3b8", fontSize: 12, fontWeight: 900 }}>
               Score
             </span>
 
@@ -1552,6 +1459,18 @@ export function JobDashboard({
   }, []);
 
   useEffect(() => {
+    return () => {
+      closeOpenAiAnalysis();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (workspaceResetAt) {
+      closeOpenAiAnalysis();
+    }
+  }, [workspaceResetAt]);
+
+  useEffect(() => {
     if (!cvFile) {
       clearFileInput();
     }
@@ -1619,6 +1538,7 @@ export function JobDashboard({
         return;
       }
 
+      closeOpenAiAnalysis();
       setCvProfile(null);
       removeStoredCvProfile();
       setCvFile(file);
@@ -1629,6 +1549,8 @@ export function JobDashboard({
   );
 
   const handleSearch = useCallback(() => {
+    closeOpenAiAnalysis();
+
     const now = Date.now();
 
     activeSearchStartedAtRef.current = now;
@@ -1646,6 +1568,31 @@ export function JobDashboard({
 
     onSearch();
   }, [onSearch, savedBaseJobs]);
+
+  const handleToggleSaved = useCallback(() => {
+    closeOpenAiAnalysis();
+    onToggleSaved();
+  }, [onToggleSaved]);
+
+  const handleToggleTop = useCallback(() => {
+    closeOpenAiAnalysis();
+    onToggleTop();
+  }, [onToggleTop]);
+
+  const handleAnalyzeCv = useCallback(() => {
+    closeOpenAiAnalysis();
+    onAnalyzeCv();
+  }, [onAnalyzeCv]);
+
+  const handleClearCv = useCallback(() => {
+    closeOpenAiAnalysis();
+    onClearCv();
+  }, [onClearCv]);
+
+  const handleClearCacheClick = useCallback(() => {
+    closeOpenAiAnalysis();
+    onClearCache();
+  }, [onClearCache]);
 
   const { skillSignals, languageSignals, roleSignals, highlightSignals } =
     useMemo(() => getProfileSignals(cvProfile), [cvProfile]);
@@ -1855,13 +1802,13 @@ export function JobDashboard({
                 </label>
 
                 {cvFile && !cvProfile && !profileLoading && (
-                  <button className="btn btn-blue" onClick={onAnalyzeCv}>
+                  <button className="btn btn-blue" onClick={handleAnalyzeCv}>
                     Analyze CV
                   </button>
                 )}
 
                 {cvProfile && (
-                  <button className="btn btn-dark" onClick={onClearCv}>
+                  <button className="btn btn-dark" onClick={handleClearCv}>
                     Reset Profile
                   </button>
                 )}
@@ -1976,13 +1923,13 @@ export function JobDashboard({
           </button>
 
           {!isWorkspaceReset && savedJobs.length > 0 && (
-            <button className="btn btn-dark" onClick={onToggleSaved}>
+            <button className="btn btn-dark" onClick={handleToggleSaved}>
               {isSavedView ? "Show Live Jobs" : "Show Saved Jobs"}
             </button>
           )}
 
           {!isSavedView && !isWorkspaceReset && activeJobs.length > 0 && (
-            <button className="btn btn-dark" onClick={onToggleTop}>
+            <button className="btn btn-dark" onClick={handleToggleTop}>
               {onlyTop ? "Show All Jobs" : "Only Top Jobs"}
             </button>
           )}
@@ -1991,7 +1938,7 @@ export function JobDashboard({
         {canClearCache && (
           <button
             className="btn btn-danger"
-            onClick={onClearCache}
+            onClick={handleClearCacheClick}
             disabled={isBusy}
             style={{
               opacity: isBusy ? 0.7 : 1,
@@ -2099,27 +2046,30 @@ export function JobDashboard({
         />
       )}
 
-      {!searchLoading && !isSavedView && !isWorkspaceReset && displayedJobs.length > 0 && (
-        <section style={{ display: "grid", gap: 14 }}>
-          {displayedJobs.map((job, index) => (
-            <JobCard
-              key={job.url || job.id || index}
-              job={
-                {
-                  ...job,
-                  uiDecisionSection: "live",
-                } as UiDecisionJob
-              }
-              index={index}
-              analysisText={job.id ? analysis[job.id] : undefined}
-              hoveredId={hoveredId}
-              showSavedJobs={showSavedJobs}
-              onHover={onHover}
-              onAnalyze={onAnalyzeJob}
-            />
-          ))}
-        </section>
-      )}
+      {!searchLoading &&
+        !isSavedView &&
+        !isWorkspaceReset &&
+        displayedJobs.length > 0 && (
+          <section style={{ display: "grid", gap: 14 }}>
+            {displayedJobs.map((job, index) => (
+              <JobCard
+                key={job.url || job.id || index}
+                job={
+                  {
+                    ...job,
+                    uiDecisionSection: "live",
+                  } as UiDecisionJob
+                }
+                index={index}
+                analysisText={job.id ? analysis[job.id] : undefined}
+                hoveredId={hoveredId}
+                showSavedJobs={showSavedJobs}
+                onHover={onHover}
+                onAnalyze={onAnalyzeJob}
+              />
+            ))}
+          </section>
+        )}
     </main>
   );
 }
