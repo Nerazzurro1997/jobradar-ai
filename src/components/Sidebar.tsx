@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 
 type SidebarProps = {
   cvFile: File | null;
@@ -39,12 +39,14 @@ type WorkspaceState = {
   icon: string;
 };
 
+type CssVars = CSSProperties & Record<string, string | number>;
+
 const SIDEBAR_WIDTH = 260;
 
 const sidebarStyle: CSSProperties = {
   width: SIDEBAR_WIDTH,
   background:
-    "radial-gradient(circle at top left, rgba(37,99,235,0.22), transparent 34%), radial-gradient(circle at bottom right, rgba(20,184,166,0.13), transparent 30%), rgba(2,6,23,0.97)",
+    "radial-gradient(circle at top left, rgba(37,99,235,0.24), transparent 34%), radial-gradient(circle at bottom right, rgba(20,184,166,0.14), transparent 30%), rgba(2,6,23,0.97)",
   backdropFilter: "blur(18px)",
   WebkitBackdropFilter: "blur(18px)",
   color: "white",
@@ -103,8 +105,8 @@ function getWorkspaceState({
       nextStep: "Wait for profile analysis",
       progress: 62,
       color: "#facc15",
-      softColor: "rgba(250,204,21,0.13)",
-      borderColor: "rgba(250,204,21,0.28)",
+      softColor: "rgba(250,204,21,0.14)",
+      borderColor: "rgba(250,204,21,0.3)",
       icon: "⏳",
     };
   }
@@ -118,8 +120,8 @@ function getWorkspaceState({
       nextStep: "Review your best matches",
       progress: 100,
       color: "#22c55e",
-      softColor: "rgba(34,197,94,0.13)",
-      borderColor: "rgba(34,197,94,0.28)",
+      softColor: "rgba(34,197,94,0.14)",
+      borderColor: "rgba(34,197,94,0.3)",
       icon: "⚡",
     };
   }
@@ -133,8 +135,8 @@ function getWorkspaceState({
       nextStep: "Search jobs",
       progress: 86,
       color: "#22c55e",
-      softColor: "rgba(34,197,94,0.13)",
-      borderColor: "rgba(34,197,94,0.28)",
+      softColor: "rgba(34,197,94,0.14)",
+      borderColor: "rgba(34,197,94,0.3)",
       icon: "✅",
     };
   }
@@ -148,8 +150,8 @@ function getWorkspaceState({
       nextStep: "Analyze CV",
       progress: 44,
       color: "#60a5fa",
-      softColor: "rgba(96,165,250,0.13)",
-      borderColor: "rgba(96,165,250,0.28)",
+      softColor: "rgba(96,165,250,0.14)",
+      borderColor: "rgba(96,165,250,0.3)",
       icon: "📄",
     };
   }
@@ -162,8 +164,8 @@ function getWorkspaceState({
     nextStep: "Upload CV",
     progress: 12,
     color: "#fb7185",
-    softColor: "rgba(251,113,133,0.13)",
-    borderColor: "rgba(251,113,133,0.28)",
+    softColor: "rgba(251,113,133,0.14)",
+    borderColor: "rgba(251,113,133,0.3)",
     icon: "⚠️",
   };
 }
@@ -190,7 +192,7 @@ function AnimatedNumber({ value }: { value: number }) {
 
     let frameId = 0;
     const start = window.performance.now();
-    const duration = 520;
+    const duration = 560;
 
     function tick(now: number) {
       const progress = Math.min((now - start) / duration, 1);
@@ -226,8 +228,8 @@ function NavButton({
     <button
       type="button"
       className={[
-        "jr-side-motion-nav-btn",
-        active ? "jr-side-motion-nav-btn-active" : "",
+        "jr-wow-nav-btn",
+        active ? "jr-wow-nav-btn-active" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -235,13 +237,13 @@ function NavButton({
       aria-current={active ? "page" : undefined}
       onClick={disabled ? undefined : onClick}
     >
-      <span className="jr-side-motion-nav-left">
-        <span className="jr-side-motion-nav-icon">{icon}</span>
-        <span className="jr-side-motion-nav-label">{label}</span>
+      <span className="jr-wow-nav-left">
+        <span className="jr-wow-nav-icon">{icon}</span>
+        <span className="jr-wow-nav-label">{label}</span>
       </span>
 
       {typeof count === "number" && (
-        <span className="jr-side-motion-nav-count">
+        <span className="jr-wow-nav-count">
           <AnimatedNumber value={count} />
         </span>
       )}
@@ -259,17 +261,45 @@ function ProgressStep({
   active?: boolean;
 }) {
   return (
-    <div className="jr-side-motion-step">
+    <div className="jr-wow-step">
       <span
         className={[
-          "jr-side-motion-step-dot",
-          done ? "jr-side-motion-step-dot-done" : "",
-          active ? "jr-side-motion-step-dot-active" : "",
+          "jr-wow-step-dot",
+          done ? "jr-wow-step-dot-done" : "",
+          active ? "jr-wow-step-dot-active" : "",
         ]
           .filter(Boolean)
           .join(" ")}
       />
       <span>{label}</span>
+    </div>
+  );
+}
+
+function WorkspaceOrb({
+  state,
+}: {
+  state: WorkspaceState;
+}) {
+  return (
+    <div
+      className={[
+        "jr-wow-orb",
+        `jr-wow-orb-${state.variant}`,
+      ].join(" ")}
+      style={
+        {
+          "--jr-state-color": state.color,
+          "--jr-state-soft": state.softColor,
+          "--jr-state-border": state.borderColor,
+        } as CssVars
+      }
+    >
+      <span className="jr-wow-orb-ring jr-wow-orb-ring-one" />
+      <span className="jr-wow-orb-ring jr-wow-orb-ring-two" />
+      <span className="jr-wow-orb-sweep" />
+      <span className="jr-wow-orb-ping" />
+      <span className="jr-wow-orb-icon">{state.icon}</span>
     </div>
   );
 }
@@ -282,6 +312,12 @@ export function Sidebar({
   showSavedJobs,
   onToggleSavedJobs,
 }: SidebarProps) {
+  const [spotlight, setSpotlight] = useState({
+    x: 0,
+    y: 0,
+    active: false,
+  });
+
   const hasCvFile = Boolean(cvFile);
   const hasProfile = Boolean(cvProfile);
   const hasSavedJobs = savedJobsCount > 0;
@@ -294,41 +330,100 @@ export function Sidebar({
   });
 
   const fileSize = cvFile ? formatFileSize(cvFile.size) : "";
-  const stateKey = `${workspaceState.variant}-${hasCvFile}-${hasProfile}-${hasSavedJobs}`;
+  const stateKey = workspaceState.variant;
+
+  function handleMouseMove(event: MouseEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    setSpotlight({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+      active: true,
+    });
+  }
+
+  function handleMouseLeave() {
+    setSpotlight((current) => ({
+      ...current,
+      active: false,
+    }));
+  }
 
   return (
     <>
       <style>
         {`
-          .jr-side-motion,
-          .jr-side-motion * {
+          .jr-wow,
+          .jr-wow * {
             box-sizing: border-box;
           }
 
-          .jr-side-motion {
-            animation: jr-side-motion-shell-in 360ms cubic-bezier(0.16, 1, 0.3, 1);
+          .jr-wow {
+            isolation: isolate;
+            animation: jr-wow-shell-in 380ms cubic-bezier(0.16, 1, 0.3, 1);
           }
 
-          .jr-side-motion::-webkit-scrollbar {
+          .jr-wow::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background:
+              radial-gradient(
+                circle at var(--jr-mouse-x) var(--jr-mouse-y),
+                rgba(96,165,250,0.18),
+                rgba(34,197,94,0.08) 18%,
+                transparent 42%
+              );
+            opacity: var(--jr-mouse-opacity);
+            transition: opacity 180ms ease;
+          }
+
+          .jr-wow::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: -1px;
+            bottom: 0;
+            z-index: 0;
+            width: 1px;
+            background: linear-gradient(
+              180deg,
+              transparent,
+              rgba(96,165,250,0.42),
+              rgba(34,197,94,0.32),
+              transparent
+            );
+            opacity: 0.72;
+            animation: jr-wow-edge-flow 5.6s ease-in-out infinite;
+          }
+
+          .jr-wow > * {
+            position: relative;
+            z-index: 1;
+          }
+
+          .jr-wow::-webkit-scrollbar {
             width: 7px;
           }
 
-          .jr-side-motion::-webkit-scrollbar-track {
+          .jr-wow::-webkit-scrollbar-track {
             background: transparent;
           }
 
-          .jr-side-motion::-webkit-scrollbar-thumb {
+          .jr-wow::-webkit-scrollbar-thumb {
             background: rgba(148,163,184,0.18);
             border-radius: 999px;
           }
 
-          .jr-side-motion-brand {
+          .jr-wow-brand {
             display: flex;
             gap: 12px;
             align-items: center;
           }
 
-          .jr-side-motion-logo {
+          .jr-wow-logo {
             position: relative;
             width: 50px;
             height: 50px;
@@ -345,7 +440,7 @@ export function Sidebar({
               inset 0 1px 0 rgba(255,255,255,0.18);
           }
 
-          .jr-side-motion-logo::before {
+          .jr-wow-logo::before {
             content: "";
             position: absolute;
             inset: -2px;
@@ -353,10 +448,10 @@ export function Sidebar({
             background: linear-gradient(135deg, rgba(96,165,250,0.8), rgba(34,197,94,0.55));
             opacity: 0.28;
             filter: blur(10px);
-            animation: jr-side-motion-logo-breathe 3.8s ease-in-out infinite;
+            animation: jr-wow-logo-breathe 3.8s ease-in-out infinite;
           }
 
-          .jr-side-motion-logo::after {
+          .jr-wow-logo::after {
             content: "";
             position: absolute;
             inset: -45%;
@@ -367,10 +462,40 @@ export function Sidebar({
               transparent
             );
             transform: translateX(-80%) rotate(18deg);
-            animation: jr-side-motion-shine 5.2s ease-in-out infinite;
+            animation: jr-wow-shine 5.2s ease-in-out infinite;
           }
 
-          .jr-side-motion-logo-text {
+          .jr-wow-logo-orbit {
+            position: absolute;
+            inset: 5px;
+            border-radius: inherit;
+            border: 1px solid rgba(255,255,255,0.13);
+            animation: jr-wow-logo-orbit 6s linear infinite;
+          }
+
+          .jr-wow-logo-orbit::before,
+          .jr-wow-logo-orbit::after {
+            content: "";
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 0 10px rgba(255,255,255,0.55);
+          }
+
+          .jr-wow-logo-orbit::before {
+            top: -3px;
+            left: 50%;
+          }
+
+          .jr-wow-logo-orbit::after {
+            right: -3px;
+            top: 52%;
+            opacity: 0.72;
+          }
+
+          .jr-wow-logo-text {
             position: relative;
             z-index: 1;
             font-size: 17px;
@@ -379,7 +504,7 @@ export function Sidebar({
             color: #ffffff;
           }
 
-          .jr-side-motion-title {
+          .jr-wow-title {
             margin: 0;
             font-size: 19px;
             line-height: 1.05;
@@ -387,14 +512,14 @@ export function Sidebar({
             color: #f8fafc;
           }
 
-          .jr-side-motion-subtitle {
+          .jr-wow-subtitle {
             margin: 5px 0 0;
             font-size: 11.5px;
             color: #94a3b8;
             font-weight: 750;
           }
 
-          .jr-side-motion-chip {
+          .jr-wow-chip {
             display: inline-flex;
             align-items: center;
             gap: 7px;
@@ -406,24 +531,25 @@ export function Sidebar({
             color: #cbd5e1;
             font-size: 10.5px;
             font-weight: 850;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
           }
 
-          .jr-side-motion-chip-dot {
+          .jr-wow-chip-dot {
             width: 7px;
             height: 7px;
             border-radius: 999px;
             background: #22c55e;
             box-shadow: 0 0 0 4px rgba(34,197,94,0.12);
-            animation: jr-side-motion-dot-pulse 2.4s ease-in-out infinite;
+            animation: jr-wow-dot-pulse 2.4s ease-in-out infinite;
           }
 
-          .jr-side-motion-nav {
+          .jr-wow-nav {
             margin-top: 30px;
             display: grid;
             gap: 10px;
           }
 
-          .jr-side-motion-nav-btn {
+          .jr-wow-nav-btn {
             position: relative;
             width: 100%;
             min-height: 44px;
@@ -453,7 +579,7 @@ export function Sidebar({
               opacity 170ms ease;
           }
 
-          .jr-side-motion-nav-btn::after {
+          .jr-wow-nav-btn::after {
             content: "";
             position: absolute;
             inset: 0;
@@ -468,7 +594,7 @@ export function Sidebar({
             pointer-events: none;
           }
 
-          .jr-side-motion-nav-btn:hover:not(:disabled) {
+          .jr-wow-nav-btn:hover:not(:disabled) {
             transform: translateY(-1px);
             border-color: rgba(96,165,250,0.34);
             background:
@@ -479,26 +605,26 @@ export function Sidebar({
               inset 0 1px 0 rgba(255,255,255,0.06);
           }
 
-          .jr-side-motion-nav-btn:hover:not(:disabled)::after {
+          .jr-wow-nav-btn:hover:not(:disabled)::after {
             opacity: 1;
-            animation: jr-side-motion-nav-shimmer 900ms ease;
+            animation: jr-wow-nav-shimmer 900ms ease;
           }
 
-          .jr-side-motion-nav-btn:active:not(:disabled) {
+          .jr-wow-nav-btn:active:not(:disabled) {
             transform: translateY(0);
           }
 
-          .jr-side-motion-nav-btn:focus-visible {
+          .jr-wow-nav-btn:focus-visible {
             outline: 3px solid rgba(96,165,250,0.35);
             outline-offset: 3px;
           }
 
-          .jr-side-motion-nav-btn:disabled {
+          .jr-wow-nav-btn:disabled {
             cursor: not-allowed;
             opacity: 0.48;
           }
 
-          .jr-side-motion-nav-btn-active {
+          .jr-wow-nav-btn-active {
             color: #ffffff;
             border-color: rgba(34,197,94,0.42);
             background:
@@ -509,18 +635,18 @@ export function Sidebar({
               inset 0 1px 0 rgba(255,255,255,0.16);
           }
 
-          .jr-side-motion-nav-btn-active::before {
+          .jr-wow-nav-btn-active::before {
             content: "";
             position: absolute;
             inset: -1px;
             border-radius: inherit;
             border: 1px solid rgba(187,247,208,0.32);
             opacity: 0.72;
-            animation: jr-side-motion-active-glow 2.8s ease-in-out infinite;
+            animation: jr-wow-active-glow 2.8s ease-in-out infinite;
             pointer-events: none;
           }
 
-          .jr-side-motion-nav-left {
+          .jr-wow-nav-left {
             position: relative;
             z-index: 1;
             display: flex;
@@ -529,7 +655,7 @@ export function Sidebar({
             gap: 9px;
           }
 
-          .jr-side-motion-nav-icon {
+          .jr-wow-nav-icon {
             width: 21px;
             height: 21px;
             display: grid;
@@ -540,13 +666,13 @@ export function Sidebar({
             font-size: 12px;
           }
 
-          .jr-side-motion-nav-label {
+          .jr-wow-nav-label {
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
           }
 
-          .jr-side-motion-nav-count {
+          .jr-wow-nav-count {
             position: relative;
             z-index: 1;
             min-width: 24px;
@@ -562,7 +688,7 @@ export function Sidebar({
             font-weight: 950;
           }
 
-          .jr-side-motion-status {
+          .jr-wow-status {
             position: relative;
             margin-top: 26px;
             padding: 15px;
@@ -576,10 +702,10 @@ export function Sidebar({
             box-shadow:
               0 18px 42px rgba(0,0,0,0.18),
               inset 0 1px 0 rgba(255,255,255,0.045);
-            animation: jr-side-motion-card-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+            animation: jr-wow-card-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
           }
 
-          .jr-side-motion-status::before {
+          .jr-wow-status::before {
             content: "";
             position: absolute;
             inset: 0;
@@ -589,27 +715,69 @@ export function Sidebar({
               radial-gradient(circle at 100% 100%, rgba(34,197,94,0.08), transparent 34%);
           }
 
-          .jr-side-motion-status::after {
+          .jr-wow-status::after {
             content: "";
             position: absolute;
-            width: 120px;
-            height: 120px;
-            right: -48px;
-            top: -48px;
+            width: 130px;
+            height: 130px;
+            right: -52px;
+            top: -52px;
             border-radius: 999px;
-            background: var(--sidebar-accent-soft);
-            filter: blur(24px);
-            opacity: 0.55;
-            animation: jr-side-motion-aurora 5.4s ease-in-out infinite alternate;
+            background: var(--jr-status-soft);
+            filter: blur(25px);
+            opacity: 0.58;
+            animation: jr-wow-aurora 5.4s ease-in-out infinite alternate;
             pointer-events: none;
           }
 
-          .jr-side-motion-status-content {
+          .jr-wow-status-particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            overflow: hidden;
+          }
+
+          .jr-wow-status-particles span {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 999px;
+            background: var(--jr-status-color);
+            opacity: 0.16;
+            filter: blur(0.2px);
+            animation: jr-wow-particle-float 5s ease-in-out infinite;
+          }
+
+          .jr-wow-status-particles span:nth-child(1) {
+            left: 18%;
+            top: 24%;
+            animation-delay: -0.4s;
+          }
+
+          .jr-wow-status-particles span:nth-child(2) {
+            left: 76%;
+            top: 36%;
+            animation-delay: -1.2s;
+          }
+
+          .jr-wow-status-particles span:nth-child(3) {
+            left: 42%;
+            top: 78%;
+            animation-delay: -2s;
+          }
+
+          .jr-wow-status-particles span:nth-child(4) {
+            left: 86%;
+            top: 76%;
+            animation-delay: -3.1s;
+          }
+
+          .jr-wow-status-content {
             position: relative;
             z-index: 1;
           }
 
-          .jr-side-motion-status-top {
+          .jr-wow-status-top {
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -617,7 +785,7 @@ export function Sidebar({
             margin-bottom: 13px;
           }
 
-          .jr-side-motion-status-label {
+          .jr-wow-status-label {
             color: #94a3b8;
             font-size: 10px;
             font-weight: 950;
@@ -625,7 +793,7 @@ export function Sidebar({
             text-transform: uppercase;
           }
 
-          .jr-side-motion-status-badge {
+          .jr-wow-status-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -636,42 +804,91 @@ export function Sidebar({
             white-space: nowrap;
           }
 
-          .jr-side-motion-status-main {
+          .jr-wow-status-main {
             display: flex;
             gap: 11px;
             align-items: center;
             margin-bottom: 12px;
           }
 
-          .jr-side-motion-status-icon {
+          .jr-wow-orb {
             position: relative;
-            width: 38px;
-            height: 38px;
+            width: 40px;
+            height: 40px;
             flex: 0 0 auto;
             display: grid;
             place-items: center;
-            border-radius: 15px;
-            font-size: 17px;
+            border-radius: 16px;
+            color: var(--jr-state-color);
+            background:
+              radial-gradient(circle at 35% 25%, rgba(255,255,255,0.12), transparent 32%),
+              var(--jr-state-soft);
+            border: 1px solid var(--jr-state-border);
+            box-shadow:
+              0 0 26px color-mix(in srgb, var(--jr-state-color) 24%, transparent),
+              inset 0 1px 0 rgba(255,255,255,0.07);
+            overflow: hidden;
           }
 
-          .jr-side-motion-status-icon::after {
-            content: "";
+          .jr-wow-orb-ring {
             position: absolute;
-            inset: -4px;
-            border-radius: 18px;
+            border-radius: 999px;
             border: 1px solid currentColor;
-            opacity: 0.12;
-            animation: jr-side-motion-icon-breathe 2.6s ease-in-out infinite;
-            pointer-events: none;
+            opacity: 0.16;
           }
 
-          .jr-side-motion-status-icon-analyzing::after {
-            opacity: 0.32;
-            border-style: dashed;
-            animation: jr-side-motion-icon-spin 1.6s linear infinite;
+          .jr-wow-orb-ring-one {
+            width: 28px;
+            height: 28px;
+            animation: jr-wow-ring-pulse 2.7s ease-in-out infinite;
           }
 
-          .jr-side-motion-status-title {
+          .jr-wow-orb-ring-two {
+            width: 18px;
+            height: 18px;
+            animation: jr-wow-ring-pulse 2.7s ease-in-out infinite reverse;
+          }
+
+          .jr-wow-orb-sweep {
+            position: absolute;
+            inset: 4px;
+            border-radius: 999px;
+            background: conic-gradient(
+              from 0deg,
+              transparent 0deg,
+              transparent 250deg,
+              currentColor 315deg,
+              transparent 360deg
+            );
+            opacity: 0.2;
+            animation: jr-wow-radar-sweep 2.8s linear infinite;
+          }
+
+          .jr-wow-orb-ping {
+            position: absolute;
+            right: 8px;
+            top: 8px;
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: currentColor;
+            box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 18%, transparent);
+            animation: jr-wow-dot-pulse 1.8s ease-in-out infinite;
+          }
+
+          .jr-wow-orb-icon {
+            position: relative;
+            z-index: 1;
+            font-size: 16px;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.28));
+          }
+
+          .jr-wow-orb-analyzing .jr-wow-orb-sweep {
+            opacity: 0.34;
+            animation-duration: 1.2s;
+          }
+
+          .jr-wow-status-title {
             margin: 0;
             font-size: 15.5px;
             line-height: 1.15;
@@ -679,7 +896,7 @@ export function Sidebar({
             font-weight: 950;
           }
 
-          .jr-side-motion-status-subtitle {
+          .jr-wow-status-subtitle {
             margin: 5px 0 0;
             color: #94a3b8;
             font-size: 11.5px;
@@ -687,11 +904,11 @@ export function Sidebar({
             font-weight: 750;
           }
 
-          .jr-side-motion-progress-wrap {
+          .jr-wow-progress-wrap {
             margin: 13px 0 12px;
           }
 
-          .jr-side-motion-progress-meta {
+          .jr-wow-progress-meta {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -702,7 +919,7 @@ export function Sidebar({
             font-weight: 900;
           }
 
-          .jr-side-motion-progress-track {
+          .jr-wow-progress-track {
             position: relative;
             height: 8px;
             overflow: hidden;
@@ -711,7 +928,7 @@ export function Sidebar({
             border: 1px solid rgba(148,163,184,0.1);
           }
 
-          .jr-side-motion-progress-track::before {
+          .jr-wow-progress-track::before {
             content: "";
             position: absolute;
             inset: 0;
@@ -721,47 +938,49 @@ export function Sidebar({
               rgba(255,255,255,0.05),
               transparent
             );
-            animation: jr-side-motion-track-scan 2.4s ease-in-out infinite;
+            animation: jr-wow-track-scan 2.4s ease-in-out infinite;
           }
 
-          .jr-side-motion-progress-fill {
+          .jr-wow-progress-fill {
             position: relative;
             height: 100%;
             overflow: hidden;
             border-radius: inherit;
-            transition: width 420ms cubic-bezier(0.16, 1, 0.3, 1);
+            transition: width 440ms cubic-bezier(0.16, 1, 0.3, 1);
             box-shadow: 0 0 18px currentColor;
           }
 
-          .jr-side-motion-progress-fill::after {
+          .jr-wow-progress-fill::after {
             content: "";
             position: absolute;
             inset: 0;
             background: linear-gradient(
               90deg,
               transparent,
-              rgba(255,255,255,0.36),
+              rgba(255,255,255,0.42),
               transparent
             );
             transform: translateX(-120%);
-            animation: jr-side-motion-progress-shimmer 1.8s ease-in-out infinite;
+            animation: jr-wow-progress-shimmer 1.8s ease-in-out infinite;
           }
 
-          .jr-side-motion-next {
+          .jr-wow-next {
             display: flex;
             align-items: center;
             gap: 8px;
             margin-bottom: 12px;
             padding: 9px 10px;
             border-radius: 14px;
-            background: rgba(2,6,23,0.34);
+            background:
+              radial-gradient(circle at left, rgba(96,165,250,0.08), transparent 45%),
+              rgba(2,6,23,0.34);
             border: 1px solid rgba(148,163,184,0.11);
             color: #dbeafe;
             font-size: 11.5px;
             font-weight: 850;
           }
 
-          .jr-side-motion-next span:first-child {
+          .jr-wow-next span:first-child {
             width: 21px;
             height: 21px;
             display: grid;
@@ -769,10 +988,10 @@ export function Sidebar({
             flex: 0 0 auto;
             border-radius: 8px;
             background: rgba(96,165,250,0.13);
-            animation: jr-side-motion-arrow 1.8s ease-in-out infinite;
+            animation: jr-wow-arrow 1.8s ease-in-out infinite;
           }
 
-          .jr-side-motion-file {
+          .jr-wow-file {
             display: flex;
             align-items: center;
             gap: 9px;
@@ -784,10 +1003,10 @@ export function Sidebar({
             color: #cbd5e1;
             font-size: 11.5px;
             font-weight: 850;
-            animation: jr-side-motion-file-in 240ms ease-out;
+            animation: jr-wow-file-in 240ms ease-out;
           }
 
-          .jr-side-motion-file-icon {
+          .jr-wow-file-icon {
             width: 23px;
             height: 23px;
             display: grid;
@@ -797,11 +1016,11 @@ export function Sidebar({
             background: rgba(96,165,250,0.14);
           }
 
-          .jr-side-motion-file-main {
+          .jr-wow-file-main {
             min-width: 0;
           }
 
-          .jr-side-motion-file-name {
+          .jr-wow-file-name {
             display: block;
             white-space: nowrap;
             overflow: hidden;
@@ -809,7 +1028,7 @@ export function Sidebar({
             color: #e2e8f0;
           }
 
-          .jr-side-motion-file-size {
+          .jr-wow-file-size {
             display: block;
             margin-top: 2px;
             color: #64748b;
@@ -817,36 +1036,55 @@ export function Sidebar({
             font-weight: 800;
           }
 
-          .jr-side-motion-steps {
+          .jr-wow-steps {
+            position: relative;
             display: grid;
             gap: 8px;
             padding-top: 12px;
             border-top: 1px solid rgba(148,163,184,0.11);
           }
 
-          .jr-side-motion-step {
+          .jr-wow-steps::before {
+            content: "";
+            position: absolute;
+            left: 4px;
+            top: 20px;
+            bottom: 7px;
+            width: 1px;
+            background: linear-gradient(
+              180deg,
+              rgba(34,197,94,0.34),
+              rgba(96,165,250,0.16),
+              rgba(100,116,139,0.12)
+            );
+          }
+
+          .jr-wow-step {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 9px;
             color: #94a3b8;
             font-size: 11.5px;
             font-weight: 850;
-            animation: jr-side-motion-step-in 260ms ease-out both;
+            animation: jr-wow-step-in 260ms ease-out both;
           }
 
-          .jr-side-motion-step:nth-child(1) {
+          .jr-wow-step:nth-child(1) {
             animation-delay: 40ms;
           }
 
-          .jr-side-motion-step:nth-child(2) {
+          .jr-wow-step:nth-child(2) {
             animation-delay: 80ms;
           }
 
-          .jr-side-motion-step:nth-child(3) {
+          .jr-wow-step:nth-child(3) {
             animation-delay: 120ms;
           }
 
-          .jr-side-motion-step-dot {
+          .jr-wow-step-dot {
+            position: relative;
+            z-index: 1;
             width: 9px;
             height: 9px;
             flex: 0 0 auto;
@@ -856,25 +1094,27 @@ export function Sidebar({
             transition: background 240ms ease, box-shadow 240ms ease;
           }
 
-          .jr-side-motion-step-dot-done {
+          .jr-wow-step-dot-done {
             background: #22c55e;
             box-shadow: 0 0 0 4px rgba(34,197,94,0.12);
           }
 
-          .jr-side-motion-step-dot-active {
+          .jr-wow-step-dot-active {
             background: #facc15;
             box-shadow: 0 0 0 4px rgba(250,204,21,0.13);
-            animation: jr-side-motion-pulse 1.35s ease-in-out infinite;
+            animation: jr-wow-pulse 1.35s ease-in-out infinite;
           }
 
-          .jr-side-motion-stats {
+          .jr-wow-stats {
             margin-top: 13px;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 9px;
           }
 
-          .jr-side-motion-stat {
+          .jr-wow-stat {
+            position: relative;
+            overflow: hidden;
             padding: 10px;
             border-radius: 15px;
             background: rgba(2,6,23,0.34);
@@ -882,12 +1122,31 @@ export function Sidebar({
             transition: border-color 180ms ease, background 180ms ease;
           }
 
-          .jr-side-motion-stat:hover {
+          .jr-wow-stat::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top left, rgba(96,165,250,0.08), transparent 45%);
+            opacity: 0;
+            transition: opacity 180ms ease;
+          }
+
+          .jr-wow-stat:hover {
             border-color: rgba(96,165,250,0.24);
             background: rgba(15,23,42,0.5);
           }
 
-          .jr-side-motion-stat-value {
+          .jr-wow-stat:hover::after {
+            opacity: 1;
+          }
+
+          .jr-wow-stat-value,
+          .jr-wow-stat-label {
+            position: relative;
+            z-index: 1;
+          }
+
+          .jr-wow-stat-value {
             margin: 0;
             color: #f8fafc;
             font-size: 16px;
@@ -895,7 +1154,7 @@ export function Sidebar({
             font-weight: 950;
           }
 
-          .jr-side-motion-stat-label {
+          .jr-wow-stat-label {
             margin: 6px 0 0;
             color: #64748b;
             font-size: 9.8px;
@@ -904,13 +1163,13 @@ export function Sidebar({
             letter-spacing: 0.06em;
           }
 
-          .jr-side-motion-footer {
+          .jr-wow-footer {
             margin-top: 30px;
             padding-top: 17px;
             border-top: 1px solid rgba(148,163,184,0.12);
           }
 
-          .jr-side-motion-footer-card {
+          .jr-wow-footer-card {
             position: relative;
             overflow: hidden;
             padding: 12px;
@@ -922,7 +1181,7 @@ export function Sidebar({
             text-align: center;
           }
 
-          .jr-side-motion-footer-card::after {
+          .jr-wow-footer-card::after {
             content: "";
             position: absolute;
             inset: 0;
@@ -933,30 +1192,30 @@ export function Sidebar({
               transparent
             );
             transform: translateX(-100%);
-            animation: jr-side-motion-footer-shine 7s ease-in-out infinite;
+            animation: jr-wow-footer-shine 7s ease-in-out infinite;
           }
 
-          .jr-side-motion-footer-kicker,
-          .jr-side-motion-footer-name {
+          .jr-wow-footer-kicker,
+          .jr-wow-footer-name {
             position: relative;
             z-index: 1;
           }
 
-          .jr-side-motion-footer-kicker {
+          .jr-wow-footer-kicker {
             margin: 0;
             color: #64748b;
             font-size: 10px;
             font-weight: 850;
           }
 
-          .jr-side-motion-footer-name {
+          .jr-wow-footer-name {
             margin: 5px 0 0;
             color: #e2e8f0;
             font-size: 12px;
             font-weight: 950;
           }
 
-          @keyframes jr-side-motion-shell-in {
+          @keyframes jr-wow-shell-in {
             from {
               opacity: 0;
               transform: translateX(-10px);
@@ -967,7 +1226,18 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-card-in {
+          @keyframes jr-wow-edge-flow {
+            0%, 100% {
+              opacity: 0.35;
+              filter: blur(0);
+            }
+            50% {
+              opacity: 0.9;
+              filter: blur(0.5px);
+            }
+          }
+
+          @keyframes jr-wow-card-in {
             from {
               opacity: 0;
               transform: translateY(8px) scale(0.985);
@@ -978,7 +1248,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-file-in {
+          @keyframes jr-wow-file-in {
             from {
               opacity: 0;
               transform: translateY(6px);
@@ -989,7 +1259,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-step-in {
+          @keyframes jr-wow-step-in {
             from {
               opacity: 0;
               transform: translateX(-5px);
@@ -1000,7 +1270,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-shine {
+          @keyframes jr-wow-shine {
             0% {
               transform: translateX(-80%) rotate(18deg);
             }
@@ -1012,7 +1282,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-logo-breathe {
+          @keyframes jr-wow-logo-breathe {
             0%, 100% {
               opacity: 0.18;
               transform: scale(0.96);
@@ -1023,7 +1293,16 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-dot-pulse {
+          @keyframes jr-wow-logo-orbit {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
+            }
+          }
+
+          @keyframes jr-wow-dot-pulse {
             0%, 100% {
               transform: scale(1);
               box-shadow: 0 0 0 4px rgba(34,197,94,0.12);
@@ -1034,7 +1313,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-nav-shimmer {
+          @keyframes jr-wow-nav-shimmer {
             from {
               transform: translateX(-120%);
             }
@@ -1043,7 +1322,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-active-glow {
+          @keyframes jr-wow-active-glow {
             0%, 100% {
               opacity: 0.42;
             }
@@ -1052,27 +1331,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-icon-breathe {
-            0%, 100% {
-              opacity: 0.12;
-              transform: scale(1);
-            }
-            50% {
-              opacity: 0.24;
-              transform: scale(1.08);
-            }
-          }
-
-          @keyframes jr-side-motion-icon-spin {
-            from {
-              transform: rotate(0deg) scale(1.05);
-            }
-            to {
-              transform: rotate(360deg) scale(1.05);
-            }
-          }
-
-          @keyframes jr-side-motion-aurora {
+          @keyframes jr-wow-aurora {
             from {
               transform: translate3d(-4px, 0, 0) scale(0.95);
             }
@@ -1081,7 +1340,38 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-track-scan {
+          @keyframes jr-wow-particle-float {
+            0%, 100% {
+              transform: translate3d(0, 0, 0) scale(1);
+              opacity: 0.12;
+            }
+            50% {
+              transform: translate3d(8px, -10px, 0) scale(1.45);
+              opacity: 0.34;
+            }
+          }
+
+          @keyframes jr-wow-ring-pulse {
+            0%, 100% {
+              transform: scale(0.95);
+              opacity: 0.12;
+            }
+            50% {
+              transform: scale(1.08);
+              opacity: 0.26;
+            }
+          }
+
+          @keyframes jr-wow-radar-sweep {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
+            }
+          }
+
+          @keyframes jr-wow-track-scan {
             0% {
               transform: translateX(-100%);
               opacity: 0;
@@ -1095,7 +1385,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-progress-shimmer {
+          @keyframes jr-wow-progress-shimmer {
             0% {
               transform: translateX(-120%);
             }
@@ -1107,7 +1397,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-arrow {
+          @keyframes jr-wow-arrow {
             0%, 100% {
               transform: translateX(0);
             }
@@ -1116,7 +1406,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-pulse {
+          @keyframes jr-wow-pulse {
             0%, 100% {
               transform: scale(1);
               opacity: 1;
@@ -1127,7 +1417,7 @@ export function Sidebar({
             }
           }
 
-          @keyframes jr-side-motion-footer-shine {
+          @keyframes jr-wow-footer-shine {
             0% {
               transform: translateX(-100%);
             }
@@ -1140,24 +1430,29 @@ export function Sidebar({
           }
 
           @media (prefers-reduced-motion: reduce) {
-            .jr-side-motion,
-            .jr-side-motion-logo::before,
-            .jr-side-motion-logo::after,
-            .jr-side-motion-chip-dot,
-            .jr-side-motion-nav-btn,
-            .jr-side-motion-nav-btn::before,
-            .jr-side-motion-nav-btn::after,
-            .jr-side-motion-status,
-            .jr-side-motion-status::after,
-            .jr-side-motion-status-icon::after,
-            .jr-side-motion-progress-track::before,
-            .jr-side-motion-progress-fill,
-            .jr-side-motion-progress-fill::after,
-            .jr-side-motion-next span:first-child,
-            .jr-side-motion-file,
-            .jr-side-motion-step,
-            .jr-side-motion-step-dot-active,
-            .jr-side-motion-footer-card::after {
+            .jr-wow,
+            .jr-wow::after,
+            .jr-wow-logo::before,
+            .jr-wow-logo::after,
+            .jr-wow-logo-orbit,
+            .jr-wow-chip-dot,
+            .jr-wow-nav-btn,
+            .jr-wow-nav-btn::before,
+            .jr-wow-nav-btn::after,
+            .jr-wow-status,
+            .jr-wow-status::after,
+            .jr-wow-status-particles span,
+            .jr-wow-orb-ring,
+            .jr-wow-orb-sweep,
+            .jr-wow-orb-ping,
+            .jr-wow-progress-track::before,
+            .jr-wow-progress-fill,
+            .jr-wow-progress-fill::after,
+            .jr-wow-next span:first-child,
+            .jr-wow-file,
+            .jr-wow-step,
+            .jr-wow-step-dot-active,
+            .jr-wow-footer-card::after {
               animation: none;
               transition: none;
             }
@@ -1165,25 +1460,38 @@ export function Sidebar({
         `}
       </style>
 
-      <aside className="jr-side-motion" style={sidebarStyle}>
+      <aside
+        className="jr-wow"
+        style={
+          {
+            ...sidebarStyle,
+            "--jr-mouse-x": `${spotlight.x}px`,
+            "--jr-mouse-y": `${spotlight.y}px`,
+            "--jr-mouse-opacity": spotlight.active ? 1 : 0,
+          } as CssVars
+        }
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+      >
         <div>
-          <header className="jr-side-motion-brand">
-            <div className="jr-side-motion-logo" aria-hidden="true">
-              <span className="jr-side-motion-logo-text">JR</span>
+          <header className="jr-wow-brand">
+            <div className="jr-wow-logo" aria-hidden="true">
+              <span className="jr-wow-logo-orbit" />
+              <span className="jr-wow-logo-text">JR</span>
             </div>
 
             <div>
-              <h2 className="jr-side-motion-title">JobRadar AI</h2>
-              <p className="jr-side-motion-subtitle">Your AI Job Scout</p>
+              <h2 className="jr-wow-title">JobRadar AI</h2>
+              <p className="jr-wow-subtitle">Your AI Job Scout</p>
 
-              <div className="jr-side-motion-chip">
-                <span className="jr-side-motion-chip-dot" />
+              <div className="jr-wow-chip">
+                <span className="jr-wow-chip-dot" />
                 Local workspace
               </div>
             </div>
           </header>
 
-          <nav className="jr-side-motion-nav" aria-label="Main navigation">
+          <nav className="jr-wow-nav" aria-label="Main navigation">
             <NavButton
               icon="📊"
               label="Dashboard"
@@ -1207,19 +1515,27 @@ export function Sidebar({
 
           <section
             key={stateKey}
-            className="jr-side-motion-status"
+            className="jr-wow-status"
             style={
               {
-                "--sidebar-accent-soft": workspaceState.softColor,
-              } as CSSProperties
+                "--jr-status-color": workspaceState.color,
+                "--jr-status-soft": workspaceState.softColor,
+              } as CssVars
             }
           >
-            <div className="jr-side-motion-status-content">
-              <div className="jr-side-motion-status-top">
-                <span className="jr-side-motion-status-label">Workspace</span>
+            <div className="jr-wow-status-particles" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+
+            <div className="jr-wow-status-content">
+              <div className="jr-wow-status-top">
+                <span className="jr-wow-status-label">Workspace</span>
 
                 <span
-                  className="jr-side-motion-status-badge"
+                  className="jr-wow-status-badge"
                   style={{
                     color: workspaceState.color,
                     background: workspaceState.softColor,
@@ -1230,81 +1546,63 @@ export function Sidebar({
                 </span>
               </div>
 
-              <div className="jr-side-motion-status-main">
-                <div
-                  className={[
-                    "jr-side-motion-status-icon",
-                    workspaceState.variant === "analyzing"
-                      ? "jr-side-motion-status-icon-analyzing"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  style={{
-                    color: workspaceState.color,
-                    background: workspaceState.softColor,
-                    border: `1px solid ${workspaceState.borderColor}`,
-                  }}
-                >
-                  {workspaceState.icon}
-                </div>
+              <div className="jr-wow-status-main">
+                <WorkspaceOrb state={workspaceState} />
 
                 <div>
                   <h3
-                    className="jr-side-motion-status-title"
+                    className="jr-wow-status-title"
                     style={{ color: workspaceState.color }}
                   >
                     {workspaceState.title}
                   </h3>
 
-                  <p className="jr-side-motion-status-subtitle">
+                  <p className="jr-wow-status-subtitle">
                     {workspaceState.subtitle}
                   </p>
                 </div>
               </div>
 
-              <div className="jr-side-motion-progress-wrap">
-                <div className="jr-side-motion-progress-meta">
+              <div className="jr-wow-progress-wrap">
+                <div className="jr-wow-progress-meta">
                   <span>Session progress</span>
                   <span>{workspaceState.progress}%</span>
                 </div>
 
-                <div className="jr-side-motion-progress-track">
+                <div className="jr-wow-progress-track">
                   <div
-                    className="jr-side-motion-progress-fill"
+                    className="jr-wow-progress-fill"
                     style={{
                       width: `${workspaceState.progress}%`,
                       color: workspaceState.color,
-                      background: `linear-gradient(90deg, ${workspaceState.color}, rgba(96,165,250,0.88))`,
+                      background: `linear-gradient(90deg, ${workspaceState.color}, rgba(96,165,250,0.9))`,
                     }}
                   />
                 </div>
               </div>
 
-              <div className="jr-side-motion-next">
+              <div className="jr-wow-next">
                 <span>→</span>
                 <span>Next: {workspaceState.nextStep}</span>
               </div>
 
               {cvFile && (
-                <div className="jr-side-motion-file" title={cvFile.name}>
-                  <span className="jr-side-motion-file-icon">📄</span>
+                <div className="jr-wow-file" title={cvFile.name}>
+                  <span className="jr-wow-file-icon">📄</span>
 
-                  <span className="jr-side-motion-file-main">
-                    <span className="jr-side-motion-file-name">
+                  <span className="jr-wow-file-main">
+                    <span className="jr-wow-file-name">
                       {truncateFileName(cvFile.name)}
                     </span>
 
                     {fileSize && (
-                      <span className="jr-side-motion-file-size">
-                        {fileSize}
-                      </span>
+                      <span className="jr-wow-file-size">{fileSize}</span>
                     )}
                   </span>
                 </div>
               )}
 
-              <div className="jr-side-motion-steps">
+              <div className="jr-wow-steps">
                 <ProgressStep label="CV selected" done={hasCvFile} />
                 <ProgressStep
                   label="AI profile"
@@ -1314,29 +1612,29 @@ export function Sidebar({
                 <ProgressStep label="Saved jobs" done={hasSavedJobs} />
               </div>
 
-              <div className="jr-side-motion-stats">
-                <div className="jr-side-motion-stat">
-                  <p className="jr-side-motion-stat-value">
+              <div className="jr-wow-stats">
+                <div className="jr-wow-stat">
+                  <p className="jr-wow-stat-value">
                     <AnimatedNumber value={savedJobsCount} />
                   </p>
-                  <p className="jr-side-motion-stat-label">Saved</p>
+                  <p className="jr-wow-stat-label">Saved</p>
                 </div>
 
-                <div className="jr-side-motion-stat">
-                  <p className="jr-side-motion-stat-value">
+                <div className="jr-wow-stat">
+                  <p className="jr-wow-stat-value">
                     {hasProfile ? "AI" : "--"}
                   </p>
-                  <p className="jr-side-motion-stat-label">Profile</p>
+                  <p className="jr-wow-stat-label">Profile</p>
                 </div>
               </div>
             </div>
           </section>
         </div>
 
-        <footer className="jr-side-motion-footer">
-          <div className="jr-side-motion-footer-card">
-            <p className="jr-side-motion-footer-kicker">Created by</p>
-            <p className="jr-side-motion-footer-name">Francesco Molea</p>
+        <footer className="jr-wow-footer">
+          <div className="jr-wow-footer-card">
+            <p className="jr-wow-footer-kicker">Created by</p>
+            <p className="jr-wow-footer-name">Francesco Molea</p>
           </div>
         </footer>
       </aside>
