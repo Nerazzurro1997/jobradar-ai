@@ -13,9 +13,11 @@ type SidebarProps = {
 type NavButtonProps = {
   icon: string;
   label: string;
+  description: string;
   count?: number;
   active?: boolean;
   disabled?: boolean;
+  variant: "dashboard" | "saved";
   onClick?: () => void;
 };
 
@@ -219,17 +221,20 @@ function AnimatedNumber({ value }: { value: number }) {
 function NavButton({
   icon,
   label,
+  description,
   count,
   active = false,
   disabled = false,
+  variant,
   onClick,
 }: NavButtonProps) {
   return (
     <button
       type="button"
       className={[
-        "jr-wow-nav-btn",
-        active ? "jr-wow-nav-btn-active" : "",
+        "jr-wow-nav-card",
+        `jr-wow-nav-card-${variant}`,
+        active ? "jr-wow-nav-card-active" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -237,16 +242,29 @@ function NavButton({
       aria-current={active ? "page" : undefined}
       onClick={disabled ? undefined : onClick}
     >
-      <span className="jr-wow-nav-left">
-        <span className="jr-wow-nav-icon">{icon}</span>
-        <span className="jr-wow-nav-label">{label}</span>
+      <span className="jr-wow-nav-card-orb" aria-hidden="true" />
+      <span className="jr-wow-nav-card-shine" aria-hidden="true" />
+
+      <span className="jr-wow-nav-card-left">
+        <span className="jr-wow-nav-card-icon">
+          <span className="jr-wow-nav-card-icon-core">{icon}</span>
+        </span>
+
+        <span className="jr-wow-nav-card-copy">
+          <span className="jr-wow-nav-card-title">{label}</span>
+          <span className="jr-wow-nav-card-description">{description}</span>
+        </span>
       </span>
 
-      {typeof count === "number" && (
-        <span className="jr-wow-nav-count">
-          <AnimatedNumber value={count} />
-        </span>
-      )}
+      <span className="jr-wow-nav-card-right">
+        {active && <span className="jr-wow-nav-card-active-dot" />}
+
+        {typeof count === "number" && (
+          <span className="jr-wow-nav-card-count">
+            <AnimatedNumber value={count} />
+          </span>
+        )}
+      </span>
     </button>
   );
 }
@@ -276,17 +294,10 @@ function ProgressStep({
   );
 }
 
-function WorkspaceOrb({
-  state,
-}: {
-  state: WorkspaceState;
-}) {
+function WorkspaceOrb({ state }: { state: WorkspaceState }) {
   return (
     <div
-      className={[
-        "jr-wow-orb",
-        `jr-wow-orb-${state.variant}`,
-      ].join(" ")}
+      className={["jr-wow-orb", `jr-wow-orb-${state.variant}`].join(" ")}
       style={
         {
           "--jr-state-color": state.color,
@@ -544,43 +555,68 @@ export function Sidebar({
           }
 
           .jr-wow-nav {
-            margin-top: 30px;
+            margin-top: 32px;
             display: grid;
-            gap: 10px;
+            gap: 12px;
           }
 
-          .jr-wow-nav-btn {
+          .jr-wow-nav-card {
             position: relative;
             width: 100%;
-            min-height: 44px;
+            min-height: 72px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
+            gap: 12px;
             overflow: hidden;
             border: 1px solid rgba(148,163,184,0.17);
-            border-radius: 16px;
-            padding: 11px 12px;
+            border-radius: 22px;
+            padding: 13px 14px;
             color: #e2e8f0;
             background:
-              linear-gradient(180deg, rgba(30,41,59,0.7), rgba(15,23,42,0.7));
+              radial-gradient(circle at top left, rgba(59,130,246,0.08), transparent 42%),
+              linear-gradient(180deg, rgba(30,41,59,0.72), rgba(15,23,42,0.72));
             box-shadow:
-              0 12px 26px rgba(0,0,0,0.12),
-              inset 0 1px 0 rgba(255,255,255,0.04);
+              0 14px 30px rgba(0,0,0,0.14),
+              inset 0 1px 0 rgba(255,255,255,0.045);
             cursor: pointer;
-            font-size: 12.5px;
-            font-weight: 900;
             text-align: left;
             transition:
-              transform 170ms ease,
-              border-color 170ms ease,
-              background 170ms ease,
-              box-shadow 170ms ease,
-              opacity 170ms ease;
+              transform 180ms ease,
+              border-color 180ms ease,
+              background 180ms ease,
+              box-shadow 180ms ease,
+              opacity 180ms ease;
           }
 
-          .jr-wow-nav-btn::after {
+          .jr-wow-nav-card::before {
             content: "";
+            position: absolute;
+            inset: 0;
+            background:
+              linear-gradient(135deg, rgba(255,255,255,0.08), transparent 32%),
+              radial-gradient(circle at 90% 15%, rgba(96,165,250,0.16), transparent 32%);
+            opacity: 0;
+            transition: opacity 180ms ease;
+            pointer-events: none;
+          }
+
+          .jr-wow-nav-card-orb {
+            position: absolute;
+            right: -36px;
+            top: -42px;
+            width: 100px;
+            height: 100px;
+            border-radius: 999px;
+            background: rgba(96,165,250,0.12);
+            filter: blur(14px);
+            opacity: 0.5;
+            transform: scale(0.92);
+            transition: opacity 180ms ease, transform 180ms ease;
+            pointer-events: none;
+          }
+
+          .jr-wow-nav-card-shine {
             position: absolute;
             inset: 0;
             background: linear-gradient(
@@ -594,98 +630,209 @@ export function Sidebar({
             pointer-events: none;
           }
 
-          .jr-wow-nav-btn:hover:not(:disabled) {
-            transform: translateY(-1px);
+          .jr-wow-nav-card:hover:not(:disabled) {
+            transform: translateY(-2px);
             border-color: rgba(96,165,250,0.34);
             background:
-              radial-gradient(circle at top left, rgba(59,130,246,0.18), transparent 40%),
-              linear-gradient(180deg, rgba(30,41,59,0.88), rgba(15,23,42,0.82));
+              radial-gradient(circle at top left, rgba(59,130,246,0.18), transparent 44%),
+              linear-gradient(180deg, rgba(30,41,59,0.9), rgba(15,23,42,0.84));
             box-shadow:
-              0 18px 36px rgba(0,0,0,0.18),
-              inset 0 1px 0 rgba(255,255,255,0.06);
+              0 22px 44px rgba(0,0,0,0.22),
+              inset 0 1px 0 rgba(255,255,255,0.07);
           }
 
-          .jr-wow-nav-btn:hover:not(:disabled)::after {
+          .jr-wow-nav-card:hover:not(:disabled)::before {
+            opacity: 1;
+          }
+
+          .jr-wow-nav-card:hover:not(:disabled) .jr-wow-nav-card-orb {
+            opacity: 0.9;
+            transform: scale(1.08);
+          }
+
+          .jr-wow-nav-card:hover:not(:disabled) .jr-wow-nav-card-shine {
             opacity: 1;
             animation: jr-wow-nav-shimmer 900ms ease;
           }
 
-          .jr-wow-nav-btn:active:not(:disabled) {
+          .jr-wow-nav-card:active:not(:disabled) {
             transform: translateY(0);
           }
 
-          .jr-wow-nav-btn:focus-visible {
+          .jr-wow-nav-card:focus-visible {
             outline: 3px solid rgba(96,165,250,0.35);
             outline-offset: 3px;
           }
 
-          .jr-wow-nav-btn:disabled {
+          .jr-wow-nav-card:disabled {
             cursor: not-allowed;
-            opacity: 0.48;
+            opacity: 0.52;
           }
 
-          .jr-wow-nav-btn-active {
+          .jr-wow-nav-card-dashboard.jr-wow-nav-card-active {
             color: #ffffff;
-            border-color: rgba(34,197,94,0.42);
+            border-color: rgba(34,197,94,0.48);
             background:
-              radial-gradient(circle at top left, rgba(255,255,255,0.14), transparent 35%),
-              linear-gradient(135deg, #22c55e, #16a34a 58%, #15803d);
+              radial-gradient(circle at 20% 10%, rgba(255,255,255,0.16), transparent 32%),
+              radial-gradient(circle at 92% 15%, rgba(187,247,208,0.28), transparent 34%),
+              linear-gradient(135deg, #22c55e, #16a34a 55%, #15803d);
             box-shadow:
-              0 18px 40px rgba(34,197,94,0.25),
-              inset 0 1px 0 rgba(255,255,255,0.16);
+              0 22px 48px rgba(34,197,94,0.28),
+              inset 0 1px 0 rgba(255,255,255,0.18);
           }
 
-          .jr-wow-nav-btn-active::before {
+          .jr-wow-nav-card-saved.jr-wow-nav-card-active {
+            color: #ffffff;
+            border-color: rgba(96,165,250,0.48);
+            background:
+              radial-gradient(circle at 20% 10%, rgba(255,255,255,0.15), transparent 32%),
+              radial-gradient(circle at 92% 15%, rgba(147,197,253,0.28), transparent 34%),
+              linear-gradient(135deg, #2563eb, #1d4ed8 55%, #1e3a8a);
+            box-shadow:
+              0 22px 48px rgba(37,99,235,0.3),
+              inset 0 1px 0 rgba(255,255,255,0.18);
+          }
+
+          .jr-wow-nav-card-active::after {
             content: "";
             position: absolute;
             inset: -1px;
             border-radius: inherit;
-            border: 1px solid rgba(187,247,208,0.32);
+            border: 1px solid rgba(255,255,255,0.22);
             opacity: 0.72;
             animation: jr-wow-active-glow 2.8s ease-in-out infinite;
             pointer-events: none;
           }
 
-          .jr-wow-nav-left {
+          .jr-wow-nav-card-active .jr-wow-nav-card-orb {
+            opacity: 1;
+            transform: scale(1.16);
+            filter: blur(12px);
+          }
+
+          .jr-wow-nav-card-dashboard.jr-wow-nav-card-active .jr-wow-nav-card-orb {
+            background: rgba(187,247,208,0.28);
+          }
+
+          .jr-wow-nav-card-saved.jr-wow-nav-card-active .jr-wow-nav-card-orb {
+            background: rgba(147,197,253,0.3);
+          }
+
+          .jr-wow-nav-card-left {
             position: relative;
             z-index: 1;
             display: flex;
             align-items: center;
             min-width: 0;
-            gap: 9px;
+            gap: 12px;
           }
 
-          .jr-wow-nav-icon {
-            width: 21px;
-            height: 21px;
+          .jr-wow-nav-card-icon {
+            position: relative;
+            width: 38px;
+            height: 38px;
             display: grid;
             place-items: center;
             flex: 0 0 auto;
-            border-radius: 8px;
-            background: rgba(255,255,255,0.08);
-            font-size: 12px;
+            border-radius: 15px;
+            background:
+              radial-gradient(circle at 30% 20%, rgba(255,255,255,0.16), transparent 34%),
+              rgba(15,23,42,0.42);
+            border: 1px solid rgba(255,255,255,0.12);
+            box-shadow:
+              0 12px 24px rgba(0,0,0,0.18),
+              inset 0 1px 0 rgba(255,255,255,0.08);
           }
 
-          .jr-wow-nav-label {
+          .jr-wow-nav-card-icon::before {
+            content: "";
+            position: absolute;
+            inset: -4px;
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.12);
+            opacity: 0;
+            transform: scale(0.92);
+            transition: opacity 180ms ease, transform 180ms ease;
+          }
+
+          .jr-wow-nav-card:hover:not(:disabled) .jr-wow-nav-card-icon::before,
+          .jr-wow-nav-card-active .jr-wow-nav-card-icon::before {
+            opacity: 1;
+            transform: scale(1);
+          }
+
+          .jr-wow-nav-card-icon-core {
+            position: relative;
+            z-index: 1;
+            font-size: 18px;
+            line-height: 1;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.22));
+          }
+
+          .jr-wow-nav-card-copy {
+            display: grid;
+            min-width: 0;
+            gap: 3px;
+          }
+
+          .jr-wow-nav-card-title {
+            color: #f8fafc;
+            font-size: 14px;
+            line-height: 1.05;
+            font-weight: 950;
+            letter-spacing: -0.18px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
           }
 
-          .jr-wow-nav-count {
+          .jr-wow-nav-card-description {
+            color: rgba(203,213,225,0.78);
+            font-size: 10.7px;
+            line-height: 1.25;
+            font-weight: 800;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .jr-wow-nav-card-active .jr-wow-nav-card-description {
+            color: rgba(255,255,255,0.82);
+          }
+
+          .jr-wow-nav-card-right {
             position: relative;
             z-index: 1;
-            min-width: 24px;
-            height: 23px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 0 0 auto;
+          }
+
+          .jr-wow-nav-card-active-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #ffffff;
+            box-shadow: 0 0 0 5px rgba(255,255,255,0.14);
+            animation: jr-wow-dot-pulse-white 2.2s ease-in-out infinite;
+          }
+
+          .jr-wow-nav-card-count {
+            min-width: 34px;
+            height: 32px;
             display: grid;
             place-items: center;
             border-radius: 999px;
-            padding: 0 8px;
-            background: rgba(2,6,23,0.36);
-            border: 1px solid rgba(255,255,255,0.12);
+            padding: 0 10px;
+            background: rgba(2,6,23,0.32);
+            border: 1px solid rgba(255,255,255,0.14);
             color: #f8fafc;
-            font-size: 10.5px;
+            font-size: 12px;
             font-weight: 950;
+            box-shadow:
+              0 12px 24px rgba(0,0,0,0.14),
+              inset 0 1px 0 rgba(255,255,255,0.06);
           }
 
           .jr-wow-status {
@@ -1313,6 +1460,17 @@ export function Sidebar({
             }
           }
 
+          @keyframes jr-wow-dot-pulse-white {
+            0%, 100% {
+              transform: scale(1);
+              box-shadow: 0 0 0 5px rgba(255,255,255,0.14);
+            }
+            50% {
+              transform: scale(1.16);
+              box-shadow: 0 0 0 7px rgba(255,255,255,0.08);
+            }
+          }
+
           @keyframes jr-wow-nav-shimmer {
             from {
               transform: translateX(-120%);
@@ -1436,9 +1594,11 @@ export function Sidebar({
             .jr-wow-logo::after,
             .jr-wow-logo-orbit,
             .jr-wow-chip-dot,
-            .jr-wow-nav-btn,
-            .jr-wow-nav-btn::before,
-            .jr-wow-nav-btn::after,
+            .jr-wow-nav-card,
+            .jr-wow-nav-card::after,
+            .jr-wow-nav-card-shine,
+            .jr-wow-nav-card-active::after,
+            .jr-wow-nav-card-active-dot,
             .jr-wow-status,
             .jr-wow-status::after,
             .jr-wow-status-particles span,
@@ -1495,6 +1655,8 @@ export function Sidebar({
             <NavButton
               icon="📊"
               label="Dashboard"
+              description="Live job radar"
+              variant="dashboard"
               active={!showSavedJobs}
               onClick={() => {
                 if (showSavedJobs) {
@@ -1506,7 +1668,13 @@ export function Sidebar({
             <NavButton
               icon="💾"
               label="Saved Jobs"
+              description={
+                hasSavedJobs
+                  ? "Shortlisted matches"
+                  : "No saved matches yet"
+              }
               count={savedJobsCount}
+              variant="saved"
               active={showSavedJobs}
               disabled={!hasSavedJobs && !showSavedJobs}
               onClick={onToggleSavedJobs}
