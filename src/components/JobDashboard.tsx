@@ -61,11 +61,11 @@ type UiDecisionJob = Job & {
   uiIsNew?: boolean;
   uiIsPriority?: boolean;
   uiPriorityRank?: number;
-  uiDecisionSection?: "new" | "best" | "all" | "live";
+  uiDecisionSection?: "new" | "all" | "live";
 };
 
-type SavedSortMode = "best" | "closest" | "newest";
-type SavedFilterMode = "all" | "top" | "elite";
+type SavedSortMode = "best" | "closest" | "newest" | "furthest" | "score";
+type SavedFilterMode = "all" | "best" | "top" | "elite";
 type ScoreFilterMode = 70 | 80 | 90;
 
 type Props = {
@@ -98,8 +98,8 @@ type Props = {
 const CV_PROFILE_KEY = "jobradar_cv_profile";
 const LAST_SEARCH_UI_KEY = "jobradar_saved_jobs_last_search_at";
 const NEW_SAVED_JOB_KEYS_KEY = "jobradar_new_saved_job_keys";
-const NEW_JOBS_LIMIT = 12;
-const BEST_MATCH_LIMIT = 12;
+const LATEST_SEARCH_JOB_KEYS_KEY = "jobradar_latest_search_job_keys";
+const LATEST_SEARCH_LIMIT = 3;
 
 function getStorage(): Storage | null {
   if (typeof window === "undefined") return null;
@@ -119,28 +119,27 @@ function removeStoredCvProfile() {
   }
 }
 
-function readLastSearchAt() {
-  const storage = getStorage();
-  const rawValue = storage?.getItem(LAST_SEARCH_UI_KEY);
+function readNumberFromStorage(key: string) {
+  const rawValue = getStorage()?.getItem(key);
   const parsed = rawValue ? Number(rawValue) : 0;
 
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function writeLastSearchAt(value: number) {
+function writeNumberToStorage(key: string, value: number) {
   const storage = getStorage();
   if (!storage) return;
 
   try {
-    storage.setItem(LAST_SEARCH_UI_KEY, String(value));
+    storage.setItem(key, String(value));
   } catch (error) {
-    console.error("Failed to store last search timestamp", error);
+    console.error(`Failed to store ${key}`, error);
   }
 }
 
-function readStoredNewSavedJobKeys() {
+function readStringSetFromStorage(key: string) {
   const storage = getStorage();
-  const rawValue = storage?.getItem(NEW_SAVED_JOB_KEYS_KEY);
+  const rawValue = storage?.getItem(key);
 
   if (!rawValue) return new Set<string>();
 
@@ -148,7 +147,7 @@ function readStoredNewSavedJobKeys() {
     const parsed = JSON.parse(rawValue) as unknown;
 
     if (!Array.isArray(parsed)) {
-      storage?.removeItem(NEW_SAVED_JOB_KEYS_KEY);
+      storage?.removeItem(key);
       return new Set<string>();
     }
 
@@ -156,19 +155,19 @@ function readStoredNewSavedJobKeys() {
       parsed.filter((item): item is string => typeof item === "string")
     );
   } catch {
-    storage?.removeItem(NEW_SAVED_JOB_KEYS_KEY);
+    storage?.removeItem(key);
     return new Set<string>();
   }
 }
 
-function writeStoredNewSavedJobKeys(keys: string[]) {
+function writeStringSetToStorage(key: string, values: string[]) {
   const storage = getStorage();
   if (!storage) return;
 
   try {
-    storage.setItem(NEW_SAVED_JOB_KEYS_KEY, JSON.stringify(keys));
+    storage.setItem(key, JSON.stringify(values));
   } catch (error) {
-    console.error("Failed to store new saved job keys", error);
+    console.error(`Failed to store ${key}`, error);
   }
 }
 
@@ -265,8 +264,18 @@ function getDistanceScore(job: Job) {
   return toNumber((job as RankedDebugJob).distanceScore);
 }
 
+function getDistanceScoreForFurthest(job: Job) {
+  const distanceScore = getDistanceScore(job);
+
+  return distanceScore > 0 ? distanceScore : 999;
+}
+
 function getRecencyScore(job: Job) {
   return toNumber((job as RankedDebugJob).recencyScore);
+}
+
+function getRequirementMatchScore(job: Job) {
+  return toNumber((job as RankedDebugJob).requirementMatchScore);
 }
 
 function getPublishedTime(job: Job) {
@@ -376,13 +385,23 @@ function filterSavedJobs(
 
     if (score < minimumScore) return false;
     if (filterMode === "elite") return score >= 90;
-    if (filterMode === "top") return score >= 85;
+    if (filterMode === "best") return score >= 85;
+    if (filterMode === "top") return score >= 80;
 
     return true;
   });
 }
 
 function sortSavedJobs(jobs: Job[], mode: SavedSortMode) {
+  if (mode === "score") {
+    return [...jobs].sort((a, b) => {
+      const scoreDiff = getJobDisplayScore(b) - getJobDisplayScore(a);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      return getRequirementMatchScore(b) - getRequirementMatchScore(a);
+    });
+  }
+
   if (mode === "closest") {
     return [...jobs].sort((a, b) => {
       const distanceDiff = getDistanceScore(b) - getDistanceScore(a);
@@ -392,6 +411,16 @@ function sortSavedJobs(jobs: Job[], mode: SavedSortMode) {
       if (scoreDiff !== 0) return scoreDiff;
 
       return getRecencyScore(b) - getRecencyScore(a);
+    });
+  }
+
+  if (mode === "furthest") {
+    return [...jobs].sort((a, b) => {
+      const distanceDiff =
+        getDistanceScoreForFurthest(a) - getDistanceScoreForFurthest(b);
+      if (distanceDiff !== 0) return distanceDiff;
+
+      return getJobDisplayScore(b) - getJobDisplayScore(a);
     });
   }
 
@@ -454,12 +483,12 @@ function SignalPill({ label }: { label: string }) {
   return (
     <span
       style={{
-        padding: "7px 10px",
+        padding: "6px 9px",
         borderRadius: 999,
         background: "rgba(59,130,246,0.16)",
         border: "1px solid rgba(59,130,246,0.24)",
         color: "#bfdbfe",
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 800,
         lineHeight: 1,
       }}
@@ -484,9 +513,9 @@ function SignalGroup({
     <div>
       <p
         style={{
-          margin: "0 0 8px",
+          margin: "0 0 7px",
           color: "#94a3b8",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 800,
           textTransform: "uppercase",
           letterSpacing: 0.5,
@@ -495,7 +524,7 @@ function SignalGroup({
         {title}
       </p>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
         {items.slice(0, limit).map((signal, index) => (
           <SignalPill key={`${title}-${signal}-${index}`} label={signal} />
         ))}
@@ -516,18 +545,18 @@ function SavedMetricCard({
   return (
     <div
       style={{
-        minWidth: 132,
-        padding: 16,
-        borderRadius: 18,
+        minWidth: 118,
+        padding: 13,
+        borderRadius: 16,
         background: "rgba(2,6,23,0.38)",
         border: "1px solid rgba(148,163,184,0.14)",
       }}
     >
       <p
         style={{
-          margin: "0 0 8px",
+          margin: "0 0 7px",
           color: "#94a3b8",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 800,
         }}
       >
@@ -538,7 +567,7 @@ function SavedMetricCard({
         style={{
           display: "block",
           color: "#f8fafc",
-          fontSize: 25,
+          fontSize: 22,
           lineHeight: 1,
         }}
       >
@@ -549,9 +578,9 @@ function SavedMetricCard({
         <small
           style={{
             display: "block",
-            marginTop: 7,
+            marginTop: 6,
             color: "#64748b",
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 700,
           }}
         >
@@ -569,8 +598,8 @@ function ResetIllustration() {
       style={{
         position: "relative",
         width: "100%",
-        minHeight: 230,
-        borderRadius: 28,
+        minHeight: 210,
+        borderRadius: 24,
         overflow: "hidden",
         background:
           "radial-gradient(circle at 30% 20%, rgba(59,130,246,0.32), transparent 34%), radial-gradient(circle at 80% 70%, rgba(34,197,94,0.18), transparent 30%), linear-gradient(135deg, rgba(15,23,42,0.86), rgba(2,6,23,0.92))",
@@ -581,8 +610,8 @@ function ResetIllustration() {
       <div
         style={{
           position: "absolute",
-          inset: 22,
-          borderRadius: 24,
+          inset: 20,
+          borderRadius: 22,
           border: "1px solid rgba(148,163,184,0.12)",
           background: "rgba(2,6,23,0.26)",
         }}
@@ -590,7 +619,7 @@ function ResetIllustration() {
 
       <svg
         width="100%"
-        height="230"
+        height="210"
         viewBox="0 0 420 230"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -755,12 +784,12 @@ function EmptyJobsState({
         position: "relative",
         overflow: "hidden",
         padding: 0,
-        marginBottom: 28,
-        borderRadius: 30,
+        marginBottom: 22,
+        borderRadius: 26,
         background:
           "linear-gradient(135deg, rgba(15,23,42,0.94), rgba(30,41,59,0.72))",
         border: "1px solid rgba(148,163,184,0.18)",
-        boxShadow: "0 24px 70px rgba(0,0,0,0.28)",
+        boxShadow: "0 22px 58px rgba(0,0,0,0.24)",
       }}
     >
       <div
@@ -778,8 +807,8 @@ function EmptyJobsState({
           position: "relative",
           display: "grid",
           gridTemplateColumns: "1.05fr 0.95fr",
-          gap: 28,
-          padding: 32,
+          gap: 24,
+          padding: 28,
           alignItems: "center",
         }}
       >
@@ -800,7 +829,7 @@ function EmptyJobsState({
               color: isResetState ? "#bbf7d0" : "#bfdbfe",
               fontSize: 12,
               fontWeight: 900,
-              marginBottom: 18,
+              marginBottom: 16,
             }}
           >
             {isResetState ? "Clean workspace" : "Ready to start"}
@@ -809,9 +838,9 @@ function EmptyJobsState({
           <h3
             style={{
               margin: 0,
-              fontSize: 30,
+              fontSize: 28,
               lineHeight: 1.08,
-              letterSpacing: -0.7,
+              letterSpacing: -0.5,
               color: "#f8fafc",
             }}
           >
@@ -820,10 +849,10 @@ function EmptyJobsState({
 
           <p
             style={{
-              margin: "12px 0 0",
+              margin: "11px 0 0",
               color: "#cbd5e1",
-              fontSize: 15.5,
-              lineHeight: 1.65,
+              fontSize: 15,
+              lineHeight: 1.6,
               maxWidth: 620,
             }}
           >
@@ -834,15 +863,15 @@ function EmptyJobsState({
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: 10,
-              marginTop: 22,
+              gap: 9,
+              marginTop: 18,
             }}
           >
             {isResetState && (
               <>
                 <span
                   style={{
-                    padding: "9px 12px",
+                    padding: "8px 11px",
                     borderRadius: 999,
                     background: "rgba(15,23,42,0.62)",
                     border: "1px solid rgba(148,163,184,0.16)",
@@ -856,7 +885,7 @@ function EmptyJobsState({
 
                 <span
                   style={{
-                    padding: "9px 12px",
+                    padding: "8px 11px",
                     borderRadius: 999,
                     background: "rgba(15,23,42,0.62)",
                     border: "1px solid rgba(148,163,184,0.16)",
@@ -871,7 +900,7 @@ function EmptyJobsState({
                 {resetTime && (
                   <span
                     style={{
-                      padding: "9px 12px",
+                      padding: "8px 11px",
                       borderRadius: 999,
                       background: "rgba(15,23,42,0.62)",
                       border: "1px solid rgba(148,163,184,0.16)",
@@ -889,7 +918,7 @@ function EmptyJobsState({
             {cvFile && (
               <span
                 style={{
-                  padding: "9px 12px",
+                  padding: "8px 11px",
                   borderRadius: 999,
                   background: "rgba(37,99,235,0.14)",
                   border: "1px solid rgba(96,165,250,0.22)",
@@ -905,7 +934,7 @@ function EmptyJobsState({
             {cvProfile && (
               <span
                 style={{
-                  padding: "9px 12px",
+                  padding: "8px 11px",
                   borderRadius: 999,
                   background: "rgba(34,197,94,0.12)",
                   border: "1px solid rgba(34,197,94,0.22)",
@@ -933,29 +962,29 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
       style={{
         display: "grid",
         gridTemplateColumns: "auto minmax(0, 1fr) auto",
-        gap: 22,
+        gap: 18,
         alignItems: "center",
-        padding: 28,
-        marginBottom: 28,
-        borderRadius: 28,
+        padding: 24,
+        marginBottom: 22,
+        borderRadius: 24,
         background:
           "linear-gradient(135deg, rgba(15,23,42,0.94), rgba(30,41,59,0.68))",
         border: "1px solid rgba(148,163,184,0.18)",
-        boxShadow: "0 24px 70px rgba(0,0,0,0.25)",
+        boxShadow: "0 22px 58px rgba(0,0,0,0.22)",
       }}
     >
       <div
         aria-hidden="true"
         style={{
-          width: 64,
-          height: 64,
-          borderRadius: 22,
+          width: 56,
+          height: 56,
+          borderRadius: 19,
           display: "grid",
           placeItems: "center",
           background: "rgba(37,99,235,0.16)",
           border: "1px solid rgba(96,165,250,0.24)",
           color: "#bfdbfe",
-          fontSize: 28,
+          fontSize: 24,
           fontWeight: 900,
         }}
       >
@@ -967,8 +996,8 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
           style={{
             margin: 0,
             color: "#f8fafc",
-            fontSize: 28,
-            letterSpacing: -0.6,
+            fontSize: 25,
+            letterSpacing: -0.4,
           }}
         >
           No saved jobs yet
@@ -976,10 +1005,10 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
 
         <p
           style={{
-            margin: "9px 0 0",
+            margin: "8px 0 0",
             maxWidth: 620,
             color: "#cbd5e1",
-            lineHeight: 1.65,
+            lineHeight: 1.6,
           }}
         >
           Start a search and JobRadar will keep only strong matches in your
@@ -994,13 +1023,9 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
   );
 }
 
-function DecisionSection({
-  title,
-  eyebrow,
-  description,
+function LatestSearchSection({
   jobs,
-  section,
-  isScrollable,
+  totalLatestCount,
   newJobKeys,
   priorityRankByKey,
   analysis,
@@ -1008,12 +1033,8 @@ function DecisionSection({
   onHover,
   onAnalyzeJob,
 }: {
-  title: string;
-  eyebrow: string;
-  description: string;
   jobs: Job[];
-  section: UiDecisionJob["uiDecisionSection"];
-  isScrollable?: boolean;
+  totalLatestCount: number;
   newJobKeys: Set<string>;
   priorityRankByKey: Map<string, number>;
   analysis: Record<number, string>;
@@ -1027,100 +1048,76 @@ function DecisionSection({
     <section
       className="fade-in"
       style={{
-        marginBottom: 24,
-        padding: 18,
-        borderRadius: 26,
+        marginBottom: 18,
+        padding: 14,
+        borderRadius: 22,
         background:
-          "linear-gradient(135deg, rgba(15,23,42,0.78), rgba(15,23,42,0.52))",
-        border: "1px solid rgba(148,163,184,0.14)",
-        boxShadow: "0 20px 55px rgba(0,0,0,0.18)",
+          "linear-gradient(135deg, rgba(15,23,42,0.68), rgba(15,23,42,0.4))",
+        border: "1px solid rgba(96,165,250,0.14)",
+        boxShadow: "0 14px 36px rgba(0,0,0,0.14)",
       }}
     >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          gap: 18,
+          gap: 16,
           alignItems: "end",
-          marginBottom: 16,
+          marginBottom: 12,
         }}
       >
         <div>
           <p
             style={{
-              margin: "0 0 6px",
+              margin: "0 0 5px",
               color: "#93c5fd",
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 900,
               textTransform: "uppercase",
-              letterSpacing: 0.6,
+              letterSpacing: 0.55,
             }}
           >
-            {eyebrow}
+            Latest search
           </p>
 
           <h2
             style={{
               margin: 0,
               color: "#f8fafc",
-              fontSize: 25,
+              fontSize: 20,
               lineHeight: 1.1,
-              letterSpacing: -0.4,
+              letterSpacing: -0.2,
             }}
           >
-            {title}
+            Fresh results
           </h2>
 
           <p
             style={{
-              margin: "8px 0 0",
+              margin: "6px 0 0",
               color: "#94a3b8",
-              fontSize: 14,
-              lineHeight: 1.55,
+              fontSize: 13,
+              lineHeight: 1.45,
               maxWidth: 760,
             }}
           >
-            {description}
+            Showing {jobs.length} of {totalLatestCount} latest results.
           </p>
         </div>
-
-        <strong
-          style={{
-            minWidth: 46,
-            height: 42,
-            borderRadius: 16,
-            display: "grid",
-            placeItems: "center",
-            color: "#e0f2fe",
-            background: "rgba(37,99,235,0.15)",
-            border: "1px solid rgba(96,165,250,0.22)",
-            fontSize: 18,
-          }}
-        >
-          {jobs.length}
-        </strong>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 16,
-          maxHeight: isScrollable ? 920 : "none",
-          overflowY: isScrollable ? "auto" : "visible",
-          paddingRight: isScrollable ? 6 : 0,
-        }}
-      >
+      <div style={{ display: "grid", gap: 12 }}>
         {jobs.map((job, index) => {
           const decoratedJob = decorateJobForDecision({
             job,
-            section,
+            section: "new",
             newJobKeys,
             priorityRankByKey,
           });
 
           return (
             <JobCard
-              key={job.url || job.id || `${title}-${index}`}
+              key={job.url || job.id || `latest-${index}`}
               job={decoratedJob}
               index={index}
               analysisText={job.id ? analysis[job.id] : undefined}
@@ -1132,6 +1129,294 @@ function DecisionSection({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function AllSavedJobsSection({
+  jobs,
+  totalCount,
+  savedSortMode,
+  savedFilterMode,
+  minimumScore,
+  onSortChange,
+  onFilterChange,
+  onScoreChange,
+  newJobKeys,
+  priorityRankByKey,
+  analysis,
+  hoveredId,
+  onHover,
+  onAnalyzeJob,
+}: {
+  jobs: Job[];
+  totalCount: number;
+  savedSortMode: SavedSortMode;
+  savedFilterMode: SavedFilterMode;
+  minimumScore: ScoreFilterMode;
+  onSortChange: (value: SavedSortMode) => void;
+  onFilterChange: (value: SavedFilterMode) => void;
+  onScoreChange: (value: ScoreFilterMode) => void;
+  newJobKeys: Set<string>;
+  priorityRankByKey: Map<string, number>;
+  analysis: Record<number, string>;
+  hoveredId: number | null;
+  onHover: (id: number | null) => void;
+  onAnalyzeJob: (job: Job) => void;
+}) {
+  return (
+    <section
+      className="fade-in"
+      style={{
+        marginBottom: 22,
+        padding: 18,
+        borderRadius: 26,
+        background:
+          "linear-gradient(135deg, rgba(15,23,42,0.84), rgba(15,23,42,0.54))",
+        border: "1px solid rgba(148,163,184,0.15)",
+        boxShadow: "0 22px 56px rgba(0,0,0,0.2)",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gap: 16,
+          alignItems: "start",
+          marginBottom: 15,
+        }}
+      >
+        <div>
+          <p
+            style={{
+              margin: "0 0 5px",
+              color: "#bbf7d0",
+              fontSize: 11,
+              fontWeight: 900,
+              textTransform: "uppercase",
+              letterSpacing: 0.55,
+            }}
+          >
+            Main decision list
+          </p>
+
+          <h2
+            style={{
+              margin: 0,
+              color: "#f8fafc",
+              fontSize: 26,
+              lineHeight: 1.08,
+              letterSpacing: -0.35,
+            }}
+          >
+            All saved jobs
+          </h2>
+
+          <p
+            style={{
+              margin: "7px 0 0",
+              color: "#94a3b8",
+              fontSize: 13.5,
+              lineHeight: 1.5,
+              maxWidth: 760,
+            }}
+          >
+            Complete saved shortlist. Sort, filter and score controls apply to
+            this list.
+          </p>
+        </div>
+
+        <strong
+          style={{
+            minWidth: 52,
+            height: 42,
+            borderRadius: 15,
+            display: "grid",
+            placeItems: "center",
+            color: "#dcfce7",
+            background: "rgba(34,197,94,0.12)",
+            border: "1px solid rgba(34,197,94,0.24)",
+            fontSize: 17,
+          }}
+        >
+          {jobs.length}/{totalCount}
+        </strong>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 15,
+          padding: 9,
+          borderRadius: 17,
+          background: "rgba(2,6,23,0.4)",
+          border: "1px solid rgba(148,163,184,0.13)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                color: "#94a3b8",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              Sort
+            </span>
+
+            <select
+              value={savedSortMode}
+              onChange={(event) =>
+                onSortChange(event.target.value as SavedSortMode)
+              }
+              style={{
+                height: 36,
+                borderRadius: 10,
+                padding: "0 12px",
+                background: "rgba(2,6,23,0.72)",
+                color: "#e2e8f0",
+                border: "1px solid rgba(148,163,184,0.18)",
+                fontWeight: 800,
+                outline: "none",
+              }}
+            >
+              <option value="best">Best match</option>
+              <option value="closest">Closest</option>
+              <option value="newest">Newest</option>
+              <option value="furthest">Furthest</option>
+              <option value="score">Highest score</option>
+            </select>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                color: "#94a3b8",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              Filter
+            </span>
+
+            <select
+              value={savedFilterMode}
+              onChange={(event) =>
+                onFilterChange(event.target.value as SavedFilterMode)
+              }
+              style={{
+                height: 36,
+                borderRadius: 10,
+                padding: "0 12px",
+                background: "rgba(2,6,23,0.72)",
+                color: "#e2e8f0",
+                border: "1px solid rgba(148,163,184,0.18)",
+                fontWeight: 800,
+                outline: "none",
+              }}
+            >
+              <option value="all">All</option>
+              <option value="best">Best match</option>
+              <option value="top">Top match</option>
+              <option value="elite">Elite match</option>
+            </select>
+          </label>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                color: "#94a3b8",
+                fontSize: 12,
+                fontWeight: 900,
+              }}
+            >
+              Score
+            </span>
+
+            <select
+              value={minimumScore}
+              onChange={(event) =>
+                onScoreChange(Number(event.target.value) as ScoreFilterMode)
+              }
+              style={{
+                height: 36,
+                borderRadius: 10,
+                padding: "0 12px",
+                background: "rgba(2,6,23,0.72)",
+                color: "#e2e8f0",
+                border: "1px solid rgba(148,163,184,0.18)",
+                fontWeight: 800,
+                outline: "none",
+              }}
+            >
+              <option value={70}>{">= 70"}</option>
+              <option value={80}>{">= 80"}</option>
+              <option value={90}>{">= 90"}</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {jobs.length === 0 ? (
+        <div
+          className="card"
+          style={{
+            borderRadius: 20,
+            padding: 20,
+            background: "rgba(2,6,23,0.42)",
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: 21 }}>
+            No saved jobs match this filter
+          </h3>
+
+          <p
+            style={{
+              margin: "8px 0 0",
+              color: "#94a3b8",
+              lineHeight: 1.55,
+            }}
+          >
+            Try switching the filter back to All or lowering the score filter.
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {jobs.map((job, index) => {
+            const decoratedJob = decorateJobForDecision({
+              job,
+              section: "all",
+              newJobKeys,
+              priorityRankByKey,
+            });
+
+            return (
+              <JobCard
+                key={job.url || job.id || `saved-${index}`}
+                job={decoratedJob}
+                index={index}
+                analysisText={job.id ? analysis[job.id] : undefined}
+                hoveredId={hoveredId}
+                showSavedJobs
+                onHover={onHover}
+                onAnalyze={onAnalyzeJob}
+              />
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -1169,9 +1454,14 @@ export function JobDashboard({
   const [savedFilterMode, setSavedFilterMode] =
     useState<SavedFilterMode>("all");
   const [minimumScore, setMinimumScore] = useState<ScoreFilterMode>(70);
-  const [lastSearchAt, setLastSearchAt] = useState(readLastSearchAt);
-  const [newSavedJobKeys, setNewSavedJobKeys] = useState<Set<string>>(
-    readStoredNewSavedJobKeys
+  const [lastSearchAt, setLastSearchAt] = useState(() =>
+    readNumberFromStorage(LAST_SEARCH_UI_KEY)
+  );
+  const [newSavedJobKeys, setNewSavedJobKeys] = useState<Set<string>>(() =>
+    readStringSetFromStorage(NEW_SAVED_JOB_KEYS_KEY)
+  );
+  const [latestSearchJobKeys, setLatestSearchJobKeys] = useState<Set<string>>(
+    () => readStringSetFromStorage(LATEST_SEARCH_JOB_KEYS_KEY)
   );
 
   const isBusy = searchLoading || profileLoading;
@@ -1204,66 +1494,22 @@ export function JobDashboard({
     return isSavedView ? savedVisibleJobs : sortedLiveJobs;
   }, [isWorkspaceReset, isSavedView, savedVisibleJobs, sortedLiveJobs]);
 
-  useEffect(() => {
-    if (!isSavedView) return;
-
-    logShowSavedFinalOrder(activeJobs);
-  }, [activeJobs, isSavedView]);
-
-  useEffect(() => {
-    if (searchLoading) {
-      searchWasRunningRef.current = true;
-      return;
-    }
-
-    if (!searchWasRunningRef.current) return;
-
-    searchWasRunningRef.current = false;
-
-    const previousKeys = savedKeysBeforeSearchRef.current;
-    const searchStartedAt = activeSearchStartedAtRef.current;
-
-    const nextNewKeys = savedBaseJobs
-      .map((job) => {
-        const key = getJobUiKey(job);
-        const savedAtTime = getSavedAtTime(job);
-
-        if (!key) return "";
-        if (!previousKeys.has(key)) return key;
-        if (searchStartedAt > 0 && savedAtTime >= searchStartedAt) return key;
-
-        return "";
-      })
-      .filter(Boolean);
-
-    setNewSavedJobKeys(new Set(nextNewKeys));
-    writeStoredNewSavedJobKeys(nextNewKeys);
-
-    const completedAt = Date.now();
-
-    setLastSearchAt(completedAt);
-    writeLastSearchAt(completedAt);
-  }, [savedBaseJobs, searchLoading]);
-
   const displayedJobs = useMemo(
     () => activeJobs.filter((job) => !onlyTop || getJobDisplayScore(job) >= 80),
     [activeJobs, onlyTop]
   );
 
-  const newSavedJobs = useMemo(
+  const latestSearchJobsAll = useMemo(
     () =>
-      savedVisibleJobs
-        .filter((job) => newSavedJobKeys.has(getJobUiKey(job)))
-        .slice(0, NEW_JOBS_LIMIT),
-    [newSavedJobKeys, savedVisibleJobs]
+      prepareJobsForDisplay(
+        savedBaseJobs.filter((job) => latestSearchJobKeys.has(getJobUiKey(job)))
+      ),
+    [latestSearchJobKeys, savedBaseJobs]
   );
 
-  const bestMatchJobs = useMemo(
-    () =>
-      savedVisibleJobs
-        .filter((job) => getJobDisplayScore(job) >= 85)
-        .slice(0, BEST_MATCH_LIMIT),
-    [savedVisibleJobs]
+  const latestSearchJobs = useMemo(
+    () => latestSearchJobsAll.slice(0, LATEST_SEARCH_LIMIT),
+    [latestSearchJobsAll]
   );
 
   const priorityRankByKey = useMemo(() => {
@@ -1311,6 +1557,52 @@ export function JobDashboard({
     }
   }, [cvFile, clearFileInput]);
 
+  useEffect(() => {
+    if (!isSavedView) return;
+
+    logShowSavedFinalOrder(activeJobs);
+  }, [activeJobs, isSavedView]);
+
+  useEffect(() => {
+    if (searchLoading) {
+      searchWasRunningRef.current = true;
+      return;
+    }
+
+    if (!searchWasRunningRef.current) return;
+
+    searchWasRunningRef.current = false;
+
+    const previousKeys = savedKeysBeforeSearchRef.current;
+    const searchStartedAt = activeSearchStartedAtRef.current;
+
+    const nextLatestKeys = savedBaseJobs
+      .map((job) => {
+        const key = getJobUiKey(job);
+        const savedAtTime = getSavedAtTime(job);
+
+        if (!key) return "";
+        if (!previousKeys.has(key)) return key;
+        if (searchStartedAt > 0 && savedAtTime >= searchStartedAt) return key;
+
+        return "";
+      })
+      .filter(Boolean);
+
+    const nextNewKeys = nextLatestKeys.filter((key) => !previousKeys.has(key));
+
+    setLatestSearchJobKeys(new Set(nextLatestKeys));
+    setNewSavedJobKeys(new Set(nextNewKeys));
+
+    writeStringSetToStorage(LATEST_SEARCH_JOB_KEYS_KEY, nextLatestKeys);
+    writeStringSetToStorage(NEW_SAVED_JOB_KEYS_KEY, nextNewKeys);
+
+    const completedAt = Date.now();
+
+    setLastSearchAt(completedAt);
+    writeNumberToStorage(LAST_SEARCH_UI_KEY, completedAt);
+  }, [savedBaseJobs, searchLoading]);
+
   const handleFileInputClick = useCallback(
     (event: MouseEvent<HTMLInputElement>) => {
       event.currentTarget.value = "";
@@ -1345,9 +1637,12 @@ export function JobDashboard({
     );
 
     setLastSearchAt(now);
-    writeLastSearchAt(now);
+    writeNumberToStorage(LAST_SEARCH_UI_KEY, now);
+
     setNewSavedJobKeys(new Set());
-    writeStoredNewSavedJobKeys([]);
+    setLatestSearchJobKeys(new Set());
+    writeStringSetToStorage(NEW_SAVED_JOB_KEYS_KEY, []);
+    writeStringSetToStorage(LATEST_SEARCH_JOB_KEYS_KEY, []);
 
     onSearch();
   }, [onSearch, savedBaseJobs]);
@@ -1366,7 +1661,7 @@ export function JobDashboard({
       style={{
         flex: 1,
         marginLeft: 260,
-        padding: "38px",
+        padding: "30px",
         color: "#f8fafc",
       }}
     >
@@ -1375,17 +1670,17 @@ export function JobDashboard({
         style={{
           display: "grid",
           gridTemplateColumns: isSavedView
-            ? "minmax(0, 1fr) minmax(420px, 0.9fr)"
+            ? "minmax(0, 1fr) minmax(390px, 0.86fr)"
             : "minmax(0, 1fr)",
-          gap: 24,
+          gap: 20,
           alignItems: "stretch",
-          marginBottom: 24,
-          padding: 30,
-          borderRadius: 28,
+          marginBottom: 18,
+          padding: 24,
+          borderRadius: 26,
           background:
             "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.66))",
           border: "1px solid rgba(148,163,184,0.17)",
-          boxShadow: "0 24px 70px rgba(0,0,0,0.26)",
+          boxShadow: "0 22px 58px rgba(0,0,0,0.24)",
         }}
       >
         <div>
@@ -1401,9 +1696,9 @@ export function JobDashboard({
                 ? "1px solid rgba(34,197,94,0.24)"
                 : "1px solid rgba(96,165,250,0.25)",
               color: isSavedView ? "#bbf7d0" : "#bfdbfe",
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: 900,
-              marginBottom: 16,
+              marginBottom: 14,
             }}
           >
             {isSavedView ? "Decision engine" : "AI powered job matching"}
@@ -1412,9 +1707,9 @@ export function JobDashboard({
           <h1
             style={{
               margin: 0,
-              fontSize: isSavedView ? 48 : 52,
+              fontSize: isSavedView ? 42 : 48,
               lineHeight: 1,
-              letterSpacing: -1.5,
+              letterSpacing: -1.1,
             }}
           >
             {isSavedView ? "Saved Jobs" : "AI Job Radar"}
@@ -1422,15 +1717,15 @@ export function JobDashboard({
 
           <p
             style={{
-              margin: "14px 0 0",
+              margin: "12px 0 0",
               color: "#cbd5e1",
-              fontSize: 17,
+              fontSize: 16,
               maxWidth: 760,
-              lineHeight: 1.55,
+              lineHeight: 1.5,
             }}
           >
             {isSavedView
-              ? "Your strongest opportunities, grouped by urgency, fit and decision priority."
+              ? "A simple decision list: latest search above, full saved shortlist below."
               : "Upload your CV, let AI understand your profile, and discover the best matching jobs automatically."}
           </p>
         </div>
@@ -1440,7 +1735,7 @@ export function JobDashboard({
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 12,
+              gap: 10,
             }}
           >
             <SavedMetricCard label="Saved jobs" value={savedBaseJobs.length} />
@@ -1450,8 +1745,8 @@ export function JobDashboard({
               value={`${savedAvgScore}%`}
             />
             <SavedMetricCard
-              label="New last search"
-              value={newSavedJobKeys.size}
+              label="Latest search"
+              value={latestSearchJobsAll.length}
               hint={lastSearchAt ? "tracked locally" : undefined}
             />
           </div>
@@ -1461,29 +1756,30 @@ export function JobDashboard({
       <section
         className="fade-in"
         style={{
-          marginBottom: 22,
+          marginBottom: 18,
           display: "grid",
-          gridTemplateColumns: isSavedView ? "0.82fr 1.18fr" : "1.1fr 0.9fr",
-          gap: 20,
+          gridTemplateColumns: isSavedView ? "0.78fr 1.22fr" : "1.05fr 0.95fr",
+          gap: 16,
           alignItems: "stretch",
-          padding: isSavedView ? 18 : 22,
-          borderRadius: 24,
-          background: "rgba(15,23,42,0.72)",
+          padding: 16,
+          borderRadius: 22,
+          background: "rgba(15,23,42,0.7)",
           border: "1px solid rgba(148,163,184,0.14)",
-          boxShadow: "0 20px 55px rgba(0,0,0,0.2)",
+          boxShadow: "0 18px 46px rgba(0,0,0,0.18)",
           backdropFilter: "blur(12px)",
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: isSavedView ? 20 : 24 }}>
+          <h2 style={{ margin: 0, fontSize: isSavedView ? 19 : 22 }}>
             CV Intelligence
           </h2>
 
           <p
             style={{
-              margin: "8px 0 16px",
+              margin: "7px 0 13px",
               color: "#94a3b8",
-              lineHeight: 1.5,
+              lineHeight: 1.45,
+              fontSize: 14,
             }}
           >
             {isSavedView
@@ -1495,11 +1791,11 @@ export function JobDashboard({
             <div
               className="loading"
               style={{
-                padding: 14,
-                borderRadius: 16,
+                padding: 12,
+                borderRadius: 14,
                 background: "rgba(250,204,21,0.08)",
                 border: "1px solid rgba(250,204,21,0.25)",
-                marginBottom: 14,
+                marginBottom: 12,
               }}
             >
               AI is analyzing your CV...
@@ -1509,21 +1805,21 @@ export function JobDashboard({
           {!profileLoading && cvProfile && (
             <div
               style={{
-                padding: isSavedView ? 14 : 16,
-                borderRadius: 16,
+                padding: 13,
+                borderRadius: 15,
                 background: "rgba(34,197,94,0.1)",
                 border: "1px solid rgba(34,197,94,0.26)",
-                marginBottom: isSavedView ? 0 : 16,
+                marginBottom: isSavedView ? 0 : 14,
               }}
             >
               <strong style={{ color: "#22c55e" }}>Profile ready</strong>
 
               <p
                 style={{
-                  margin: "8px 0 0",
+                  margin: "7px 0 0",
                   color: "#dbeafe",
-                  lineHeight: 1.55,
-                  fontSize: isSavedView ? 14 : 15,
+                  lineHeight: 1.5,
+                  fontSize: 13.5,
                 }}
               >
                 {cvProfile.profileSummary || "CV analyzed successfully."}
@@ -1539,7 +1835,7 @@ export function JobDashboard({
 
           {!isSavedView && (
             <>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <label
                   className="file-upload"
                   style={{
@@ -1574,9 +1870,9 @@ export function JobDashboard({
               {cvFile && (
                 <p
                   style={{
-                    margin: "12px 0 0",
+                    margin: "11px 0 0",
                     color: "#94a3b8",
-                    fontSize: 13,
+                    fontSize: 12.5,
                   }}
                 >
                   Current file: {cvFile.name}
@@ -1588,9 +1884,9 @@ export function JobDashboard({
 
         <div
           style={{
-            padding: 16,
-            borderRadius: 20,
-            background: "rgba(2,6,23,0.38)",
+            padding: 14,
+            borderRadius: 18,
+            background: "rgba(2,6,23,0.36)",
             border: "1px solid rgba(148,163,184,0.13)",
           }}
         >
@@ -1599,17 +1895,17 @@ export function JobDashboard({
               display: "flex",
               justifyContent: "space-between",
               gap: 12,
-              marginBottom: 13,
+              marginBottom: 12,
               alignItems: "start",
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 17 }}>Profile signals</h3>
+            <h3 style={{ margin: 0, fontSize: 16 }}>Profile signals</h3>
 
             {isSavedView && cvFile && (
               <small
                 style={{
                   color: "#64748b",
-                  fontSize: 11,
+                  fontSize: 10.5,
                   textAlign: "right",
                   maxWidth: 220,
                 }}
@@ -1620,23 +1916,23 @@ export function JobDashboard({
           </div>
 
           {hasProfileSignals ? (
-            <div style={{ display: "grid", gap: isSavedView ? 12 : 16 }}>
+            <div style={{ display: "grid", gap: isSavedView ? 11 : 14 }}>
               <SignalGroup
                 title="Best-fit roles"
                 items={roleSignals}
-                limit={isSavedView ? 6 : 8}
+                limit={isSavedView ? 5 : 8}
               />
 
               <SignalGroup
                 title="Skills & keywords"
                 items={skillSignals}
-                limit={isSavedView ? 8 : 14}
+                limit={isSavedView ? 7 : 14}
               />
 
               <SignalGroup
                 title="Languages"
                 items={languageSignals}
-                limit={isSavedView ? 8 : 10}
+                limit={isSavedView ? 6 : 10}
               />
 
               {!isSavedView && (
@@ -1659,11 +1955,11 @@ export function JobDashboard({
       <section
         style={{
           display: "flex",
-          gap: 14,
+          gap: 12,
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 22,
+          marginBottom: 18,
         }}
       >
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -1692,120 +1988,6 @@ export function JobDashboard({
           )}
         </div>
 
-        {isSavedView && (
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              flexWrap: "wrap",
-              alignItems: "center",
-              padding: 8,
-              borderRadius: 16,
-              background: "rgba(15,23,42,0.52)",
-              border: "1px solid rgba(148,163,184,0.13)",
-            }}
-          >
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  color: "#94a3b8",
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                Sort
-              </span>
-
-              <select
-                value={savedSortMode}
-                onChange={(event) =>
-                  setSavedSortMode(event.target.value as SavedSortMode)
-                }
-                style={{
-                  height: 38,
-                  borderRadius: 11,
-                  padding: "0 12px",
-                  background: "rgba(2,6,23,0.7)",
-                  color: "#e2e8f0",
-                  border: "1px solid rgba(148,163,184,0.18)",
-                  fontWeight: 800,
-                  outline: "none",
-                }}
-              >
-                <option value="best">Best match</option>
-                <option value="closest">Closest</option>
-                <option value="newest">Newest</option>
-              </select>
-            </label>
-
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  color: "#94a3b8",
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                Filter
-              </span>
-
-              <select
-                value={savedFilterMode}
-                onChange={(event) =>
-                  setSavedFilterMode(event.target.value as SavedFilterMode)
-                }
-                style={{
-                  height: 38,
-                  borderRadius: 11,
-                  padding: "0 12px",
-                  background: "rgba(2,6,23,0.7)",
-                  color: "#e2e8f0",
-                  border: "1px solid rgba(148,163,184,0.18)",
-                  fontWeight: 800,
-                  outline: "none",
-                }}
-              >
-                <option value="all">All</option>
-                <option value="top">Top match 85+</option>
-                <option value="elite">Elite 90+</option>
-              </select>
-            </label>
-
-            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span
-                style={{
-                  color: "#94a3b8",
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                Score
-              </span>
-
-              <select
-                value={minimumScore}
-                onChange={(event) =>
-                  setMinimumScore(Number(event.target.value) as ScoreFilterMode)
-                }
-                style={{
-                  height: 38,
-                  borderRadius: 11,
-                  padding: "0 12px",
-                  background: "rgba(2,6,23,0.7)",
-                  color: "#e2e8f0",
-                  border: "1px solid rgba(148,163,184,0.18)",
-                  fontWeight: 800,
-                  outline: "none",
-                }}
-              >
-                <option value={70}>{">= 70"}</option>
-                <option value={80}>{">= 80"}</option>
-                <option value={90}>{">= 90"}</option>
-              </select>
-            </label>
-          </div>
-        )}
-
         {canClearCache && (
           <button
             className="btn btn-danger"
@@ -1827,8 +2009,8 @@ export function JobDashboard({
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-            gap: 16,
-            marginBottom: 28,
+            gap: 14,
+            marginBottom: 22,
           }}
         >
           {[
@@ -1841,7 +2023,7 @@ export function JobDashboard({
             <div key={String(label)} className="card">
               <p
                 style={{
-                  margin: "0 0 8px",
+                  margin: "0 0 7px",
                   color: "#94a3b8",
                   fontSize: 12,
                   fontWeight: 800,
@@ -1850,7 +2032,7 @@ export function JobDashboard({
                 {label}
               </p>
 
-              <p style={{ margin: 0, fontSize: 24, fontWeight: 900 }}>
+              <p style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
                 {value}
               </p>
             </div>
@@ -1863,12 +2045,12 @@ export function JobDashboard({
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 20,
-            marginBottom: 28,
+            gap: 16,
+            marginBottom: 22,
           }}
         >
           {[1, 2, 3].map((item) => (
-            <div key={item} className="card loading" style={{ minHeight: 160 }} />
+            <div key={item} className="card loading" style={{ minHeight: 130 }} />
           ))}
         </section>
       )}
@@ -1877,50 +2059,11 @@ export function JobDashboard({
         <EmptySavedJobsState onSearch={handleSearch} />
       )}
 
-      {!searchLoading &&
-        isSavedView &&
-        savedBaseJobs.length > 0 &&
-        activeJobs.length === 0 && (
-          <section
-            className="card fade-in"
-            style={{
-              marginBottom: 28,
-              borderRadius: 24,
-              padding: 24,
-            }}
-          >
-            <h3 style={{ margin: 0, fontSize: 22 }}>
-              No saved jobs match this filter
-            </h3>
-
-            <p
-              style={{
-                margin: "8px 0 0",
-                color: "#94a3b8",
-                lineHeight: 1.6,
-              }}
-            >
-              Try switching the filter back to All or lowering the score filter.
-            </p>
-          </section>
-        )}
-
-      {!searchLoading && !isSavedView && activeJobs.length === 0 && (
-        <EmptyJobsState
-          resetAt={workspaceResetAt}
-          cvFile={cvFile}
-          cvProfile={cvProfile}
-        />
-      )}
-
-      {!searchLoading && isSavedView && activeJobs.length > 0 && (
+      {!searchLoading && isSavedView && savedBaseJobs.length > 0 && (
         <>
-          <DecisionSection
-            title="New jobs"
-            eyebrow="Latest search"
-            description="Fresh opportunities found in the latest run. Review these first."
-            jobs={newSavedJobs}
-            section="new"
+          <LatestSearchSection
+            jobs={latestSearchJobs}
+            totalLatestCount={latestSearchJobsAll.length}
             newJobKeys={newSavedJobKeys}
             priorityRankByKey={priorityRankByKey}
             analysis={analysis}
@@ -1929,27 +2072,15 @@ export function JobDashboard({
             onAnalyzeJob={onAnalyzeJob}
           />
 
-          <DecisionSection
-            title="Best matches"
-            eyebrow="High confidence"
-            description="Strong fit jobs with score 85+, ordered by your current decision settings."
-            jobs={bestMatchJobs}
-            section="best"
-            newJobKeys={newSavedJobKeys}
-            priorityRankByKey={priorityRankByKey}
-            analysis={analysis}
-            hoveredId={hoveredId}
-            onHover={onHover}
-            onAnalyzeJob={onAnalyzeJob}
-          />
-
-          <DecisionSection
-            title="All saved jobs"
-            eyebrow="Complete shortlist"
-            description="Your full saved list, filtered by score and match quality."
+          <AllSavedJobsSection
             jobs={savedVisibleJobs}
-            section="all"
-            isScrollable
+            totalCount={savedBaseJobs.length}
+            savedSortMode={savedSortMode}
+            savedFilterMode={savedFilterMode}
+            minimumScore={minimumScore}
+            onSortChange={setSavedSortMode}
+            onFilterChange={setSavedFilterMode}
+            onScoreChange={setMinimumScore}
             newJobKeys={newSavedJobKeys}
             priorityRankByKey={priorityRankByKey}
             analysis={analysis}
@@ -1960,8 +2091,16 @@ export function JobDashboard({
         </>
       )}
 
+      {!searchLoading && !isSavedView && activeJobs.length === 0 && (
+        <EmptyJobsState
+          resetAt={workspaceResetAt}
+          cvFile={cvFile}
+          cvProfile={cvProfile}
+        />
+      )}
+
       {!searchLoading && !isSavedView && !isWorkspaceReset && displayedJobs.length > 0 && (
-        <section style={{ display: "grid", gap: 22 }}>
+        <section style={{ display: "grid", gap: 14 }}>
           {displayedJobs.map((job, index) => (
             <JobCard
               key={job.url || job.id || index}

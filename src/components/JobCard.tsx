@@ -36,7 +36,7 @@ type JobWithOptionalFields = Job & {
   uiIsNew?: boolean;
   uiIsPriority?: boolean;
   uiPriorityRank?: number;
-  uiDecisionSection?: "new" | "best" | "all" | "live";
+  uiDecisionSection?: "new" | "all" | "live";
 };
 
 function toNumber(value: unknown, fallback = 0) {
@@ -243,7 +243,8 @@ function getRecommendationStyle(text?: string) {
 }
 
 function getDistanceLabel(job: JobWithOptionalFields) {
-  const distanceText = typeof job.distanceText === "string" ? job.distanceText.trim() : "";
+  const distanceText =
+    typeof job.distanceText === "string" ? job.distanceText.trim() : "";
   if (distanceText) return distanceText;
 
   const distanceKm = toNumber(job.distanceKm, toNumber(job.commuteKm));
@@ -364,10 +365,10 @@ function Badge({
       style={{
         display: "inline-flex",
         alignItems: "center",
-        minHeight: 28,
-        padding: "6px 10px",
+        minHeight: 23,
+        padding: "5px 8px",
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: 900,
         lineHeight: 1,
         whiteSpace: "nowrap",
@@ -413,6 +414,10 @@ export function JobCard({
       ? rankedJob.matchedLocation.trim()
       : "";
 
+  const visibleHighlights = job.highlights?.slice(0, 2) ?? [];
+  const extraHighlightCount = Math.max((job.highlights?.length ?? 0) - 2, 0);
+  const visibleRiskFlags = job.riskFlags?.slice(0, 1) ?? [];
+
   const normalizedAnalysis = analysisText?.toLowerCase() || "";
   const isAnalyzing =
     analysisText === "⏳ Analisi in corso..." ||
@@ -440,24 +445,24 @@ export function JobCard({
         background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
         color: "#0f172a",
         padding: 0,
-        borderRadius: 24,
+        borderRadius: 20,
         border: isPriorityChoice
-          ? "1px solid rgba(34,197,94,0.58)"
+          ? "1px solid rgba(34,197,94,0.52)"
           : showSavedJobs
-          ? "1px solid rgba(34,197,94,0.26)"
+          ? "1px solid rgba(34,197,94,0.22)"
           : isBest
-          ? "1px solid rgba(34,197,94,0.35)"
+          ? "1px solid rgba(34,197,94,0.32)"
           : "1px solid rgba(226,232,240,0.9)",
         boxShadow: isHovered
-          ? "0 30px 78px rgba(0,0,0,0.3)"
+          ? "0 24px 58px rgba(0,0,0,0.26)"
           : isPriorityChoice
-          ? "0 24px 70px rgba(34,197,94,0.22)"
+          ? "0 18px 46px rgba(34,197,94,0.18)"
           : showSavedJobs
-          ? "0 22px 58px rgba(15,23,42,0.22)"
-          : "0 22px 55px rgba(0,0,0,0.2)",
-        transform: isHovered ? "translateY(-4px)" : "translateY(0)",
+          ? "0 16px 42px rgba(15,23,42,0.18)"
+          : "0 18px 44px rgba(0,0,0,0.18)",
+        transform: isHovered ? "translateY(-3px)" : "translateY(0)",
         transition:
-          "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease",
+          "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
       }}
     >
       <div
@@ -466,7 +471,7 @@ export function JobCard({
           top: 0,
           bottom: 0,
           left: 0,
-          width: isPriorityChoice ? 7 : 5,
+          width: isPriorityChoice ? 6 : 4,
           background: scoreColor(score),
         }}
       />
@@ -480,7 +485,7 @@ export function JobCard({
             left: 0,
             height: 3,
             background:
-              "linear-gradient(90deg, rgba(34,197,94,0.9), rgba(59,130,246,0.55), transparent)",
+              "linear-gradient(90deg, rgba(34,197,94,0.9), rgba(59,130,246,0.5), transparent)",
           }}
         />
       )}
@@ -488,19 +493,19 @@ export function JobCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) 118px",
-          gap: 24,
+          gridTemplateColumns: "minmax(0, 1fr) 92px",
+          gap: 16,
           alignItems: "start",
-          padding: 26,
+          padding: "18px 20px 18px 22px",
         }}
       >
         <div style={{ minWidth: 0 }}>
           <div
             style={{
               display: "flex",
-              gap: 8,
+              gap: 6,
               flexWrap: "wrap",
-              marginBottom: 14,
+              marginBottom: 10,
             }}
           >
             {isPriorityChoice && (
@@ -518,7 +523,7 @@ export function JobCard({
 
             {distanceLabel && <Badge tone="blue">Distance {distanceLabel}</Badge>}
             {publishedLabel && <Badge>{publishedLabel}</Badge>}
-            {workload && <Badge tone="amber">Workload {workload}</Badge>}
+            {workload && <Badge tone="amber">{workload}</Badge>}
             {hasFinishedAnalysis && <Badge tone="purple">AI reviewed</Badge>}
           </div>
 
@@ -526,9 +531,9 @@ export function JobCard({
             style={{
               margin: 0,
               color: "#0f172a",
-              fontSize: showSavedJobs ? 25 : 26,
-              lineHeight: 1.16,
-              letterSpacing: -0.35,
+              fontSize: showSavedJobs ? 22 : 23,
+              lineHeight: 1.14,
+              letterSpacing: -0.25,
             }}
           >
             {titleData.title}
@@ -536,10 +541,11 @@ export function JobCard({
 
           <p
             style={{
-              margin: "10px 0 0",
-              fontSize: 14,
+              margin: "8px 0 0",
+              fontSize: 13.5,
               color: "#475569",
               fontWeight: 900,
+              lineHeight: 1.35,
             }}
           >
             {job.company} · {job.location}
@@ -549,14 +555,15 @@ export function JobCard({
             style={{
               display: "flex",
               flexWrap: "wrap",
-              gap: "8px 14px",
-              marginTop: 11,
+              gap: "6px 12px",
+              marginTop: 9,
               color: "#64748b",
-              fontSize: 12,
+              fontSize: 11.5,
               fontWeight: 800,
+              lineHeight: 1.3,
             }}
           >
-            {metaItems.slice(0, 4).map((item) => (
+            {metaItems.slice(0, 3).map((item) => (
               <span key={item}>{item}</span>
             ))}
           </div>
@@ -566,8 +573,8 @@ export function JobCard({
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                gap: 8,
-                marginTop: 12,
+                gap: 6,
+                marginTop: 9,
               }}
             >
               {requirementMatchScore > 0 && (
@@ -575,7 +582,7 @@ export function JobCard({
               )}
 
               {locationPriority > 0 && (
-                <Badge tone="blue">Location priority {locationPriority}</Badge>
+                <Badge tone="blue">Location {locationPriority}</Badge>
               )}
 
               {matchedLocation && <Badge>{matchedLocation}</Badge>}
@@ -585,48 +592,48 @@ export function JobCard({
           )}
 
           {(job.previewSummary ||
-            job.highlights?.length ||
-            job.riskFlags?.length ||
+            visibleHighlights.length > 0 ||
+            visibleRiskFlags.length > 0 ||
             job.snippet) && (
             <div
               style={{
-                marginTop: 18,
-                maxWidth: 980,
+                marginTop: 13,
+                maxWidth: 920,
                 display: "grid",
-                gap: 12,
+                gap: 9,
               }}
             >
               {job.previewSummary && (
                 <div
                   style={{
-                    padding: "12px 14px",
-                    borderRadius: 14,
+                    padding: "10px 12px",
+                    borderRadius: 13,
                     background: "rgba(37,99,235,0.07)",
                     border: "1px solid rgba(37,99,235,0.14)",
                     color: "#1e3a8a",
                     fontWeight: 900,
-                    lineHeight: 1.55,
-                    fontSize: 13,
+                    lineHeight: 1.45,
+                    fontSize: 12.5,
                   }}
                 >
                   {job.previewSummary}
                 </div>
               )}
 
-              {job.highlights && job.highlights.length > 0 ? (
+              {visibleHighlights.length > 0 ? (
                 <div
                   style={{
-                    padding: "14px 15px",
-                    borderRadius: 16,
+                    padding: "11px 12px",
+                    borderRadius: 14,
                     background: "rgba(15,23,42,0.035)",
                     border: "1px solid rgba(15,23,42,0.07)",
                   }}
                 >
                   <p
                     style={{
-                      margin: "0 0 10px",
+                      margin: "0 0 8px",
                       color: "#0f172a",
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 950,
                       letterSpacing: 0.35,
                       textTransform: "uppercase",
@@ -635,18 +642,18 @@ export function JobCard({
                     Highlights
                   </p>
 
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {job.highlights.slice(0, 3).map((highlight, i) => (
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {visibleHighlights.map((highlight, i) => (
                       <div
                         key={`${highlight}-${i}`}
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "20px 1fr",
-                          gap: 8,
+                          gridTemplateColumns: "18px 1fr",
+                          gap: 7,
                           alignItems: "start",
                           color: "#334155",
-                          fontSize: 13,
-                          lineHeight: 1.55,
+                          fontSize: 12.5,
+                          lineHeight: 1.45,
                         }}
                       >
                         <span style={{ color: "#15803d", fontWeight: 950 }}>
@@ -656,37 +663,50 @@ export function JobCard({
                       </div>
                     ))}
                   </div>
+
+                  {extraHighlightCount > 0 && (
+                    <p
+                      style={{
+                        margin: "7px 0 0",
+                        color: "#64748b",
+                        fontSize: 11,
+                        fontWeight: 850,
+                      }}
+                    >
+                      +{extraHighlightCount} more highlights
+                    </p>
+                  )}
                 </div>
               ) : job.snippet ? (
                 <div
                   style={{
-                    padding: "14px 15px",
-                    borderRadius: 16,
+                    padding: "11px 12px",
+                    borderRadius: 14,
                     background: "rgba(15,23,42,0.035)",
                     border: "1px solid rgba(15,23,42,0.07)",
                     color: "#334155",
-                    lineHeight: 1.65,
-                    fontSize: 13,
+                    lineHeight: 1.55,
+                    fontSize: 12.5,
                   }}
                 >
                   {job.snippet}
                 </div>
               ) : null}
 
-              {job.riskFlags && job.riskFlags.length > 0 && (
+              {visibleRiskFlags.length > 0 && (
                 <div
                   style={{
-                    padding: "14px 15px",
-                    borderRadius: 16,
+                    padding: "10px 12px",
+                    borderRadius: 14,
                     background: "rgba(220,38,38,0.06)",
                     border: "1px solid rgba(220,38,38,0.16)",
                   }}
                 >
                   <p
                     style={{
-                      margin: "0 0 8px",
+                      margin: "0 0 7px",
                       color: "#991b1b",
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 950,
                       letterSpacing: 0.35,
                       textTransform: "uppercase",
@@ -695,8 +715,8 @@ export function JobCard({
                     Watch out
                   </p>
 
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {job.riskFlags.slice(0, 3).map((risk, i) => (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {visibleRiskFlags.map((risk, i) => (
                       <Badge key={`${risk}-${i}`} tone="red">
                         {risk}
                       </Badge>
@@ -710,8 +730,8 @@ export function JobCard({
           <div
             style={{
               display: "flex",
-              gap: 10,
-              marginTop: 20,
+              gap: 8,
+              marginTop: 14,
               flexWrap: "wrap",
             }}
           >
@@ -721,7 +741,12 @@ export function JobCard({
                 href={job.url}
                 target="_blank"
                 rel="noreferrer"
-                style={{ textDecoration: "none" }}
+                style={{
+                  textDecoration: "none",
+                  padding: "9px 13px",
+                  fontSize: 13,
+                  borderRadius: 11,
+                }}
               >
                 Open Job
               </a>
@@ -734,6 +759,9 @@ export function JobCard({
               style={{
                 opacity: isAnalyzing ? 0.75 : 1,
                 cursor: isAnalyzing ? "not-allowed" : "pointer",
+                padding: "9px 13px",
+                fontSize: 13,
+                borderRadius: 11,
               }}
             >
               {isAnalyzing ? "AI analyzing..." : "AI Analysis"}
@@ -749,9 +777,9 @@ export function JobCard({
         >
           <div
             style={{
-              width: 104,
-              height: 104,
-              borderRadius: 26,
+              width: 82,
+              height: 82,
+              borderRadius: 22,
               background: scoreColor(score),
               color: "white",
               display: "flex",
@@ -760,18 +788,18 @@ export function JobCard({
               flexDirection: "column",
               fontWeight: 950,
               boxShadow: isHovered
-                ? `0 24px 55px ${scoreColor(score)}66`
-                : `0 18px 38px ${scoreColor(score)}35`,
-              transform: isHovered ? "scale(1.04)" : "scale(1)",
-              transition: "transform 0.22s ease, box-shadow 0.22s ease",
+                ? `0 20px 42px ${scoreColor(score)}60`
+                : `0 14px 28px ${scoreColor(score)}30`,
+              transform: isHovered ? "scale(1.03)" : "scale(1)",
+              transition: "transform 0.2s ease, box-shadow 0.2s ease",
             }}
           >
-            <span style={{ fontSize: 30, lineHeight: 1 }}>{score}%</span>
+            <span style={{ fontSize: 25, lineHeight: 1 }}>{score}%</span>
             <span
               style={{
-                marginTop: 5,
-                fontSize: 10,
-                letterSpacing: 0.7,
+                marginTop: 4,
+                fontSize: 9,
+                letterSpacing: 0.65,
                 textTransform: "uppercase",
               }}
             >
@@ -781,150 +809,137 @@ export function JobCard({
         </div>
       </div>
 
-      <div
-        style={{
-          maxHeight: analysisText ? 980 : 0,
-          opacity: analysisText ? 1 : 0,
-          overflow: "hidden",
-          transform: analysisText ? "translateY(0)" : "translateY(-8px)",
-          transition:
-            "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
-        }}
-      >
-        {analysisText && (
+      {analysisText && (
+        <div
+          style={{
+            margin: "0 20px 18px 22px",
+            padding: 0,
+            background: "linear-gradient(135deg, #eef2ff, #e2e8f0)",
+            border: "1px solid rgba(148,163,184,0.32)",
+            borderRadius: 18,
+            overflow: "hidden",
+            boxShadow: "0 14px 32px rgba(15,23,42,0.09)",
+          }}
+        >
           <div
             style={{
-              margin: "0 26px 26px",
-              padding: 0,
-              background: "linear-gradient(135deg, #eef2ff, #e2e8f0)",
-              border: "1px solid rgba(148,163,184,0.32)",
-              borderRadius: 20,
-              overflow: "hidden",
-              boxShadow: "0 18px 45px rgba(15,23,42,0.1)",
+              padding: "13px 15px",
+              background:
+                "linear-gradient(135deg, rgba(37,99,235,0.11), rgba(124,58,237,0.08))",
+              borderBottom: "1px solid rgba(148,163,184,0.25)",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 14,
+              alignItems: "center",
             }}
           >
-            <div
-              style={{
-                padding: "16px 18px",
-                background:
-                  "linear-gradient(135deg, rgba(37,99,235,0.11), rgba(124,58,237,0.08))",
-                borderBottom: "1px solid rgba(148,163,184,0.25)",
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 16,
-                alignItems: "center",
-              }}
-            >
-              <div>
-                <strong
-                  style={{
-                    display: "block",
-                    color: "#0f172a",
-                    fontSize: 17,
-                    letterSpacing: -0.2,
-                  }}
-                >
-                  AI Matching Insight
-                </strong>
-
-                <p
-                  style={{
-                    margin: "5px 0 0",
-                    color: "#475569",
-                    fontSize: 13,
-                    fontWeight: 700,
-                  }}
-                >
-                  Personalized analysis based on your CV profile.
-                </p>
-              </div>
-
-              <span
+            <div>
+              <strong
                 style={{
-                  padding: "7px 11px",
-                  borderRadius: 999,
-                  background: isAnalyzing
-                    ? "rgba(245,158,11,0.14)"
-                    : recommendationStyle.background,
-                  color: isAnalyzing ? "#92400e" : recommendationStyle.color,
-                  border: isAnalyzing
-                    ? "1px solid rgba(245,158,11,0.28)"
-                    : recommendationStyle.border,
-                  fontSize: 12,
-                  fontWeight: 900,
-                  whiteSpace: "nowrap",
+                  display: "block",
+                  color: "#0f172a",
+                  fontSize: 16,
+                  letterSpacing: -0.15,
                 }}
               >
-                {isAnalyzing ? "Analyzing" : recommendationStyle.label}
-              </span>
+                AI Matching Insight
+              </strong>
+
+              <p
+                style={{
+                  margin: "4px 0 0",
+                  color: "#475569",
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                }}
+              >
+                Personalized analysis based on your CV profile.
+              </p>
             </div>
 
-            <div
+            <span
               style={{
-                padding: 18,
-                maxHeight: 620,
-                overflowY: "auto",
+                padding: "6px 10px",
+                borderRadius: 999,
+                background: isAnalyzing
+                  ? "rgba(245,158,11,0.14)"
+                  : recommendationStyle.background,
+                color: isAnalyzing ? "#92400e" : recommendationStyle.color,
+                border: isAnalyzing
+                  ? "1px solid rgba(245,158,11,0.28)"
+                  : recommendationStyle.border,
+                fontSize: 11,
+                fontWeight: 900,
+                whiteSpace: "nowrap",
               }}
             >
-              {isAnalyzing ? (
-                <div style={{ display: "grid", gap: 12 }}>
+              {isAnalyzing ? "Analyzing" : recommendationStyle.label}
+            </span>
+          </div>
+
+          <div
+            style={{
+              padding: 15,
+            }}
+          >
+            {isAnalyzing ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                <p
+                  className="loading"
+                  style={{
+                    margin: 0,
+                    color: "#475569",
+                    fontWeight: 900,
+                  }}
+                >
+                  AI is analyzing this job...
+                </p>
+
+                {[1, 2, 3].map((item) => (
+                  <div
+                    key={item}
+                    style={{
+                      height: 12,
+                      borderRadius: 999,
+                      background:
+                        item === 1
+                          ? "rgba(37,99,235,0.20)"
+                          : "rgba(100,116,139,0.20)",
+                      width: item === 1 ? "85%" : item === 2 ? "70%" : "55%",
+                    }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    marginBottom: 13,
+                    padding: 12,
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,0.72)",
+                    border: "1px solid rgba(148,163,184,0.22)",
+                  }}
+                >
                   <p
-                    className="loading"
                     style={{
                       margin: 0,
-                      color: "#475569",
+                      color: "#0f172a",
+                      fontSize: 13.5,
                       fontWeight: 900,
+                      lineHeight: 1.5,
                     }}
                   >
-                    AI is analyzing this job...
+                    {analysisSummary}
                   </p>
-
-                  {[1, 2, 3].map((item) => (
-                    <div
-                      key={item}
-                      style={{
-                        height: 14,
-                        borderRadius: 999,
-                        background:
-                          item === 1
-                            ? "rgba(37,99,235,0.20)"
-                            : "rgba(100,116,139,0.20)",
-                        width: item === 1 ? "85%" : item === 2 ? "70%" : "55%",
-                      }}
-                    />
-                  ))}
                 </div>
-              ) : (
-                <>
-                  <div
-                    style={{
-                      marginBottom: 16,
-                      padding: 14,
-                      borderRadius: 16,
-                      background: "rgba(255,255,255,0.72)",
-                      border: "1px solid rgba(148,163,184,0.22)",
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        color: "#0f172a",
-                        fontSize: 14,
-                        fontWeight: 900,
-                        lineHeight: 1.55,
-                      }}
-                    >
-                      {analysisSummary}
-                    </p>
-                  </div>
 
-                  {renderAnalysis(analysisText)}
-                </>
-              )}
-            </div>
+                {renderAnalysis(analysisText)}
+              </>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </article>
   );
 }
