@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import type { CvProfile, Job } from "./types";
-import {
-  clearJobs,
-  getSavedJobs,
-  logShowSavedFinalOrder,
-  saveJobs,
-} from "./utils/storage";
+import { clearJobs, getSavedJobs, saveJobs } from "./utils/storage";
 import { prepareJobsForDisplay } from "./utils/jobs";
 import { Sidebar } from "./components/Sidebar";
 import { JobDashboard } from "./components/JobDashboard";
@@ -300,8 +295,6 @@ export default function App() {
     if (shouldShowSavedJobs) {
       const sortedSavedJobs = refreshSavedJobs(true);
 
-      logShowSavedFinalOrder(sortedSavedJobs);
-
       if (sortedSavedJobs.length > 0) {
         setWorkspaceResetAt(null);
       }
@@ -440,7 +433,6 @@ export default function App() {
       if (refreshedSavedJobs.length > 0) {
         setWorkspaceResetAt(null);
         setShowSavedJobs(true);
-        logShowSavedFinalOrder(refreshedSavedJobs);
         return;
       }
 

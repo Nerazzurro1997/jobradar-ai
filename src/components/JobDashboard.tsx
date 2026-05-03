@@ -106,7 +106,6 @@ function resetPageOverflow() {
 
   document.body.style.overflow = "";
   document.documentElement.style.overflow = "";
-  console.log("BODY OVERFLOW RESET");
 }
 
 function closeOpenAiAnalysis() {
@@ -300,27 +299,6 @@ function getPublishedTime(job: Job) {
 
 function getSavedAtTime(job: Job) {
   return getDateTime((job as RankedDebugJob).savedAt);
-}
-
-function logShowSavedFinalOrder(jobs: Job[]) {
-  console.log(
-    "SHOW SAVED FINAL ORDER",
-    jobs.slice(0, 20).map((job) => {
-      const rankedJob = job as RankedDebugJob;
-
-      return {
-        title: rankedJob.title,
-        company: rankedJob.company,
-        location: rankedJob.location,
-        score: rankedJob.score,
-        finalScore: rankedJob.finalScore,
-        distanceScore: rankedJob.distanceScore,
-        requirementMatchScore: rankedJob.requirementMatchScore,
-        recencyScore: rankedJob.recencyScore,
-        savedAt: rankedJob.savedAt,
-      };
-    })
-  );
 }
 
 function getProfileSignals(cvProfile: CvProfile | null) {
@@ -652,27 +630,114 @@ function ResetIllustration() {
           </linearGradient>
         </defs>
 
-        <circle cx="210" cy="116" r="76" stroke="rgba(147,197,253,0.15)" strokeWidth="1.5" />
-        <circle cx="210" cy="116" r="48" stroke="rgba(147,197,253,0.18)" strokeWidth="1.5" />
-        <circle cx="210" cy="116" r="18" stroke="rgba(147,197,253,0.22)" strokeWidth="1.5" />
-        <path d="M210 116L265 70" stroke="url(#radarLine)" strokeWidth="3" strokeLinecap="round" />
+        <circle
+          cx="210"
+          cy="116"
+          r="76"
+          stroke="rgba(147,197,253,0.15)"
+          strokeWidth="1.5"
+        />
+        <circle
+          cx="210"
+          cy="116"
+          r="48"
+          stroke="rgba(147,197,253,0.18)"
+          strokeWidth="1.5"
+        />
+        <circle
+          cx="210"
+          cy="116"
+          r="18"
+          stroke="rgba(147,197,253,0.22)"
+          strokeWidth="1.5"
+        />
+        <path
+          d="M210 116L265 70"
+          stroke="url(#radarLine)"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
         <circle cx="265" cy="70" r="8" fill="#22C55E" />
         <circle cx="265" cy="70" r="16" fill="#22C55E" opacity="0.12" />
 
-        <rect x="74" y="62" width="92" height="52" rx="16" fill="url(#cardGlow)" stroke="rgba(191,219,254,0.18)" />
-        <rect x="94" y="80" width="48" height="5" rx="2.5" fill="rgba(191,219,254,0.52)" />
-        <rect x="94" y="94" width="34" height="5" rx="2.5" fill="rgba(191,219,254,0.22)" />
+        <rect
+          x="74"
+          y="62"
+          width="92"
+          height="52"
+          rx="16"
+          fill="url(#cardGlow)"
+          stroke="rgba(191,219,254,0.18)"
+        />
+        <rect
+          x="94"
+          y="80"
+          width="48"
+          height="5"
+          rx="2.5"
+          fill="rgba(191,219,254,0.52)"
+        />
+        <rect
+          x="94"
+          y="94"
+          width="34"
+          height="5"
+          rx="2.5"
+          fill="rgba(191,219,254,0.22)"
+        />
 
-        <rect x="252" y="132" width="96" height="54" rx="16" fill="url(#cardGlow)" stroke="rgba(191,219,254,0.18)" />
-        <rect x="273" y="151" width="50" height="5" rx="2.5" fill="rgba(191,219,254,0.52)" />
-        <rect x="273" y="165" width="36" height="5" rx="2.5" fill="rgba(191,219,254,0.22)" />
+        <rect
+          x="252"
+          y="132"
+          width="96"
+          height="54"
+          rx="16"
+          fill="url(#cardGlow)"
+          stroke="rgba(191,219,254,0.18)"
+        />
+        <rect
+          x="273"
+          y="151"
+          width="50"
+          height="5"
+          rx="2.5"
+          fill="rgba(191,219,254,0.52)"
+        />
+        <rect
+          x="273"
+          y="165"
+          width="36"
+          height="5"
+          rx="2.5"
+          fill="rgba(191,219,254,0.22)"
+        />
 
-        <path d="M134 154C160 181 247 191 291 130" stroke="rgba(34,197,94,0.38)" strokeWidth="2" strokeLinecap="round" strokeDasharray="5 7" />
+        <path
+          d="M134 154C160 181 247 191 291 130"
+          stroke="rgba(34,197,94,0.38)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="5 7"
+        />
         <circle cx="132" cy="154" r="6" fill="#60A5FA" />
         <circle cx="291" cy="130" r="6" fill="#22C55E" />
 
-        <rect x="165" y="92" width="90" height="74" rx="22" fill="rgba(15,23,42,0.72)" stroke="rgba(148,163,184,0.22)" />
-        <path d="M196 126L207 137L229 111" stroke="#22C55E" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+        <rect
+          x="165"
+          y="92"
+          width="90"
+          height="74"
+          rx="22"
+          fill="rgba(15,23,42,0.72)"
+          stroke="rgba(148,163,184,0.22)"
+        />
+        <path
+          d="M196 126L207 137L229 111"
+          stroke="#22C55E"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </div>
   );
@@ -1475,12 +1540,6 @@ export function JobDashboard({
       clearFileInput();
     }
   }, [cvFile, clearFileInput]);
-
-  useEffect(() => {
-    if (!isSavedView) return;
-
-    logShowSavedFinalOrder(activeJobs);
-  }, [activeJobs, isSavedView]);
 
   useEffect(() => {
     if (searchLoading) {

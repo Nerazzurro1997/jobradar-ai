@@ -18,6 +18,11 @@
 
 .dashboard-shell {
   min-width: 0;
+  box-sizing: border-box;
+}
+
+.dashboard-shell * {
+  box-sizing: border-box;
 }
 
 .job-card {
