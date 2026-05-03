@@ -13,12 +13,65 @@ type JobCardProps = {
   onAnalyze: (job: Job) => void;
 };
 
-type JobWithOptionalWorkload = Job & {
+type JobWithOptionalFields = Job & {
   workload?: string;
   workloadPercent?: string;
   employmentLevel?: string;
   pensum?: string;
+  distanceScore?: number | string | null;
+  recencyScore?: number | string | null;
+  requirementMatchScore?: number | string | null;
+  finalScore?: number | string | null;
+  publishedDate?: string | null;
+  savedAt?: number | string | null;
 };
+
+function toNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string" && value.trim()) {
+    const normalized = value.trim().replace(",", ".");
+    const numericText = normalized.match(/-?\d+(\.\d+)?/)?.[0];
+    const parsed = numericText ? Number(numericText) : Number(normalized);
+
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return fallback;
+}
+
+function getDateTime(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return 0;
+
+  const swissDate = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (swissDate) {
+    const [, day, month, year] = swissDate;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
+    ).getTime();
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatDate(value: unknown) {
+  const time = getDateTime(value);
+  if (!time) return "";
+
+  return new Intl.DateTimeFormat("de-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(time));
+}
 
 function normalizeWorkload(value: string) {
   return value.replace(/\s+/g, "").replace(/-/g, "–").trim();
@@ -55,7 +108,7 @@ function extractWorkloadFromTitle(title: string) {
   };
 }
 
-function getExplicitWorkload(job: JobWithOptionalWorkload) {
+function getExplicitWorkload(job: JobWithOptionalFields) {
   return (
     job.workload ||
     job.workloadPercent ||
@@ -155,6 +208,127 @@ function getRecommendationStyle(text?: string) {
   };
 }
 
+function getDistanceLabel(distanceScore: number) {
+  if (distanceScore >= 90) return "Very close";
+  if (distanceScore >= 75) return "Good distance";
+  if (distanceScore >= 60) return "Reachable";
+  if (distanceScore > 0) return "Farther away";
+  return "";
+}
+
+function getRecencyLabel(job: JobWithOptionalFields) {
+  const publishedDate = formatDate(job.publishedDate);
+  if (publishedDate) return `Published ${publishedDate}`;
+
+  const recencyScore = toNumber(job.recencyScore);
+
+  if (recencyScore >= 14) return "Very recent";
+  if (recencyScore >= 8) return "Recent";
+  if (recencyScore > 0) return "Fresh enough";
+
+  return "";
+}
+
+function isNewSavedJob(job: JobWithOptionalFields) {
+  const savedAt = getDateTime(job.savedAt);
+  if (!savedAt) return false;
+
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  return Date.now() - savedAt <= oneDayMs;
+}
+
+function getMetaItems(job: JobWithOptionalFields) {
+  const items: string[] = [];
+
+  const distanceScore = toNumber(job.distanceScore);
+  const requirementMatchScore = toNumber(job.requirementMatchScore);
+  const publishedDate = formatDate(job.publishedDate);
+
+  if (distanceScore > 0) {
+    items.push(`Distance ${distanceScore}`);
+  }
+
+  if (requirementMatchScore > 0) {
+    items.push(`Requirement fit ${requirementMatchScore}`);
+  }
+
+  if (publishedDate) {
+    items.push(`Published ${publishedDate}`);
+  }
+
+  if (job.keyword) {
+    items.push(`Reason: ${job.keyword}`);
+  }
+
+  return items;
+}
+
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "blue" | "green" | "amber" | "red" | "purple";
+}) {
+  const styles: Record<
+    NonNullable<Parameters<typeof Badge>[0]["tone"]>,
+    {
+      background: string;
+      border: string;
+      color: string;
+    }
+  > = {
+    neutral: {
+      background: "rgba(15,23,42,0.055)",
+      border: "1px solid rgba(15,23,42,0.07)",
+      color: "#334155",
+    },
+    blue: {
+      background: "rgba(37,99,235,0.1)",
+      border: "1px solid rgba(37,99,235,0.18)",
+      color: "#1d4ed8",
+    },
+    green: {
+      background: "rgba(34,197,94,0.12)",
+      border: "1px solid rgba(34,197,94,0.26)",
+      color: "#166534",
+    },
+    amber: {
+      background: "rgba(245,158,11,0.12)",
+      border: "1px solid rgba(245,158,11,0.26)",
+      color: "#92400e",
+    },
+    red: {
+      background: "rgba(220,38,38,0.08)",
+      border: "1px solid rgba(220,38,38,0.18)",
+      color: "#991b1b",
+    },
+    purple: {
+      background: "rgba(124,58,237,0.12)",
+      border: "1px solid rgba(124,58,237,0.24)",
+      color: "#5b21b6",
+    },
+  };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        minHeight: 28,
+        padding: "6px 10px",
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 900,
+        lineHeight: 1,
+        ...styles[tone],
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function JobCard({
   job,
   index,
@@ -164,13 +338,21 @@ export function JobCard({
   onHover,
   onAnalyze,
 }: JobCardProps) {
+  const rankedJob = job as JobWithOptionalFields;
+
   const score = getJobDisplayScore(job);
   const isBest = index < 3;
   const isHovered = hoveredId === job.id;
 
   const titleData = extractWorkloadFromTitle(job.title || "Untitled job");
-  const explicitWorkload = getExplicitWorkload(job as JobWithOptionalWorkload);
+  const explicitWorkload = getExplicitWorkload(rankedJob);
   const workload = titleData.workload || explicitWorkload;
+
+  const distanceScore = toNumber(rankedJob.distanceScore);
+  const distanceLabel = getDistanceLabel(distanceScore);
+  const recencyLabel = getRecencyLabel(rankedJob);
+  const metaItems = getMetaItems(rankedJob);
+  const savedIsNew = showSavedJobs && isNewSavedJob(rankedJob);
 
   const normalizedAnalysis = analysisText?.toLowerCase() || "";
   const isAnalyzing =
@@ -198,28 +380,30 @@ export function JobCard({
         overflow: "hidden",
         background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
         color: "#0f172a",
-        padding: 32,
-        borderRadius: 28,
-        border: isBest
-          ? "2px solid rgba(34,197,94,0.42)"
-          : "1px solid rgba(226,232,240,0.85)",
-        boxShadow: isHovered
-          ? "0 35px 85px rgba(0,0,0,0.34)"
+        padding: 0,
+        borderRadius: 24,
+        border: showSavedJobs
+          ? "1px solid rgba(34,197,94,0.32)"
           : isBest
-          ? "0 28px 70px rgba(34,197,94,0.14)"
-          : "0 22px 55px rgba(0,0,0,0.22)",
-        transform: isHovered ? "translateY(-6px)" : "translateY(0)",
+          ? "1px solid rgba(34,197,94,0.35)"
+          : "1px solid rgba(226,232,240,0.9)",
+        boxShadow: isHovered
+          ? "0 30px 78px rgba(0,0,0,0.3)"
+          : showSavedJobs
+          ? "0 22px 58px rgba(15,23,42,0.22)"
+          : "0 22px 55px rgba(0,0,0,0.2)",
+        transform: isHovered ? "translateY(-4px)" : "translateY(0)",
         transition:
-          "transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease",
+          "transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease",
       }}
     >
       <div
         style={{
           position: "absolute",
           top: 0,
+          bottom: 0,
           left: 0,
-          right: 0,
-          height: 6,
+          width: 5,
           background: scoreColor(score),
         }}
       />
@@ -227,119 +411,40 @@ export function JobCard({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 128px",
-          gap: 28,
+          gridTemplateColumns: "minmax(0, 1fr) 118px",
+          gap: 24,
           alignItems: "start",
+          padding: 26,
         }}
       >
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div
             style={{
               display: "flex",
-              gap: 10,
+              gap: 8,
               flexWrap: "wrap",
               marginBottom: 14,
             }}
           >
-            {isBest && (
-              <span
-                style={{
-                  background: "rgba(34,197,94,0.12)",
-                  color: "#166534",
-                  border: "1px solid rgba(34,197,94,0.28)",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                ⭐ Best Match
-              </span>
-            )}
+            {showSavedJobs && <Badge tone="blue">Saved</Badge>}
+            {savedIsNew && <Badge tone="green">New</Badge>}
+            {isBest && <Badge tone="green">Best Match</Badge>}
 
-            {showSavedJobs && (
-              <span
-                style={{
-                  background: "rgba(37,99,235,0.1)",
-                  color: "#1d4ed8",
-                  border: "1px solid rgba(37,99,235,0.18)",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                💾 Saved
-              </span>
-            )}
+            <Badge>{scoreLabel(score)}</Badge>
 
-            <span
-              style={{
-                background: "rgba(15,23,42,0.06)",
-                color: "#334155",
-                padding: "6px 10px",
-                borderRadius: 999,
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
-              {scoreLabel(score)}
-            </span>
-
-            {workload && (
-              <span
-                style={{
-                  background: "rgba(245,158,11,0.12)",
-                  color: "#92400e",
-                  border: "1px solid rgba(245,158,11,0.28)",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                🕒 Workload {workload}
-              </span>
-            )}
-
-            {hasFinishedAnalysis && (
-              <span
-                style={{
-                  background: "rgba(124,58,237,0.12)",
-                  color: "#5b21b6",
-                  border: "1px solid rgba(124,58,237,0.24)",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                🤖 AI reviewed
-              </span>
-            )}
-
-            {job.keyword && (
-              <span
-                style={{
-                  background: "#dbeafe",
-                  color: "#1d4ed8",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 900,
-                }}
-              >
-                Keyword: {job.keyword}
-              </span>
-            )}
+            {distanceLabel && <Badge tone="blue">{distanceLabel}</Badge>}
+            {recencyLabel && <Badge>{recencyLabel}</Badge>}
+            {workload && <Badge tone="amber">Workload {workload}</Badge>}
+            {hasFinishedAnalysis && <Badge tone="purple">AI reviewed</Badge>}
           </div>
 
           <h2
             style={{
               margin: 0,
-              fontSize: 30,
-              lineHeight: 1.15,
-              letterSpacing: -0.5,
+              color: "#0f172a",
+              fontSize: 26,
+              lineHeight: 1.16,
+              letterSpacing: -0.45,
             }}
           >
             {titleData.title}
@@ -347,8 +452,8 @@ export function JobCard({
 
           <p
             style={{
-              marginTop: 12,
-              fontSize: 16,
+              margin: "10px 0 0",
+              fontSize: 14,
               color: "#475569",
               fontWeight: 900,
             }}
@@ -356,51 +461,69 @@ export function JobCard({
             {job.company} · {job.location}
           </p>
 
+          {metaItems.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "8px 14px",
+                marginTop: 11,
+                color: "#64748b",
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              {metaItems.slice(0, 4).map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+          )}
+
           {(job.previewSummary ||
             job.highlights?.length ||
             job.riskFlags?.length ||
             job.snippet) && (
             <div
               style={{
-                marginTop: 22,
-                maxWidth: 1050,
+                marginTop: 18,
+                maxWidth: 980,
                 display: "grid",
-                gap: 14,
+                gap: 12,
               }}
             >
               {job.previewSummary && (
                 <div
                   style={{
-                    padding: "13px 15px",
-                    borderRadius: 16,
-                    background: "rgba(37,99,235,0.08)",
-                    border: "1px solid rgba(37,99,235,0.16)",
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    background: "rgba(37,99,235,0.07)",
+                    border: "1px solid rgba(37,99,235,0.14)",
                     color: "#1e3a8a",
                     fontWeight: 900,
                     lineHeight: 1.55,
-                    fontSize: 14,
+                    fontSize: 13,
                   }}
                 >
-                  💡 {job.previewSummary}
+                  {job.previewSummary}
                 </div>
               )}
 
               {job.highlights && job.highlights.length > 0 ? (
                 <div
                   style={{
-                    padding: "16px 18px",
-                    borderRadius: 18,
-                    background: "rgba(15,23,42,0.04)",
-                    border: "1px solid rgba(15,23,42,0.08)",
+                    padding: "14px 15px",
+                    borderRadius: 16,
+                    background: "rgba(15,23,42,0.035)",
+                    border: "1px solid rgba(15,23,42,0.07)",
                   }}
                 >
                   <p
                     style={{
                       margin: "0 0 10px",
                       color: "#0f172a",
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: 950,
-                      letterSpacing: 0.4,
+                      letterSpacing: 0.35,
                       textTransform: "uppercase",
                     }}
                   >
@@ -413,11 +536,11 @@ export function JobCard({
                         key={`${highlight}-${i}`}
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "22px 1fr",
+                          gridTemplateColumns: "20px 1fr",
                           gap: 8,
                           alignItems: "start",
                           color: "#334155",
-                          fontSize: 14,
+                          fontSize: 13,
                           lineHeight: 1.55,
                         }}
                       >
@@ -432,13 +555,13 @@ export function JobCard({
               ) : job.snippet ? (
                 <div
                   style={{
-                    padding: "16px 18px",
-                    borderRadius: 18,
-                    background: "rgba(15,23,42,0.04)",
-                    border: "1px solid rgba(15,23,42,0.08)",
+                    padding: "14px 15px",
+                    borderRadius: 16,
+                    background: "rgba(15,23,42,0.035)",
+                    border: "1px solid rgba(15,23,42,0.07)",
                     color: "#334155",
                     lineHeight: 1.65,
-                    fontSize: 14,
+                    fontSize: 13,
                   }}
                 >
                   {job.snippet}
@@ -448,19 +571,19 @@ export function JobCard({
               {job.riskFlags && job.riskFlags.length > 0 && (
                 <div
                   style={{
-                    padding: "14px 16px",
-                    borderRadius: 18,
-                    background: "rgba(220,38,38,0.07)",
-                    border: "1px solid rgba(220,38,38,0.18)",
+                    padding: "14px 15px",
+                    borderRadius: 16,
+                    background: "rgba(220,38,38,0.06)",
+                    border: "1px solid rgba(220,38,38,0.16)",
                   }}
                 >
                   <p
                     style={{
                       margin: "0 0 8px",
                       color: "#991b1b",
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: 950,
-                      letterSpacing: 0.4,
+                      letterSpacing: 0.35,
                       textTransform: "uppercase",
                     }}
                   >
@@ -469,19 +592,9 @@ export function JobCard({
 
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {job.riskFlags.slice(0, 3).map((risk, i) => (
-                      <span
-                        key={`${risk}-${i}`}
-                        style={{
-                          padding: "7px 10px",
-                          borderRadius: 999,
-                          background: "rgba(220,38,38,0.1)",
-                          color: "#991b1b",
-                          fontSize: 12,
-                          fontWeight: 900,
-                        }}
-                      >
-                        ⚠️ {risk}
-                      </span>
+                      <Badge key={`${risk}-${i}`} tone="red">
+                        {risk}
+                      </Badge>
                     ))}
                   </div>
                 </div>
@@ -492,8 +605,8 @@ export function JobCard({
           <div
             style={{
               display: "flex",
-              gap: 12,
-              marginTop: 24,
+              gap: 10,
+              marginTop: 20,
               flexWrap: "wrap",
             }}
           >
@@ -518,32 +631,48 @@ export function JobCard({
                 cursor: isAnalyzing ? "not-allowed" : "pointer",
               }}
             >
-              {isAnalyzing ? "🔄 AI analyzing..." : "🤖 AI Analysis"}
+              {isAnalyzing ? "AI analyzing..." : "AI Analysis"}
             </button>
           </div>
         </div>
 
         <div
           style={{
-            width: 116,
-            height: 116,
-            borderRadius: 30,
-            background: scoreColor(score),
-            color: "white",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
-            fontWeight: 950,
-            boxShadow: isHovered
-              ? `0 24px 55px ${scoreColor(score)}66`
-              : `0 18px 38px ${scoreColor(score)}44`,
-            transform: isHovered ? "scale(1.08)" : "scale(1)",
-            transition: "transform 0.25s ease, box-shadow 0.25s ease",
+            justifyContent: "flex-end",
           }}
         >
-          <span style={{ fontSize: 34 }}>{score}%</span>
-          <span style={{ fontSize: 11, letterSpacing: 0.8 }}>MATCH</span>
+          <div
+            style={{
+              width: 104,
+              height: 104,
+              borderRadius: 26,
+              background: scoreColor(score),
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "column",
+              fontWeight: 950,
+              boxShadow: isHovered
+                ? `0 24px 55px ${scoreColor(score)}66`
+                : `0 18px 38px ${scoreColor(score)}35`,
+              transform: isHovered ? "scale(1.04)" : "scale(1)",
+              transition: "transform 0.22s ease, box-shadow 0.22s ease",
+            }}
+          >
+            <span style={{ fontSize: 30, lineHeight: 1 }}>{score}%</span>
+            <span
+              style={{
+                marginTop: 5,
+                fontSize: 10,
+                letterSpacing: 0.7,
+                textTransform: "uppercase",
+              }}
+            >
+              Match
+            </span>
+          </div>
         </div>
       </div>
 
@@ -552,7 +681,7 @@ export function JobCard({
           maxHeight: analysisText ? 980 : 0,
           opacity: analysisText ? 1 : 0,
           overflow: "hidden",
-          transform: analysisText ? "translateY(0)" : "translateY(-10px)",
+          transform: analysisText ? "translateY(0)" : "translateY(-8px)",
           transition:
             "max-height 0.45s ease, opacity 0.3s ease, transform 0.3s ease",
         }}
@@ -560,21 +689,21 @@ export function JobCard({
         {analysisText && (
           <div
             style={{
-              marginTop: 26,
+              margin: "0 26px 26px",
               padding: 0,
               background: "linear-gradient(135deg, #eef2ff, #e2e8f0)",
-              border: "1px solid rgba(148,163,184,0.35)",
-              borderRadius: 24,
+              border: "1px solid rgba(148,163,184,0.32)",
+              borderRadius: 20,
               overflow: "hidden",
-              boxShadow: "0 18px 45px rgba(15,23,42,0.12)",
+              boxShadow: "0 18px 45px rgba(15,23,42,0.1)",
             }}
           >
             <div
               style={{
-                padding: "18px 22px",
+                padding: "16px 18px",
                 background:
-                  "linear-gradient(135deg, rgba(37,99,235,0.12), rgba(124,58,237,0.10))",
-                borderBottom: "1px solid rgba(148,163,184,0.28)",
+                  "linear-gradient(135deg, rgba(37,99,235,0.11), rgba(124,58,237,0.08))",
+                borderBottom: "1px solid rgba(148,163,184,0.25)",
                 display: "flex",
                 justifyContent: "space-between",
                 gap: 16,
@@ -586,16 +715,16 @@ export function JobCard({
                   style={{
                     display: "block",
                     color: "#0f172a",
-                    fontSize: 19,
-                    letterSpacing: -0.3,
+                    fontSize: 17,
+                    letterSpacing: -0.2,
                   }}
                 >
-                  🤖 AI Matching Insight
+                  AI Matching Insight
                 </strong>
 
                 <p
                   style={{
-                    margin: "6px 0 0",
+                    margin: "5px 0 0",
                     color: "#475569",
                     fontSize: 13,
                     fontWeight: 700,
@@ -627,7 +756,7 @@ export function JobCard({
 
             <div
               style={{
-                padding: 22,
+                padding: 18,
                 maxHeight: 620,
                 overflowY: "auto",
               }}
@@ -664,11 +793,11 @@ export function JobCard({
                 <>
                   <div
                     style={{
-                      marginBottom: 18,
-                      padding: 16,
-                      borderRadius: 18,
-                      background: "rgba(255,255,255,0.7)",
-                      border: "1px solid rgba(148,163,184,0.25)",
+                      marginBottom: 16,
+                      padding: 14,
+                      borderRadius: 16,
+                      background: "rgba(255,255,255,0.72)",
+                      border: "1px solid rgba(148,163,184,0.22)",
                     }}
                   >
                     <p
