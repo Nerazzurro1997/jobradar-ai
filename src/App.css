@@ -27,6 +27,7 @@
 
 .job-card {
   min-width: 0;
+  height: 100%;
   isolation: isolate;
 }
 
@@ -48,6 +49,38 @@
   white-space: nowrap;
 }
 
+.jr-job-card-main {
+  min-width: 0;
+}
+
+.jr-job-card-body {
+  min-width: 0;
+}
+
+.jr-job-card-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.jr-job-actions {
+  align-items: center;
+}
+
+.jr-job-actions a,
+.jr-job-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jr-score-column {
+  min-width: 0;
+}
+
+.jr-score-box {
+  flex: 0 0 auto;
+}
+
 .card {
   min-width: 0;
 }
@@ -67,11 +100,63 @@
 }
 
 @media (max-width: 760px) {
+  .job-card {
+    width: 100%;
+    border-radius: 18px;
+  }
+
+  .jr-job-card-main {
+    grid-template-columns: minmax(0, 1fr) 76px !important;
+    gap: 10px !important;
+    padding: 14px 14px 15px 16px !important;
+  }
+
+  .jr-score-box {
+    width: 70px !important;
+    height: 74px !important;
+    border-radius: 16px !important;
+    padding: 6px 5px !important;
+  }
+
+  .jr-score-box > span:first-child {
+    font-size: 21px !important;
+  }
+
+  .jr-score-box > span {
+    max-width: 62px !important;
+  }
+
+  .jr-job-card-content {
+    max-width: 100% !important;
+  }
+
+  .jr-job-actions {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 8px !important;
+  }
+
   .job-card a,
   .job-card button {
     width: 100%;
     justify-content: center;
     text-align: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .jr-job-card-main {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .jr-score-column {
+    order: -1;
+    justify-content: flex-start !important;
+  }
+
+  .jr-score-box {
+    width: 76px !important;
+    height: 76px !important;
   }
 }
 

@@ -46,12 +46,17 @@ export function Badge({ children, tone = "neutral" }: BadgeProps) {
       style={{
         display: "inline-flex",
         alignItems: "center",
+        maxWidth: "100%",
         minHeight: 23,
         padding: "5px 8px",
         borderRadius: 999,
         fontSize: 10.5,
         fontWeight: 900,
         lineHeight: 1,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        verticalAlign: "middle",
         ...badgeStyles[tone],
       }}
     >

@@ -30,7 +30,11 @@ type AnalyzeCvOptions = {
 
 const APP_SHELL_STYLE: CSSProperties = {
   display: "flex",
+  width: "100%",
+  minWidth: 0,
   minHeight: "100vh",
+  overflowX: "hidden",
+  alignItems: "stretch",
   background:
     "radial-gradient(circle at top left, #1e3a8a 0, transparent 30%), radial-gradient(circle at top right, #064e3b 0, transparent 28%), #020617",
   fontFamily:

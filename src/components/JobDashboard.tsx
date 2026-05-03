@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, MouseEvent } from "react";
+import type { CSSProperties, ChangeEvent, MouseEvent } from "react";
 import type { Job, CvProfile } from "../types";
 import { getJobDisplayScore, prepareJobsForDisplay } from "../utils/jobs";
 import { JobCard } from "./JobCard";
@@ -99,7 +99,18 @@ const CV_PROFILE_KEY = "jobradar_cv_profile";
 const LAST_SEARCH_UI_KEY = "jobradar_saved_jobs_last_search_at";
 const NEW_SAVED_JOB_KEYS_KEY = "jobradar_new_saved_job_keys";
 const LATEST_SEARCH_JOB_KEYS_KEY = "jobradar_latest_search_job_keys";
-const LATEST_SEARCH_LIMIT = 3;
+
+const JOB_CARD_GRID_STYLE: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gridAutoRows: "1fr",
+  gap: 24,
+  alignItems: "stretch",
+  justifyItems: "stretch",
+  width: "100%",
+  maxWidth: "100%",
+  margin: 0,
+};
 
 function resetPageOverflow() {
   if (typeof document === "undefined") return;
@@ -463,13 +474,14 @@ function decorateJobForDecision({
 }): Job {
   const key = getJobUiKey(job);
   const priorityRank = priorityRankByKey.get(key);
+  const isLatestSearchJob = newJobKeys.has(key);
 
   return {
     ...job,
-    uiIsNew: newJobKeys.has(key),
+    uiIsNew: isLatestSearchJob,
     uiIsPriority: Boolean(priorityRank),
     uiPriorityRank: priorityRank,
-    uiDecisionSection: section,
+    uiDecisionSection: isLatestSearchJob ? "new" : section,
   } as UiDecisionJob;
 }
 
@@ -1013,116 +1025,6 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
   );
 }
 
-function LatestSearchSection({
-  jobs,
-  totalLatestCount,
-  newJobKeys,
-  priorityRankByKey,
-  analysis,
-  hoveredId,
-  onHover,
-  onAnalyzeJob,
-}: {
-  jobs: Job[];
-  totalLatestCount: number;
-  newJobKeys: Set<string>;
-  priorityRankByKey: Map<string, number>;
-  analysis: Record<number, string>;
-  hoveredId: number | null;
-  onHover: (id: number | null) => void;
-  onAnalyzeJob: (job: Job) => void;
-}) {
-  if (jobs.length === 0) return null;
-
-  return (
-    <section
-      className="fade-in"
-      style={{
-        marginBottom: 18,
-        padding: 14,
-        borderRadius: 22,
-        background:
-          "linear-gradient(135deg, rgba(15,23,42,0.68), rgba(15,23,42,0.4))",
-        border: "1px solid rgba(96,165,250,0.14)",
-        boxShadow: "0 14px 36px rgba(0,0,0,0.14)",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 16,
-          alignItems: "end",
-          marginBottom: 12,
-        }}
-      >
-        <div>
-          <p
-            style={{
-              margin: "0 0 5px",
-              color: "#93c5fd",
-              fontSize: 11,
-              fontWeight: 900,
-              textTransform: "uppercase",
-              letterSpacing: 0.55,
-            }}
-          >
-            Latest search
-          </p>
-
-          <h2
-            style={{
-              margin: 0,
-              color: "#f8fafc",
-              fontSize: 20,
-              lineHeight: 1.1,
-              letterSpacing: -0.2,
-            }}
-          >
-            Fresh results
-          </h2>
-
-          <p
-            style={{
-              margin: "6px 0 0",
-              color: "#94a3b8",
-              fontSize: 13,
-              lineHeight: 1.45,
-              maxWidth: 760,
-            }}
-          >
-            Showing {jobs.length} of {totalLatestCount} latest results.
-          </p>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gap: 12 }}>
-        {jobs.map((job, index) => {
-          const decoratedJob = decorateJobForDecision({
-            job,
-            section: "new",
-            newJobKeys,
-            priorityRankByKey,
-          });
-
-          return (
-            <JobCard
-              key={job.url || job.id || `latest-${index}`}
-              job={decoratedJob}
-              index={index}
-              analysisText={job.id ? analysis[job.id] : undefined}
-              hoveredId={hoveredId}
-              showSavedJobs
-              onHover={onHover}
-              onAnalyze={onAnalyzeJob}
-            />
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 function AllSavedJobsSection({
   jobs,
   totalCount,
@@ -1365,7 +1267,7 @@ function AllSavedJobsSection({
           </p>
         </div>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div style={JOB_CARD_GRID_STYLE}>
           {jobs.map((job, index) => {
             const decoratedJob = decorateJobForDecision({
               job,
@@ -1479,9 +1381,9 @@ export function JobDashboard({
     [latestSearchJobKeys, savedBaseJobs]
   );
 
-  const latestSearchJobs = useMemo(
-    () => latestSearchJobsAll.slice(0, LATEST_SEARCH_LIMIT),
-    [latestSearchJobsAll]
+  const latestMarkedJobKeys = useMemo(
+    () => new Set([...latestSearchJobKeys, ...newSavedJobKeys]),
+    [latestSearchJobKeys, newSavedJobKeys]
   );
 
   const priorityRankByKey = useMemo(() => {
@@ -1600,8 +1502,8 @@ export function JobDashboard({
       closeOpenAiAnalysis();
       setCvProfile(null);
       removeStoredCvProfile();
-      setCvFile(file);
 
+      setCvFile(file);
       event.currentTarget.value = "";
     },
     [setCvFile, setCvProfile]
@@ -1666,6 +1568,7 @@ export function JobDashboard({
     <main
       style={{
         flex: 1,
+        minWidth: 0,
         marginLeft: 260,
         padding: "30px",
         color: "#f8fafc",
@@ -1731,7 +1634,7 @@ export function JobDashboard({
             }}
           >
             {isSavedView
-              ? "A simple decision list: latest search above, full saved shortlist below."
+              ? "A single decision list with sort, filter and score controls."
               : "Upload your CV, let AI understand your profile, and discover the best matching jobs automatically."}
           </p>
         </div>
@@ -2066,35 +1969,22 @@ export function JobDashboard({
       )}
 
       {!searchLoading && isSavedView && savedBaseJobs.length > 0 && (
-        <>
-          <LatestSearchSection
-            jobs={latestSearchJobs}
-            totalLatestCount={latestSearchJobsAll.length}
-            newJobKeys={newSavedJobKeys}
-            priorityRankByKey={priorityRankByKey}
-            analysis={analysis}
-            hoveredId={hoveredId}
-            onHover={onHover}
-            onAnalyzeJob={onAnalyzeJob}
-          />
-
-          <AllSavedJobsSection
-            jobs={savedVisibleJobs}
-            totalCount={savedBaseJobs.length}
-            savedSortMode={savedSortMode}
-            savedFilterMode={savedFilterMode}
-            minimumScore={minimumScore}
-            onSortChange={setSavedSortMode}
-            onFilterChange={setSavedFilterMode}
-            onScoreChange={setMinimumScore}
-            newJobKeys={newSavedJobKeys}
-            priorityRankByKey={priorityRankByKey}
-            analysis={analysis}
-            hoveredId={hoveredId}
-            onHover={onHover}
-            onAnalyzeJob={onAnalyzeJob}
-          />
-        </>
+        <AllSavedJobsSection
+          jobs={savedVisibleJobs}
+          totalCount={savedBaseJobs.length}
+          savedSortMode={savedSortMode}
+          savedFilterMode={savedFilterMode}
+          minimumScore={minimumScore}
+          onSortChange={setSavedSortMode}
+          onFilterChange={setSavedFilterMode}
+          onScoreChange={setMinimumScore}
+          newJobKeys={latestMarkedJobKeys}
+          priorityRankByKey={priorityRankByKey}
+          analysis={analysis}
+          hoveredId={hoveredId}
+          onHover={onHover}
+          onAnalyzeJob={onAnalyzeJob}
+        />
       )}
 
       {!searchLoading && !isSavedView && activeJobs.length === 0 && (

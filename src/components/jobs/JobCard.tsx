@@ -16,7 +16,6 @@ import {
   getMetaItems,
   getRecommendationStyle,
   isMobileViewport,
-  isNewSavedJob,
   resetPageOverflow,
   toNumber,
 } from "./JobCardUtils";
@@ -56,9 +55,52 @@ function getScoreConfidenceLabel(score: number) {
 }
 
 function getDecisionLine(score: number) {
-  if (score >= 85) return "Strong match - recommended to apply";
-  if (score >= 70) return "Good match - worth reviewing";
-  return "Low match - likely skip";
+  if (score >= 85) {
+    return {
+      icon: "🟢",
+      label: "Strong match",
+      background: "rgba(34,197,94,0.08)",
+      border: "1px solid rgba(34,197,94,0.18)",
+      color: "#166534",
+    };
+  }
+
+  if (score >= 70) {
+    return {
+      icon: "🟡",
+      label: "Good match",
+      background: "rgba(245,158,11,0.08)",
+      border: "1px solid rgba(245,158,11,0.18)",
+      color: "#92400e",
+    };
+  }
+
+  return {
+    icon: "🔴",
+    label: "Low match",
+    background: "rgba(220,38,38,0.06)",
+    border: "1px solid rgba(220,38,38,0.14)",
+    color: "#991b1b",
+  };
+}
+
+function getMetaItemByPrefix(items: string[], prefix: string) {
+  return items.find((item) =>
+    item.toLowerCase().startsWith(prefix.toLowerCase())
+  );
+}
+
+function cleanReasonLabel(value: string) {
+  const cleaned = value
+    .replace(/^Reason:\s*/i, "")
+    .replace(/\bcv[-_\s]*direct\b/gi, "")
+    .replace(/\s*[|,/]\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) return "";
+
+  return cleaned.length > 58 ? `${cleaned.slice(0, 55).trim()}...` : cleaned;
 }
 
 export function JobCard({
@@ -85,21 +127,31 @@ export function JobCard({
   const distanceScore = toNumber(rankedJob.distanceScore);
   const distanceLabel = getDistanceLabel(distanceScore);
   const metaItems = getMetaItems(rankedJob);
-  const savedIsNew = showSavedJobs && isNewSavedJob(rankedJob);
+  const savedIsNew = showSavedJobs && rankedJob.uiDecisionSection === "new";
   const mainBadge = getMainBadge(score, isBestChoice);
   const scoreConfidenceLabel = getScoreConfidenceLabel(score);
   const decisionLine = getDecisionLine(score);
 
-  const reasonMetaItem = metaItems.find((item) => item.startsWith("Reason:"));
-  const primaryMetaItems = metaItems
-    .filter((item) => !item.startsWith("Reason:"))
-    .slice(0, 3);
-  const secondaryMetaItems = [
-    reasonMetaItem
-      ? `${reasonMetaItem}${job.location ? ` · ${job.location}` : ""}`
-      : "",
+  const publishedMetaItem = getMetaItemByPrefix(metaItems, "Published");
+  const cvMatchMetaItem = getMetaItemByPrefix(metaItems, "CV match");
+  const reasonMetaItem = getMetaItemByPrefix(metaItems, "Reason:");
+  const reasonLabel = reasonMetaItem ? cleanReasonLabel(reasonMetaItem) : "";
+
+  const firstMetaRow = [
+    distanceLabel ? `📍 ${distanceLabel}` : "",
+    publishedMetaItem ? `📅 ${publishedMetaItem}` : "",
+  ].filter(Boolean);
+
+  const secondMetaRow = [
+    cvMatchMetaItem ? `🎯 ${cvMatchMetaItem}` : "",
     workload ? `Workload ${workload}` : "",
   ].filter(Boolean);
+
+  const thirdMetaRow = [reasonLabel ? `💡 ${reasonLabel}` : ""].filter(Boolean);
+
+  const metaRows = [firstMetaRow, secondMetaRow, thirdMetaRow].filter(
+    (row) => row.length > 0
+  );
 
   const visibleHighlights = job.highlights?.slice(0, 2) ?? [];
   const hiddenHighlightsCount = Math.max((job.highlights?.length ?? 0) - 2, 0);
@@ -193,6 +245,10 @@ export function JobCard({
         style={{
           position: "relative",
           overflow: "hidden",
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
           background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
           color: "#0f172a",
           padding: 0,
@@ -240,20 +296,29 @@ export function JobCard({
           className="jr-job-card-main"
           style={{
             position: "relative",
+            flex: 1,
             display: "grid",
             gridTemplateColumns: "minmax(0, 1fr) 92px",
-            gap: 16,
+            gap: 14,
             alignItems: "start",
-            padding: "18px 20px 18px 22px",
+            padding: "16px 18px 16px 20px",
           }}
         >
-          <div style={{ minWidth: 0 }}>
+          <div
+            className="jr-job-card-body"
+            style={{
+              minWidth: 0,
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <div
               style={{
                 display: "flex",
                 gap: 6,
                 flexWrap: "wrap",
-                marginBottom: 10,
+                marginBottom: 8,
               }}
             >
               {showSavedJobs && <Badge tone="blue">Saved</Badge>}
@@ -286,25 +351,26 @@ export function JobCard({
               {job.company} · {job.location}
             </p>
 
-            {(primaryMetaItems.length > 0 || secondaryMetaItems.length > 0) && (
+            {metaRows.length > 0 && (
               <div
                 className="jr-job-meta-row"
                 style={{
                   display: "grid",
-                  gap: 4,
-                  marginTop: 9,
+                  gap: 5,
+                  marginTop: 8,
                   color: "#64748b",
                   fontSize: 11.5,
                   fontWeight: 850,
                   lineHeight: 1.35,
                 }}
               >
-                {primaryMetaItems.length > 0 && (
-                  <span>{primaryMetaItems.join(" · ")}</span>
-                )}
-
-                {secondaryMetaItems.map((item) => (
-                  <span key={item}>{item}</span>
+                {metaRows.map((row, rowIndex) => (
+                  <span
+                    key={`meta-${rowIndex}`}
+                    style={{ display: "block", overflowWrap: "anywhere" }}
+                  >
+                    {row.join(" · ")}
+                  </span>
                 ))}
               </div>
             )}
@@ -316,10 +382,10 @@ export function JobCard({
               <div
                 className="jr-job-card-content"
                 style={{
-                  marginTop: 13,
+                  marginTop: 11,
                   maxWidth: 980,
                   display: "grid",
-                  gap: 9,
+                  gap: 7,
                 }}
               >
                 {job.previewSummary && (
@@ -333,6 +399,10 @@ export function JobCard({
                       fontWeight: 850,
                       lineHeight: 1.45,
                       fontSize: 12.5,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
                     }}
                   >
                     {job.previewSummary}
@@ -342,15 +412,15 @@ export function JobCard({
                 {visibleHighlights.length > 0 ? (
                   <div
                     style={{
-                      padding: "10px 12px",
-                      borderRadius: 13,
-                      background: "rgba(15,23,42,0.035)",
-                      border: "1px solid rgba(15,23,42,0.07)",
+                      padding: "8px 10px",
+                      borderRadius: 12,
+                      background: "rgba(15,23,42,0.022)",
+                      border: "1px solid rgba(15,23,42,0.05)",
                     }}
                   >
                     <p
                       style={{
-                        margin: "0 0 7px",
+                        margin: "0 0 6px",
                         color: "#0f172a",
                         fontSize: 11,
                         fontWeight: 950,
@@ -361,7 +431,7 @@ export function JobCard({
                       Highlights
                     </p>
 
-                    <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "grid", gap: 5 }}>
                       {visibleHighlights.map((highlight, i) => (
                         <div
                           key={`${highlight}-${i}`}
@@ -371,14 +441,23 @@ export function JobCard({
                             gap: 7,
                             alignItems: "start",
                             color: "#334155",
-                            fontSize: 12.5,
-                            lineHeight: 1.42,
+                            fontSize: 12.3,
+                            lineHeight: 1.38,
                           }}
                         >
                           <span style={{ color: "#15803d", fontWeight: 950 }}>
                             ✓
                           </span>
-                          <span>{highlight}</span>
+                          <span
+                            style={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {highlight}
+                          </span>
                         </div>
                       ))}
 
@@ -405,6 +484,10 @@ export function JobCard({
                       color: "#334155",
                       lineHeight: 1.5,
                       fontSize: 12.5,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
                     }}
                   >
                     {job.snippet}
@@ -446,74 +529,74 @@ export function JobCard({
             )}
 
             <div
-              className="jr-job-decision-line"
               style={{
-                marginTop: 13,
-                padding: "9px 11px",
-                borderRadius: 12,
-                background:
-                  score >= 85
-                    ? "rgba(34,197,94,0.08)"
-                    : score >= 70
-                      ? "rgba(245,158,11,0.08)"
-                      : "rgba(220,38,38,0.06)",
-                border:
-                  score >= 85
-                    ? "1px solid rgba(34,197,94,0.18)"
-                    : score >= 70
-                      ? "1px solid rgba(245,158,11,0.18)"
-                      : "1px solid rgba(220,38,38,0.14)",
-                color:
-                  score >= 85 ? "#166534" : score >= 70 ? "#92400e" : "#991b1b",
-                fontSize: 12.5,
-                fontWeight: 900,
-                lineHeight: 1.35,
+                marginTop: "auto",
+                paddingTop: 10,
               }}
             >
-              {decisionLine}
-            </div>
-
-            <div
-              className="jr-job-actions"
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: 12,
-                flexWrap: "wrap",
-              }}
-            >
-              {job.url && (
-                <a
-                  className="btn btn-dark"
-                  href={job.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    textDecoration: "none",
-                    padding: "9px 13px",
-                    fontSize: 13,
-                  }}
-                >
-                  Open Job
-                </a>
-              )}
-
-              <button
-                className="btn btn-blue"
-                onClick={handleAnalyzeClick}
+              <div
+                className="jr-job-decision-line"
                 style={{
-                  padding: "9px 13px",
-                  fontSize: 13,
-                  opacity: isAnalyzing ? 0.85 : 1,
-                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  maxWidth: "100%",
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  background: decisionLine.background,
+                  border: decisionLine.border,
+                  color: decisionLine.color,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  lineHeight: 1.2,
                 }}
               >
-                {isAnalyzing
-                  ? "AI analyzing..."
-                  : hasFinishedAnalysis
-                    ? "View AI Analysis"
-                    : "AI Analysis"}
-              </button>
+                <span aria-hidden="true">{decisionLine.icon}</span>
+                <span>{decisionLine.label}</span>
+              </div>
+
+              <div
+                className="jr-job-actions"
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                {job.url && (
+                  <a
+                    className="btn btn-dark"
+                    href={job.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      textDecoration: "none",
+                      padding: "9px 13px",
+                      fontSize: 13,
+                    }}
+                  >
+                    Open Job
+                  </a>
+                )}
+
+                <button
+                  className="btn btn-blue"
+                  onClick={handleAnalyzeClick}
+                  style={{
+                    padding: "9px 13px",
+                    fontSize: 13,
+                    opacity: isAnalyzing ? 0.85 : 1,
+                    cursor: "pointer",
+                  }}
+                >
+                  {isAnalyzing
+                    ? "AI analyzing..."
+                    : hasFinishedAnalysis
+                      ? "View AI Analysis"
+                      : "AI Analysis"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -522,14 +605,15 @@ export function JobCard({
             style={{
               display: "flex",
               justifyContent: "flex-end",
+              alignItems: "flex-start",
             }}
           >
             <div
               className="jr-score-box"
               style={{
-                width: 86,
-                minHeight: 88,
-                borderRadius: 21,
+                width: 82,
+                height: 86,
+                borderRadius: 19,
                 background: scoreColor(score),
                 color: "white",
                 display: "flex",
@@ -538,7 +622,7 @@ export function JobCard({
                 flexDirection: "column",
                 fontWeight: 950,
                 textAlign: "center",
-                padding: "8px 7px",
+                padding: "7px 6px",
                 boxShadow: isHovered
                   ? `0 20px 42px ${scoreColor(score)}55`
                   : `0 14px 30px ${scoreColor(score)}30`,
@@ -546,7 +630,7 @@ export function JobCard({
                 transition: "transform 0.2s ease, box-shadow 0.2s ease",
               }}
             >
-              <span style={{ fontSize: 25, lineHeight: 1 }}>{score}%</span>
+              <span style={{ fontSize: 24, lineHeight: 1 }}>{score}%</span>
               <span
                 style={{
                   marginTop: 4,
@@ -559,9 +643,9 @@ export function JobCard({
               </span>
               <span
                 style={{
-                  marginTop: 5,
-                  maxWidth: 70,
-                  fontSize: 8.5,
+                  marginTop: 4,
+                  maxWidth: 66,
+                  fontSize: 8,
                   lineHeight: 1.1,
                   opacity: 0.92,
                 }}
