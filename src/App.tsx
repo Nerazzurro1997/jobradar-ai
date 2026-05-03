@@ -158,6 +158,18 @@ function loadSavedJobs(): Job[] {
   }
 }
 
+function getErrorMessage(error: unknown, fallback = "Something went wrong") {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  return fallback;
+}
+
 export default function App() {
   const [initialCvCache] = useState<StoredCvProfile | null>(() =>
     readStoredCvProfile()
@@ -186,6 +198,7 @@ export default function App() {
     searchJobs: searchJobsFromHook,
     analyzeJob: analyzeJobFromHook,
     analyzeCv: analyzeCvFromHook,
+    resetJobs: resetJobsFromHook,
   } = useJobs();
 
   const refreshSavedJobs = useCallback((persistSorted = false): Job[] => {
@@ -296,6 +309,7 @@ export default function App() {
     try {
       clearJobs();
       removeStoredCvProfile();
+      resetJobsFromHook();
 
       setSavedJobs([]);
       setCvProfile(null);
@@ -304,13 +318,6 @@ export default function App() {
       setOnlyTop(false);
       setShowSavedJobs(false);
       setHoveredId(null);
-
-      /**
-       * Important:
-       * jobs from useJobs live in memory, not in localStorage.
-       * This flag tells the dashboard to hide old search results
-       * and show a premium reset state instead.
-       */
       setWorkspaceResetAt(new Date().toISOString());
     } catch (error) {
       console.error("Failed to clear saved data", error);
@@ -354,7 +361,13 @@ export default function App() {
       console.error("CV analysis failed", error);
 
       if (showAlert) {
-        window.alert("CV analysis failed");
+        window.alert(
+          "CV analysis failed.\n\n" +
+            getErrorMessage(error, "Please check your CV and try again.").slice(
+              0,
+              900
+            )
+        );
       }
 
       throw error;
@@ -422,7 +435,11 @@ export default function App() {
       window.alert("No new jobs found.");
     } catch (error) {
       console.error("Job search failed", error);
-      window.alert("Job search failed. Check your CV and try again.");
+
+      window.alert(
+        "Job search failed.\n\n" +
+          getErrorMessage(error, "Check your CV and try again.").slice(0, 900)
+      );
     }
   }
 

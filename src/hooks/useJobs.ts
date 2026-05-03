@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { CvProfile, Job, SearchStats } from "../types";
 import { toBase64 } from "../utils/file";
 import { saveJobs } from "../utils/storage";
@@ -9,27 +9,27 @@ import {
   normalizeJobs,
 } from "../utils/jobs";
 
-function safeString(value: unknown) {
+function safeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function safeArray(value: unknown, limit = 30) {
+function safeArray(value: unknown, limit = 30): string[] {
   return Array.isArray(value)
     ? value
-        .filter((item) => typeof item === "string" && item.trim())
+        .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
         .map((item) => item.trim())
         .slice(0, limit)
     : [];
 }
 
-function uniqueArray(items: string[], limit = 50) {
+function uniqueArray(items: string[], limit = 50): string[] {
   return [...new Set(items.filter(Boolean).map((item) => item.trim()))].slice(
     0,
     limit
   );
 }
 
-function valueToText(value: unknown) {
+function valueToText(value: unknown): string {
   if (typeof value === "string") return value;
 
   try {
@@ -39,7 +39,7 @@ function valueToText(value: unknown) {
   }
 }
 
-function extractJsonObject(text = "") {
+function extractJsonObject(text = ""): string {
   const cleaned = text
     .replace(/```json/gi, "")
     .replace(/```/g, "")
@@ -55,13 +55,13 @@ function extractJsonObject(text = "") {
   return cleaned.slice(first, last + 1);
 }
 
-function tryParseJson(text: string) {
+function tryParseJson(text: string): any | null {
   const extracted = extractJsonObject(text);
 
   try {
     return JSON.parse(extracted);
   } catch {
-    // Continue
+    // Continue with a light repair attempt.
   }
 
   try {
@@ -76,7 +76,7 @@ function tryParseJson(text: string) {
   }
 }
 
-function extractArrayFromText(text: string, key: string, limit = 30) {
+function extractArrayFromText(text: string, key: string, limit = 30): string[] {
   const regex = new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]*?)\\]`, "i");
   const match = text.match(regex);
 
@@ -100,7 +100,11 @@ function extractArrayFromText(text: string, key: string, limit = 30) {
   }
 }
 
-function extractStringFromText(text: string, key: string, maxLength = 700) {
+function extractStringFromText(
+  text: string,
+  key: string,
+  maxLength = 700
+): string {
   const keyIndex = text.indexOf(`"${key}"`);
 
   if (keyIndex === -1) return "";
@@ -144,6 +148,22 @@ function extractStringFromText(text: string, key: string, maxLength = 700) {
     return JSON.parse(`"${value}"`).trim();
   } catch {
     return value.replace(/\\"/g, '"').trim();
+  }
+}
+
+function getErrorMessage(error: unknown, fallback = "Unknown error"): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error.trim();
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return fallback;
   }
 }
 
@@ -377,14 +397,51 @@ export function useJobs() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [stats, setStats] = useState<SearchStats>({});
 
+  /**
+   * Every reset increases this number.
+   * Async requests capture the current value.
+   * If a slow old request finishes after a reset, it is ignored.
+   */
+  const resetVersionRef = useRef(0);
+  const searchRequestIdRef = useRef(0);
+  const profileRequestIdRef = useRef(0);
+
+  const isCurrentResetVersion = useCallback((version: number) => {
+    return resetVersionRef.current === version;
+  }, []);
+
+  const resetJobs = useCallback(() => {
+    resetVersionRef.current += 1;
+    searchRequestIdRef.current += 1;
+    profileRequestIdRef.current += 1;
+
+    setJobs([]);
+    setAnalysis({});
+    setStats({});
+    setSearchLoading(false);
+    setProfileLoading(false);
+  }, []);
+
   async function analyzeCv(file: File): Promise<CvProfile> {
+    const resetVersion = resetVersionRef.current;
+    const profileRequestId = profileRequestIdRef.current + 1;
+
+    profileRequestIdRef.current = profileRequestId;
     setProfileLoading(true);
+
+    const isCurrentProfileRequest = () =>
+      isCurrentResetVersion(resetVersion) &&
+      profileRequestIdRef.current === profileRequestId;
 
     try {
       const base64 = await toBase64(file);
       const data = await analyzeCvAPI(base64, file.name);
 
       console.log("ANALYZE CV RESPONSE:", data);
+
+      if (!isCurrentProfileRequest()) {
+        throw new Error("CV analysis was reset before completion.");
+      }
 
       if (!data.success || !data.profile) {
         const recoveredProfile = recoverProfileFromApiFailure(data);
@@ -399,20 +456,18 @@ export function useJobs() {
         }
 
         const message =
-          data.details ||
-          data.error ||
-          "CV analysis failed without details";
+          data.details || data.error || "CV analysis failed without details";
 
         console.error("CV ANALYSIS FAILED:", data);
-
-        alert("CV analysis failed:\n\n" + String(message).slice(0, 1200));
 
         throw new Error(String(message));
       }
 
       return data.profile;
     } finally {
-      setProfileLoading(false);
+      if (isCurrentProfileRequest()) {
+        setProfileLoading(false);
+      }
     }
   }
 
@@ -420,7 +475,16 @@ export function useJobs() {
     file: File,
     profile: CvProfile | null,
     savedJobs: Job[]
-  ) {
+  ): Promise<Job[]> {
+    const resetVersion = resetVersionRef.current;
+    const searchRequestId = searchRequestIdRef.current + 1;
+
+    searchRequestIdRef.current = searchRequestId;
+
+    const isCurrentSearchRequest = () =>
+      isCurrentResetVersion(resetVersion) &&
+      searchRequestIdRef.current === searchRequestId;
+
     setSearchLoading(true);
     setJobs([]);
     setAnalysis({});
@@ -432,6 +496,10 @@ export function useJobs() {
       let profileToUse = profile;
       if (!profileToUse) {
         profileToUse = await analyzeCv(file);
+      }
+
+      if (!isCurrentSearchRequest()) {
+        return [];
       }
 
       const knownUrls = savedJobs
@@ -447,9 +515,12 @@ export function useJobs() {
 
       console.log("SEARCH JOBS RESPONSE:", data);
 
+      if (!isCurrentSearchRequest()) {
+        return [];
+      }
+
       if (data.error) {
         const message = data.details || data.error;
-        alert("Job search failed:\n\n" + String(message).slice(0, 1200));
         throw new Error(String(message));
       }
 
@@ -459,7 +530,12 @@ export function useJobs() {
       const sortedJobs = sortJobsByScore(uniqueJobs);
 
       setJobs(sortedJobs);
-      saveJobs(sortedJobs);
+
+      try {
+        saveJobs(sortedJobs);
+      } catch (error) {
+        console.error("Failed to save jobs", error);
+      }
 
       setStats({
         foundLinks: data.foundLinks,
@@ -467,16 +543,29 @@ export function useJobs() {
         shown: data.count,
       });
 
-      return incomingJobs;
+      return sortedJobs;
     } catch (error) {
       console.error("SEARCH JOBS ERROR:", error);
-      return [];
+
+      if (!isCurrentSearchRequest()) {
+        return [];
+      }
+
+      throw new Error(getErrorMessage(error, "Job search failed"));
     } finally {
-      setSearchLoading(false);
+      if (isCurrentSearchRequest()) {
+        setSearchLoading(false);
+      }
     }
   }
 
   async function analyzeJob(job: Job, file: File, profile: CvProfile | null) {
+    const resetVersion = resetVersionRef.current;
+
+    if (!isCurrentResetVersion(resetVersion)) {
+      return;
+    }
+
     setAnalysis((prev) => ({
       ...prev,
       [job.id]: "⏳ Analisi in corso...",
@@ -487,6 +576,10 @@ export function useJobs() {
       const data = await analyzeJobAPI(base64, file.name, profile, job);
 
       console.log("ANALYZE JOB RESPONSE:", data);
+
+      if (!isCurrentResetVersion(resetVersion)) {
+        return;
+      }
 
       const raw =
         data?.text ||
@@ -501,9 +594,13 @@ export function useJobs() {
     } catch (error) {
       console.error("ANALYZE JOB ERROR:", error);
 
+      if (!isCurrentResetVersion(resetVersion)) {
+        return;
+      }
+
       setAnalysis((prev) => ({
         ...prev,
-        [job.id]: "Errore: " + String(error),
+        [job.id]: "Errore: " + getErrorMessage(error),
       }));
     }
   }
@@ -517,5 +614,6 @@ export function useJobs() {
     searchJobs,
     analyzeJob,
     analyzeCv,
+    resetJobs,
   };
 }
