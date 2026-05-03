@@ -1655,7 +1655,7 @@ export function Sidebar({
             <NavButton
               icon="📊"
               label="Dashboard"
-              description="Live job radar"
+              description="Live radar"
               variant="dashboard"
               active={!showSavedJobs}
               onClick={() => {
@@ -1668,11 +1668,7 @@ export function Sidebar({
             <NavButton
               icon="💾"
               label="Saved Jobs"
-              description={
-                hasSavedJobs
-                  ? "Shortlisted matches"
-                  : "No saved matches yet"
-              }
+              description={hasSavedJobs ? "Saved matches" : "No saved yet"}
               count={savedJobsCount}
               variant="saved"
               active={showSavedJobs}
