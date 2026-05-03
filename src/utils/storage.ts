@@ -1,5 +1,5 @@
 import type { Job } from "../types";
-import { prepareJobsForDisplay } from "./jobs";
+import { prepareSavedJobsForStorage } from "./jobs";
 
 const STORAGE_KEY = "jobradar_saved_jobs";
 
@@ -64,24 +64,27 @@ export function getSavedJobs(): Job[] {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return [];
 
-    const sortedSavedJobs = prepareJobsForDisplay(
-      normalizeStoredJobs(JSON.parse(data))
-    );
+    const storedJobs = normalizeStoredJobs(JSON.parse(data));
+    const cleanedSavedJobs = prepareSavedJobsForStorage(storedJobs);
 
-    logSavedSortDebug(sortedSavedJobs);
+    if (cleanedSavedJobs.length !== storedJobs.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedSavedJobs));
+    }
 
-    return sortedSavedJobs;
+    logSavedSortDebug(cleanedSavedJobs);
+
+    return cleanedSavedJobs;
   } catch {
     return [];
   }
 }
 
 export function saveJobs(jobs: Job[]) {
-  const sortedJobs = prepareJobsForDisplay(jobs);
+  const cleanedSavedJobs = prepareSavedJobsForStorage(jobs);
 
-  logSavedSortDebug(sortedJobs);
+  logSavedSortDebug(cleanedSavedJobs);
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedJobs));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedSavedJobs));
 }
 
 export function clearJobs() {

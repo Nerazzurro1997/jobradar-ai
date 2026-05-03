@@ -1,5 +1,7 @@
 import type { Job } from "../types";
 
+export const SAVED_JOBS_MIN_SCORE = 70;
+
 type RankedJob = Job & {
   distanceScore?: number | string | null;
   recencyScore?: number | string | null;
@@ -46,6 +48,18 @@ function getScore(job: RankedJob) {
 
 export function getJobDisplayScore(job: Job) {
   return getScore(job as RankedJob);
+}
+
+export function isSaveableJob(job: Job) {
+  return getJobDisplayScore(job) >= SAVED_JOBS_MIN_SCORE;
+}
+
+function logSavedFilterDebug(beforeFilterCount: number, afterFilterCount: number) {
+  console.log("SAVED FILTER DEBUG", {
+    beforeFilterCount,
+    afterFilterCount,
+    removedBelow70: beforeFilterCount - afterFilterCount,
+  });
 }
 
 function getDistanceScoreFromLocation(locationValue: unknown) {
@@ -366,4 +380,13 @@ export function normalizeJobs(jobs: Job[]) {
 
 export function prepareJobsForDisplay(jobs: Job[]) {
   return sortJobsByScore(getUniqueJobsByUrl(normalizeJobs(jobs)));
+}
+
+export function prepareSavedJobsForStorage(jobs: Job[]) {
+  const normalizedJobs = normalizeJobs(jobs);
+  const filteredJobs = normalizedJobs.filter(isSaveableJob);
+
+  logSavedFilterDebug(normalizedJobs.length, filteredJobs.length);
+
+  return sortJobsByScore(getUniqueJobsByUrl(filteredJobs));
 }
