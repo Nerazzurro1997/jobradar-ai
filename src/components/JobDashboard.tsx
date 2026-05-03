@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { ChangeEvent, MouseEvent } from "react";
 import type { Job, CvProfile } from "../types";
+import { getJobDisplayScore, prepareJobsForDisplay } from "../utils/jobs";
 import { JobCard } from "./JobCard";
 
 type Stats = {
@@ -45,6 +46,14 @@ type ProfileSignals = {
     preferredRoles?: string[];
     preferredLocations?: string[];
   };
+};
+
+type RankedDebugJob = Job & {
+  finalScore?: number | string | null;
+  distanceScore?: number | string | null;
+  requirementMatchScore?: number | string | null;
+  recencyScore?: number | string | null;
+  savedAt?: number | string | null;
 };
 
 type Props = {
@@ -180,6 +189,27 @@ function formatResetTime(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function logShowSavedFinalOrder(jobs: Job[]) {
+  console.log(
+    "SHOW SAVED FINAL ORDER",
+    jobs.slice(0, 20).map((job) => {
+      const rankedJob = job as RankedDebugJob;
+
+      return {
+        title: rankedJob.title,
+        company: rankedJob.company,
+        location: rankedJob.location,
+        score: rankedJob.score,
+        finalScore: rankedJob.finalScore,
+        distanceScore: rankedJob.distanceScore,
+        requirementMatchScore: rankedJob.requirementMatchScore,
+        recencyScore: rankedJob.recencyScore,
+        savedAt: rankedJob.savedAt,
+      };
+    })
+  );
 }
 
 function SignalPill({ label }: { label: string }) {
@@ -594,6 +624,25 @@ export function JobDashboard({
   const isBusy = searchLoading || profileLoading;
   const isWorkspaceReset = Boolean(workspaceResetAt);
 
+  const sortedLiveJobs = useMemo(() => prepareJobsForDisplay(jobs), [jobs]);
+
+  const sortedSavedJobs = useMemo(
+    () => prepareJobsForDisplay(savedJobs),
+    [savedJobs]
+  );
+
+  const activeJobs = useMemo(() => {
+    if (isWorkspaceReset) return [];
+
+    return showSavedJobs ? sortedSavedJobs : sortedLiveJobs;
+  }, [isWorkspaceReset, showSavedJobs, sortedSavedJobs, sortedLiveJobs]);
+
+  useEffect(() => {
+    if (!showSavedJobs || isWorkspaceReset) return;
+
+    logShowSavedFinalOrder(activeJobs);
+  }, [activeJobs, isWorkspaceReset, showSavedJobs]);
+
   const canClearCache =
     !isWorkspaceReset &&
     (savedJobs.length > 0 ||
@@ -638,28 +687,22 @@ export function JobDashboard({
     [setCvFile, setCvProfile]
   );
 
-  const activeJobs = useMemo(() => {
-    if (isWorkspaceReset) return [];
-
-    return showSavedJobs ? savedJobs : jobs;
-  }, [isWorkspaceReset, showSavedJobs, savedJobs, jobs]);
-
   const displayedJobs = useMemo(
-    () => activeJobs.filter((job) => !onlyTop || (job.score || 0) >= 80),
+    () => activeJobs.filter((job) => !onlyTop || getJobDisplayScore(job) >= 80),
     [activeJobs, onlyTop]
   );
 
   const bestScore = useMemo(() => {
     if (activeJobs.length === 0) return 0;
 
-    return Math.max(...activeJobs.map((job) => job.score || 0));
+    return Math.max(...activeJobs.map(getJobDisplayScore));
   }, [activeJobs]);
 
   const avgScore = useMemo(() => {
     if (activeJobs.length === 0) return 0;
 
     return Math.round(
-      activeJobs.reduce((sum, job) => sum + (job.score || 0), 0) /
+      activeJobs.reduce((sum, job) => sum + getJobDisplayScore(job), 0) /
         activeJobs.length
     );
   }, [activeJobs]);

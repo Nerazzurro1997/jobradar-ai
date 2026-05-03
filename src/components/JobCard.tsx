@@ -1,5 +1,6 @@
 import type { Job } from "../types";
 import { renderAnalysis } from "../utils/renderAnalysis";
+import { getJobDisplayScore } from "../utils/jobs";
 import { scoreColor, scoreLabel } from "../utils/score";
 
 type JobCardProps = {
@@ -109,7 +110,10 @@ function getAnalysisSummary(text?: string) {
       return line.length > 18;
     });
 
-  return firstUsefulLine || "AI analysis completed. Review the detailed recommendation below.";
+  return (
+    firstUsefulLine ||
+    "AI analysis completed. Review the detailed recommendation below."
+  );
 }
 
 function getRecommendationStyle(text?: string) {
@@ -160,7 +164,7 @@ export function JobCard({
   onHover,
   onAnalyze,
 }: JobCardProps) {
-  const score = job.score || 0;
+  const score = getJobDisplayScore(job);
   const isBest = index < 3;
   const isHovered = hoveredId === job.id;
 

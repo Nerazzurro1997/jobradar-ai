@@ -7,13 +7,18 @@ type RankedJob = Job & {
   finalScore?: number | string | null;
   locationPriority?: number | string | null;
   matchedLocation?: string | null;
+  publishedDate?: string | null;
+  savedAt?: number | string | null;
 };
 
 function toNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
 
   if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
+    const normalized = value.trim().replace(",", ".");
+    const numericText = normalized.match(/-?\d+(\.\d+)?/)?.[0];
+    const parsed = numericText ? Number(numericText) : Number(normalized);
+
     if (Number.isFinite(parsed)) return parsed;
   }
 
@@ -24,12 +29,23 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+function normalizeUrl(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return "";
+
+  return raw.split("#")[0].split("?")[0].replace(/\/$/, "");
+}
+
 function includesAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
 }
 
 function getScore(job: RankedJob) {
-  return toNumber(job.finalScore, toNumber(job.score));
+  return Math.max(toNumber(job.score), toNumber(job.finalScore));
+}
+
+export function getJobDisplayScore(job: Job) {
+  return getScore(job as RankedJob);
 }
 
 function getDistanceScoreFromLocation(locationValue: unknown) {
@@ -55,6 +71,7 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
   if (location.includes("horgen")) return 96;
   if (location.includes("richterswil")) return 92;
   if (location.includes("thalwil")) return 90;
+  if (location.includes("samstagern")) return 88;
 
   if (
     location.includes("pfäffikon") ||
@@ -76,7 +93,11 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
   if (location.includes("adliswil")) return 78;
   if (location.includes("altendorf")) return 68;
   if (location.includes("lachen")) return 66;
+  if (location.includes("schwerzenbach")) return 65;
   if (location.includes("siebnen")) return 64;
+  if (location.includes("zug")) return 60;
+  if (location.includes("schwyz")) return 58;
+  if (location.includes("winterthur")) return 45;
 
   if (
     location === "zürich" ||
@@ -89,14 +110,10 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
     return 76;
   }
 
-  if (location.includes("samstagern")) return 88;
-  if (location.includes("schwerzenbach")) return 65;
-  if (location.includes("zug")) return 60;
-  if (location.includes("schwyz")) return 58;
-  if (location.includes("winterthur")) return 45;
   if (location.includes("st. gallen") || location.includes("sankt gallen")) {
     return 35;
   }
+
   if (location.includes("tuggen")) return 35;
 
   const otherZurichCantonSignals = [
@@ -130,7 +147,7 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
 }
 
 function getDistanceScore(job: RankedJob) {
-  return getDistanceScoreFromLocation(job.matchedLocation || job.location);
+  return getDistanceScoreFromLocation(job.location);
 }
 
 function getRecencyScore(job: RankedJob) {
@@ -141,6 +158,106 @@ function getRequirementMatchScore(job: RankedJob) {
   return toNumber(job.requirementMatchScore);
 }
 
+function getDateTime(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return 0;
+
+  const swissDate = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (swissDate) {
+    const [, day, month, year] = swissDate;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
+    ).getTime();
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getPublishedDateScore(job: RankedJob) {
+  return getDateTime(job.publishedDate);
+}
+
+function getSavedAtScore(job: RankedJob) {
+  return getDateTime(job.savedAt);
+}
+
+function getJobKey(job: Job) {
+  const url = normalizeUrl(job.url);
+  if (url) return `url:${url}`;
+
+  const title = normalizeText(job.title);
+  const company = normalizeText(job.company);
+  const location = normalizeText(job.location);
+  const fallbackKey = [title, company, location].filter(Boolean).join("|");
+
+  return fallbackKey ? `fallback:${fallbackKey}` : "";
+}
+
+function mergeJob(existingJob: Job, incomingJob: Job) {
+  const existingRankedJob = existingJob as RankedJob;
+  const incomingRankedJob = incomingJob as RankedJob;
+
+  const bestScore = Math.max(
+    getScore(existingRankedJob),
+    getScore(incomingRankedJob)
+  );
+
+  const bestRequirementMatchScore = Math.max(
+    getRequirementMatchScore(existingRankedJob),
+    getRequirementMatchScore(incomingRankedJob)
+  );
+
+  const bestRecencyScore = Math.max(
+    getRecencyScore(existingRankedJob),
+    getRecencyScore(incomingRankedJob)
+  );
+
+  const mergedLocation = incomingJob.location || existingJob.location;
+  const mergedDistanceJob = {
+    ...existingRankedJob,
+    ...incomingRankedJob,
+    location: mergedLocation,
+  } as RankedJob;
+
+  return {
+    ...existingJob,
+    ...incomingJob,
+    id: existingJob.id ?? incomingJob.id,
+    url: incomingJob.url || existingJob.url,
+    title: incomingJob.title || existingJob.title,
+    company: incomingJob.company || existingJob.company,
+    location: mergedLocation,
+    snippet: incomingJob.snippet || existingJob.snippet,
+    fullDescription:
+      incomingJob.fullDescription || existingJob.fullDescription,
+    highlights: incomingJob.highlights?.length
+      ? incomingJob.highlights
+      : existingJob.highlights,
+    riskFlags: incomingJob.riskFlags?.length
+      ? incomingJob.riskFlags
+      : existingJob.riskFlags,
+    matchedKeywords: incomingJob.matchedKeywords?.length
+      ? incomingJob.matchedKeywords
+      : existingJob.matchedKeywords,
+    missingKeywords: incomingJob.missingKeywords?.length
+      ? incomingJob.missingKeywords
+      : existingJob.missingKeywords,
+    score: bestScore,
+    finalScore: bestScore,
+    distanceScore: getDistanceScore(mergedDistanceJob),
+    requirementMatchScore: bestRequirementMatchScore,
+    recencyScore: bestRecencyScore,
+    savedAt: existingRankedJob.savedAt ?? incomingRankedJob.savedAt,
+  };
+}
+
 function logSortPreview(sortedJobs: Job[]) {
   console.log(
     "JOB SORT DEBUG:",
@@ -149,11 +266,15 @@ function logSortPreview(sortedJobs: Job[]) {
 
       return {
         title: rankedJob.title,
+        company: rankedJob.company,
         location: rankedJob.location,
         score: getScore(rankedJob),
+        finalScore: rankedJob.finalScore,
         distanceScore: getDistanceScore(rankedJob),
         recencyScore: getRecencyScore(rankedJob),
         requirementMatchScore: getRequirementMatchScore(rankedJob),
+        publishedDate: rankedJob.publishedDate,
+        savedAt: rankedJob.savedAt,
       };
     })
   );
@@ -168,19 +289,30 @@ export function sortJobsByScore(jobs: Job[]) {
     const scoreB = getScore(jobB);
     const scoreDiff = scoreB - scoreA;
 
-    if (Math.abs(scoreDiff) > 10) {
+    if (Math.abs(scoreDiff) > 1) {
       return scoreDiff;
+    }
+
+    const requirementDiff =
+      getRequirementMatchScore(jobB) - getRequirementMatchScore(jobA);
+    if (Math.abs(requirementDiff) > 6) {
+      return requirementDiff;
     }
 
     const distanceDiff = getDistanceScore(jobB) - getDistanceScore(jobA);
     if (distanceDiff !== 0) return distanceDiff;
 
-    const requirementDiff =
-      getRequirementMatchScore(jobB) - getRequirementMatchScore(jobA);
     if (requirementDiff !== 0) return requirementDiff;
 
     const recencyDiff = getRecencyScore(jobB) - getRecencyScore(jobA);
     if (recencyDiff !== 0) return recencyDiff;
+
+    const publishedDateDiff =
+      getPublishedDateScore(jobB) - getPublishedDateScore(jobA);
+    if (publishedDateDiff !== 0) return publishedDateDiff;
+
+    const savedAtDiff = getSavedAtScore(jobB) - getSavedAtScore(jobA);
+    if (savedAtDiff !== 0) return savedAtDiff;
 
     return scoreDiff;
   });
@@ -191,27 +323,47 @@ export function sortJobsByScore(jobs: Job[]) {
 }
 
 export function getUniqueJobsByUrl(jobs: Job[]) {
-  return jobs.filter((job, index, self) => {
-    if (!job.url) return false;
-    return index === self.findIndex((item) => item.url === job.url);
-  });
+  const uniqueJobs = new Map<string, Job>();
+  const jobsWithoutKey: Job[] = [];
+
+  for (const job of jobs) {
+    const key = getJobKey(job);
+
+    if (!key) {
+      jobsWithoutKey.push(job);
+      continue;
+    }
+
+    const existingJob = uniqueJobs.get(key);
+    uniqueJobs.set(key, existingJob ? mergeJob(existingJob, job) : job);
+  }
+
+  return [...uniqueJobs.values(), ...jobsWithoutKey];
 }
 
 export function normalizeJobs(jobs: Job[]) {
   return jobs
-    .filter((job) => job.url)
+    .filter((job) => getJobKey(job))
     .map((job) => {
       const rankedJob = job as RankedJob;
+      const score = getScore(rankedJob);
 
       return {
         ...job,
         id: job.id ?? Math.floor(Date.now() + Math.random() * 1_000_000),
+        score,
         distanceScore: getDistanceScore(rankedJob),
         recencyScore: getRecencyScore(rankedJob),
         requirementMatchScore: getRequirementMatchScore(rankedJob),
-        finalScore: toNumber(rankedJob.finalScore, toNumber(rankedJob.score)),
+        finalScore: score,
         locationPriority: rankedJob.locationPriority,
         matchedLocation: rankedJob.matchedLocation,
+        publishedDate: rankedJob.publishedDate,
+        savedAt: rankedJob.savedAt ?? new Date().toISOString(),
       };
     });
+}
+
+export function prepareJobsForDisplay(jobs: Job[]) {
+  return sortJobsByScore(getUniqueJobsByUrl(normalizeJobs(jobs)));
 }

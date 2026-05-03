@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import type { CvProfile, Job } from "./types";
-import { getSavedJobs, saveJobs, clearJobs } from "./utils/storage";
-import { sortJobsByScore } from "./utils/jobs";
+import {
+  clearJobs,
+  getSavedJobs,
+  logShowSavedFinalOrder,
+  saveJobs,
+} from "./utils/storage";
+import { prepareJobsForDisplay } from "./utils/jobs";
 import { Sidebar } from "./components/Sidebar";
 import { JobDashboard } from "./components/JobDashboard";
 import { ConfirmDialog } from "./components/ConfirmDialog";
@@ -151,7 +156,7 @@ function removeStoredCvProfile(): void {
 
 function loadSavedJobs(): Job[] {
   try {
-    return sortJobsByScore(getSavedJobs());
+    return prepareJobsForDisplay(getSavedJobs());
   } catch (error) {
     console.error("Failed to load saved jobs", error);
     return [];
@@ -290,8 +295,20 @@ export default function App() {
     );
 
   const toggleSavedJobs = useCallback(() => {
-    setShowSavedJobs((current) => !current);
-  }, []);
+    const shouldShowSavedJobs = !showSavedJobs;
+
+    if (shouldShowSavedJobs) {
+      const sortedSavedJobs = refreshSavedJobs(true);
+
+      logShowSavedFinalOrder(sortedSavedJobs);
+
+      if (sortedSavedJobs.length > 0) {
+        setWorkspaceResetAt(null);
+      }
+    }
+
+    setShowSavedJobs(shouldShowSavedJobs);
+  }, [refreshSavedJobs, showSavedJobs]);
 
   const toggleOnlyTop = useCallback(() => {
     setOnlyTop((current) => !current);
@@ -429,6 +446,7 @@ export default function App() {
       if (refreshedSavedJobs.length > 0) {
         setWorkspaceResetAt(null);
         setShowSavedJobs(true);
+        logShowSavedFinalOrder(refreshedSavedJobs);
         return;
       }
 

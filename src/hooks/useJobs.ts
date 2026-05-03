@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { CvProfile, Job, SearchStats } from "../types";
 import { toBase64 } from "../utils/file";
-import { saveJobs } from "../utils/storage";
+import { getSavedJobs, saveJobs } from "../utils/storage";
 import { analyzeCvAPI, searchJobsAPI, analyzeJobAPI } from "../services/api";
 import {
   sortJobsByScore,
@@ -390,6 +390,13 @@ function recoverProfileFromApiFailure(data: any): CvProfile | null {
   return buildRecoveredProfileFromText(combined);
 }
 
+function mergeSortAndDeduplicateJobs(jobs: Job[]) {
+  const normalizedJobs = normalizeJobs(jobs);
+  const uniqueJobs = getUniqueJobsByUrl(normalizedJobs);
+
+  return sortJobsByScore(uniqueJobs);
+}
+
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [analysis, setAnalysis] = useState<Record<number, string>>({});
@@ -486,7 +493,6 @@ export function useJobs() {
       searchRequestIdRef.current === searchRequestId;
 
     setSearchLoading(true);
-    setJobs([]);
     setAnalysis({});
     setStats({});
 
@@ -502,7 +508,12 @@ export function useJobs() {
         return [];
       }
 
-      const knownUrls = savedJobs
+      const existingSavedJobs = mergeSortAndDeduplicateJobs([
+        ...getSavedJobs(),
+        ...savedJobs,
+      ]);
+
+      const knownUrls = existingSavedJobs
         .map((job) => job.url)
         .filter((url): url is string => Boolean(url));
 
@@ -524,15 +535,32 @@ export function useJobs() {
         throw new Error(String(message));
       }
 
-      const incomingJobs: Job[] = data.jobs || [];
-      const normalizedJobs = normalizeJobs(incomingJobs);
-      const uniqueJobs = getUniqueJobsByUrl(normalizedJobs);
-      const sortedJobs = sortJobsByScore(uniqueJobs);
+      if (data.noNewJobs) {
+        const sortedSavedJobs = sortJobsByScore(existingSavedJobs);
 
-      setJobs(sortedJobs);
+        setJobs(sortedSavedJobs);
+        setStats({
+          foundLinks: data.foundLinks,
+          scanned: data.scanned,
+          shown: sortedSavedJobs.length,
+        });
+
+        return sortedSavedJobs;
+      }
+
+      const incomingJobs: Job[] = data.jobs || [];
+      const mergedJobs = getUniqueJobsByUrl(
+        normalizeJobs([
+          ...existingSavedJobs,
+          ...incomingJobs,
+        ])
+      );
+      const updatedSavedJobs = sortJobsByScore(mergedJobs);
+
+      setJobs(updatedSavedJobs);
 
       try {
-        saveJobs(sortedJobs);
+        saveJobs(updatedSavedJobs);
       } catch (error) {
         console.error("Failed to save jobs", error);
       }
@@ -540,10 +568,10 @@ export function useJobs() {
       setStats({
         foundLinks: data.foundLinks,
         scanned: data.scanned,
-        shown: data.count,
+        shown: updatedSavedJobs.length,
       });
 
-      return sortedJobs;
+      return updatedSavedJobs;
     } catch (error) {
       console.error("SEARCH JOBS ERROR:", error);
 
