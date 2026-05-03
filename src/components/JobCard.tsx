@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Job } from "../types";
 import { renderAnalysis } from "../utils/renderAnalysis";
 import { getJobDisplayScore } from "../utils/jobs";
@@ -18,12 +19,24 @@ type JobWithOptionalFields = Job & {
   workloadPercent?: string;
   employmentLevel?: string;
   pensum?: string;
+
   distanceScore?: number | string | null;
+  distanceKm?: number | string | null;
+  commuteKm?: number | string | null;
+  distanceText?: string | null;
+
   recencyScore?: number | string | null;
   requirementMatchScore?: number | string | null;
   finalScore?: number | string | null;
+  locationPriority?: number | string | null;
+  matchedLocation?: string | null;
   publishedDate?: string | null;
   savedAt?: number | string | null;
+
+  uiIsNew?: boolean;
+  uiIsPriority?: boolean;
+  uiPriorityRank?: number;
+  uiDecisionSection?: "new" | "best" | "all" | "live";
 };
 
 function toNumber(value: unknown, fallback = 0) {
@@ -71,6 +84,27 @@ function formatDate(value: unknown) {
     month: "2-digit",
     year: "numeric",
   }).format(new Date(time));
+}
+
+function formatRelativeDate(value: unknown) {
+  const time = getDateTime(value);
+  if (!time) return "";
+
+  const diffMs = Date.now() - time;
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+
+  if (diffMs < hourMs) return "today";
+
+  const hours = Math.floor(diffMs / hourMs);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(diffMs / dayMs);
+  if (days === 1) return "1 day ago";
+  if (days < 14) return `${days} days ago`;
+
+  return formatDate(value);
 }
 
 function normalizeWorkload(value: string) {
@@ -208,28 +242,51 @@ function getRecommendationStyle(text?: string) {
   };
 }
 
-function getDistanceLabel(distanceScore: number) {
-  if (distanceScore >= 90) return "Very close";
-  if (distanceScore >= 75) return "Good distance";
-  if (distanceScore >= 60) return "Reachable";
-  if (distanceScore > 0) return "Farther away";
+function getDistanceLabel(job: JobWithOptionalFields) {
+  const distanceText = typeof job.distanceText === "string" ? job.distanceText.trim() : "";
+  if (distanceText) return distanceText;
+
+  const distanceKm = toNumber(job.distanceKm, toNumber(job.commuteKm));
+  if (distanceKm > 0) return `${Math.round(distanceKm)} km`;
+
+  const distanceScore = toNumber(job.distanceScore);
+
+  if (distanceScore >= 90) return "very close";
+  if (distanceScore >= 75) return "good distance";
+  if (distanceScore >= 60) return "reachable";
+  if (distanceScore > 0) return "farther away";
+
   return "";
 }
 
-function getRecencyLabel(job: JobWithOptionalFields) {
-  const publishedDate = formatDate(job.publishedDate);
-  if (publishedDate) return `Published ${publishedDate}`;
+function getPublishedLabel(job: JobWithOptionalFields) {
+  const relativeDate = formatRelativeDate(job.publishedDate);
+  if (relativeDate) return relativeDate;
 
   const recencyScore = toNumber(job.recencyScore);
 
-  if (recencyScore >= 14) return "Very recent";
-  if (recencyScore >= 8) return "Recent";
-  if (recencyScore > 0) return "Fresh enough";
+  if (recencyScore >= 14) return "very recent";
+  if (recencyScore >= 8) return "recent";
+  if (recencyScore > 0) return "fresh enough";
 
   return "";
 }
 
+function getReasonLabel(job: JobWithOptionalFields, score: number) {
+  const requirementMatchScore = toNumber(job.requirementMatchScore);
+
+  if (job.keyword) return job.keyword;
+  if (requirementMatchScore >= 85) return "strong CV match";
+  if (score >= 90) return "elite profile fit";
+  if (score >= 85) return "high match quality";
+  if (job.previewSummary) return "profile-relevant role";
+
+  return "saved match";
+}
+
 function isNewSavedJob(job: JobWithOptionalFields) {
+  if (job.uiIsNew) return true;
+
   const savedAt = getDateTime(job.savedAt);
   if (!savedAt) return false;
 
@@ -237,47 +294,34 @@ function isNewSavedJob(job: JobWithOptionalFields) {
   return Date.now() - savedAt <= oneDayMs;
 }
 
-function getMetaItems(job: JobWithOptionalFields) {
+function getMetaItems(job: JobWithOptionalFields, score: number) {
   const items: string[] = [];
 
-  const distanceScore = toNumber(job.distanceScore);
-  const requirementMatchScore = toNumber(job.requirementMatchScore);
-  const publishedDate = formatDate(job.publishedDate);
+  const distanceLabel = getDistanceLabel(job);
+  const publishedLabel = getPublishedLabel(job);
+  const reasonLabel = getReasonLabel(job, score);
 
-  if (distanceScore > 0) {
-    items.push(`Distance ${distanceScore}`);
-  }
-
-  if (requirementMatchScore > 0) {
-    items.push(`Requirement fit ${requirementMatchScore}`);
-  }
-
-  if (publishedDate) {
-    items.push(`Published ${publishedDate}`);
-  }
-
-  if (job.keyword) {
-    items.push(`Reason: ${job.keyword}`);
-  }
+  if (distanceLabel) items.push(`Distance: ${distanceLabel}`);
+  if (publishedLabel) items.push(`Published: ${publishedLabel}`);
+  if (reasonLabel) items.push(`Reason: ${reasonLabel}`);
 
   return items;
+}
+
+function getQualityTone(score: number): "green" | "blue" | "amber" {
+  if (score >= 90) return "green";
+  if (score >= 85) return "blue";
+  return "amber";
 }
 
 function Badge({
   children,
   tone = "neutral",
 }: {
-  children: React.ReactNode;
-  tone?: "neutral" | "blue" | "green" | "amber" | "red" | "purple";
+  children: ReactNode;
+  tone?: "neutral" | "blue" | "green" | "amber" | "red" | "purple" | "dark";
 }) {
-  const styles: Record<
-    NonNullable<Parameters<typeof Badge>[0]["tone"]>,
-    {
-      background: string;
-      border: string;
-      color: string;
-    }
-  > = {
+  const styles = {
     neutral: {
       background: "rgba(15,23,42,0.055)",
       border: "1px solid rgba(15,23,42,0.07)",
@@ -308,6 +352,11 @@ function Badge({
       border: "1px solid rgba(124,58,237,0.24)",
       color: "#5b21b6",
     },
+    dark: {
+      background: "rgba(15,23,42,0.9)",
+      border: "1px solid rgba(15,23,42,0.12)",
+      color: "#f8fafc",
+    },
   };
 
   return (
@@ -321,6 +370,7 @@ function Badge({
         fontSize: 11,
         fontWeight: 900,
         lineHeight: 1,
+        whiteSpace: "nowrap",
         ...styles[tone],
       }}
     >
@@ -343,16 +393,25 @@ export function JobCard({
   const score = getJobDisplayScore(job);
   const isBest = index < 3;
   const isHovered = hoveredId === job.id;
+  const isNew = showSavedJobs && isNewSavedJob(rankedJob);
+  const isPriorityChoice = showSavedJobs && Boolean(rankedJob.uiIsPriority);
+  const priorityRank = rankedJob.uiPriorityRank;
 
   const titleData = extractWorkloadFromTitle(job.title || "Untitled job");
   const explicitWorkload = getExplicitWorkload(rankedJob);
   const workload = titleData.workload || explicitWorkload;
 
-  const distanceScore = toNumber(rankedJob.distanceScore);
-  const distanceLabel = getDistanceLabel(distanceScore);
-  const recencyLabel = getRecencyLabel(rankedJob);
-  const metaItems = getMetaItems(rankedJob);
-  const savedIsNew = showSavedJobs && isNewSavedJob(rankedJob);
+  const distanceLabel = getDistanceLabel(rankedJob);
+  const publishedLabel = getPublishedLabel(rankedJob);
+  const reasonLabel = getReasonLabel(rankedJob, score);
+  const metaItems = getMetaItems(rankedJob, score);
+
+  const requirementMatchScore = toNumber(rankedJob.requirementMatchScore);
+  const locationPriority = toNumber(rankedJob.locationPriority);
+  const matchedLocation =
+    typeof rankedJob.matchedLocation === "string"
+      ? rankedJob.matchedLocation.trim()
+      : "";
 
   const normalizedAnalysis = analysisText?.toLowerCase() || "";
   const isAnalyzing =
@@ -382,13 +441,17 @@ export function JobCard({
         color: "#0f172a",
         padding: 0,
         borderRadius: 24,
-        border: showSavedJobs
-          ? "1px solid rgba(34,197,94,0.32)"
+        border: isPriorityChoice
+          ? "1px solid rgba(34,197,94,0.58)"
+          : showSavedJobs
+          ? "1px solid rgba(34,197,94,0.26)"
           : isBest
           ? "1px solid rgba(34,197,94,0.35)"
           : "1px solid rgba(226,232,240,0.9)",
         boxShadow: isHovered
           ? "0 30px 78px rgba(0,0,0,0.3)"
+          : isPriorityChoice
+          ? "0 24px 70px rgba(34,197,94,0.22)"
           : showSavedJobs
           ? "0 22px 58px rgba(15,23,42,0.22)"
           : "0 22px 55px rgba(0,0,0,0.2)",
@@ -403,10 +466,24 @@ export function JobCard({
           top: 0,
           bottom: 0,
           left: 0,
-          width: 5,
+          width: isPriorityChoice ? 7 : 5,
           background: scoreColor(score),
         }}
       />
+
+      {isPriorityChoice && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            right: 0,
+            left: 0,
+            height: 3,
+            background:
+              "linear-gradient(90deg, rgba(34,197,94,0.9), rgba(59,130,246,0.55), transparent)",
+          }}
+        />
+      )}
 
       <div
         style={{
@@ -426,14 +503,21 @@ export function JobCard({
               marginBottom: 14,
             }}
           >
+            {isPriorityChoice && (
+              <Badge tone="green">
+                {priorityRank ? `Best choice #${priorityRank}` : "Best choice"}
+              </Badge>
+            )}
+
             {showSavedJobs && <Badge tone="blue">Saved</Badge>}
-            {savedIsNew && <Badge tone="green">New</Badge>}
-            {isBest && <Badge tone="green">Best Match</Badge>}
+            {isNew && <Badge tone="green">NEW</Badge>}
 
-            <Badge>{scoreLabel(score)}</Badge>
+            {!isPriorityChoice && isBest && <Badge tone="green">Best Match</Badge>}
 
-            {distanceLabel && <Badge tone="blue">{distanceLabel}</Badge>}
-            {recencyLabel && <Badge>{recencyLabel}</Badge>}
+            <Badge tone={getQualityTone(score)}>{scoreLabel(score)}</Badge>
+
+            {distanceLabel && <Badge tone="blue">Distance {distanceLabel}</Badge>}
+            {publishedLabel && <Badge>{publishedLabel}</Badge>}
             {workload && <Badge tone="amber">Workload {workload}</Badge>}
             {hasFinishedAnalysis && <Badge tone="purple">AI reviewed</Badge>}
           </div>
@@ -442,9 +526,9 @@ export function JobCard({
             style={{
               margin: 0,
               color: "#0f172a",
-              fontSize: 26,
+              fontSize: showSavedJobs ? 25 : 26,
               lineHeight: 1.16,
-              letterSpacing: -0.45,
+              letterSpacing: -0.35,
             }}
           >
             {titleData.title}
@@ -461,21 +545,42 @@ export function JobCard({
             {job.company} · {job.location}
           </p>
 
-          {metaItems.length > 0 && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px 14px",
+              marginTop: 11,
+              color: "#64748b",
+              fontSize: 12,
+              fontWeight: 800,
+            }}
+          >
+            {metaItems.slice(0, 4).map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+
+          {(requirementMatchScore > 0 || locationPriority > 0 || matchedLocation) && (
             <div
               style={{
                 display: "flex",
                 flexWrap: "wrap",
-                gap: "8px 14px",
-                marginTop: 11,
-                color: "#64748b",
-                fontSize: 12,
-                fontWeight: 800,
+                gap: 8,
+                marginTop: 12,
               }}
             >
-              {metaItems.slice(0, 4).map((item) => (
-                <span key={item}>{item}</span>
-              ))}
+              {requirementMatchScore > 0 && (
+                <Badge tone="purple">CV fit {requirementMatchScore}</Badge>
+              )}
+
+              {locationPriority > 0 && (
+                <Badge tone="blue">Location priority {locationPriority}</Badge>
+              )}
+
+              {matchedLocation && <Badge>{matchedLocation}</Badge>}
+
+              {reasonLabel && <Badge tone="dark">{reasonLabel}</Badge>}
             </div>
           )}
 

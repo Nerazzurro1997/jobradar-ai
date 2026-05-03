@@ -57,8 +57,16 @@ type RankedDebugJob = Job & {
   savedAt?: number | string | null;
 };
 
+type UiDecisionJob = Job & {
+  uiIsNew?: boolean;
+  uiIsPriority?: boolean;
+  uiPriorityRank?: number;
+  uiDecisionSection?: "new" | "best" | "all" | "live";
+};
+
 type SavedSortMode = "best" | "closest" | "newest";
-type SavedFilterMode = "all" | "best" | "top" | "elite";
+type SavedFilterMode = "all" | "top" | "elite";
+type ScoreFilterMode = 70 | 80 | 90;
 
 type Props = {
   cvFile: File | null;
@@ -88,14 +96,79 @@ type Props = {
 };
 
 const CV_PROFILE_KEY = "jobradar_cv_profile";
+const LAST_SEARCH_UI_KEY = "jobradar_saved_jobs_last_search_at";
+const NEW_SAVED_JOB_KEYS_KEY = "jobradar_new_saved_job_keys";
+const NEW_JOBS_LIMIT = 12;
+const BEST_MATCH_LIMIT = 12;
 
-function removeStoredCvProfile() {
-  if (typeof window === "undefined") return;
+function getStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
 
   try {
-    window.localStorage.removeItem(CV_PROFILE_KEY);
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function removeStoredCvProfile() {
+  try {
+    getStorage()?.removeItem(CV_PROFILE_KEY);
   } catch (error) {
     console.error("Failed to remove stored CV profile", error);
+  }
+}
+
+function readLastSearchAt() {
+  const storage = getStorage();
+  const rawValue = storage?.getItem(LAST_SEARCH_UI_KEY);
+  const parsed = rawValue ? Number(rawValue) : 0;
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function writeLastSearchAt(value: number) {
+  const storage = getStorage();
+  if (!storage) return;
+
+  try {
+    storage.setItem(LAST_SEARCH_UI_KEY, String(value));
+  } catch (error) {
+    console.error("Failed to store last search timestamp", error);
+  }
+}
+
+function readStoredNewSavedJobKeys() {
+  const storage = getStorage();
+  const rawValue = storage?.getItem(NEW_SAVED_JOB_KEYS_KEY);
+
+  if (!rawValue) return new Set<string>();
+
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      storage?.removeItem(NEW_SAVED_JOB_KEYS_KEY);
+      return new Set<string>();
+    }
+
+    return new Set(
+      parsed.filter((item): item is string => typeof item === "string")
+    );
+  } catch {
+    storage?.removeItem(NEW_SAVED_JOB_KEYS_KEY);
+    return new Set<string>();
+  }
+}
+
+function writeStoredNewSavedJobKeys(keys: string[]) {
+  const storage = getStorage();
+  if (!storage) return;
+
+  try {
+    storage.setItem(NEW_SAVED_JOB_KEYS_KEY, JSON.stringify(keys));
+  } catch (error) {
+    console.error("Failed to store new saved job keys", error);
   }
 }
 
@@ -132,8 +205,45 @@ function getDateTime(value: unknown) {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) return 0;
 
+  const swissDate = text.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (swissDate) {
+    const [, day, month, year] = swissDate;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
+    ).getTime();
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   const parsed = Date.parse(text);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeText(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeUrl(value: unknown) {
+  const raw = normalizeText(value);
+  if (!raw) return "";
+
+  return raw.split("#")[0].split("?")[0].replace(/\/$/, "");
+}
+
+function getJobUiKey(job: Job) {
+  const url = normalizeUrl(job.url);
+  if (url) return `url:${url}`;
+
+  const title = normalizeText(job.title);
+  const company = normalizeText(job.company);
+  const location = normalizeText(job.location);
+  const fallbackKey = [title, company, location].filter(Boolean).join("|");
+
+  if (fallbackKey) return `fallback:${fallbackKey}`;
+
+  return typeof job.id === "number" ? `id:${job.id}` : "";
 }
 
 function formatResetTime(value: string | null): string {
@@ -256,14 +366,17 @@ function getProfileSignals(cvProfile: CvProfile | null) {
   };
 }
 
-function filterSavedJobs(jobs: Job[], mode: SavedFilterMode) {
+function filterSavedJobs(
+  jobs: Job[],
+  filterMode: SavedFilterMode,
+  minimumScore: ScoreFilterMode
+) {
   return jobs.filter((job) => {
     const score = getJobDisplayScore(job);
 
-    if (score < 70) return false;
-    if (mode === "elite") return score >= 90;
-    if (mode === "best") return score >= 85;
-    if (mode === "top") return score >= 80;
+    if (score < minimumScore) return false;
+    if (filterMode === "elite") return score >= 90;
+    if (filterMode === "top") return score >= 85;
 
     return true;
   });
@@ -314,6 +427,29 @@ function getBestScore(jobs: Job[]) {
   return Math.max(...jobs.map(getJobDisplayScore));
 }
 
+function decorateJobForDecision({
+  job,
+  section,
+  newJobKeys,
+  priorityRankByKey,
+}: {
+  job: Job;
+  section: UiDecisionJob["uiDecisionSection"];
+  newJobKeys: Set<string>;
+  priorityRankByKey: Map<string, number>;
+}): Job {
+  const key = getJobUiKey(job);
+  const priorityRank = priorityRankByKey.get(key);
+
+  return {
+    ...job,
+    uiIsNew: newJobKeys.has(key),
+    uiIsPriority: Boolean(priorityRank),
+    uiPriorityRank: priorityRank,
+    uiDecisionSection: section,
+  } as UiDecisionJob;
+}
+
 function SignalPill({ label }: { label: string }) {
   return (
     <span
@@ -330,6 +466,41 @@ function SignalPill({ label }: { label: string }) {
     >
       {label}
     </span>
+  );
+}
+
+function SignalGroup({
+  title,
+  items,
+  limit,
+}: {
+  title: string;
+  items: string[];
+  limit: number;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div>
+      <p
+        style={{
+          margin: "0 0 8px",
+          color: "#94a3b8",
+          fontSize: 12,
+          fontWeight: 800,
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        {title}
+      </p>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {items.slice(0, limit).map((signal, index) => (
+          <SignalPill key={`${title}-${signal}-${index}`} label={signal} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -357,7 +528,7 @@ function SavedMetricCard({
           margin: "0 0 8px",
           color: "#94a3b8",
           fontSize: 12,
-          fontWeight: 850,
+          fontWeight: 800,
         }}
       >
         {label}
@@ -812,13 +983,155 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
           }}
         >
           Start a search and JobRadar will keep only strong matches in your
-          saved list.
+          saved decision list.
         </p>
       </div>
 
       <button className="btn btn-primary" onClick={onSearch}>
         Search Jobs
       </button>
+    </section>
+  );
+}
+
+function DecisionSection({
+  title,
+  eyebrow,
+  description,
+  jobs,
+  section,
+  isScrollable,
+  newJobKeys,
+  priorityRankByKey,
+  analysis,
+  hoveredId,
+  onHover,
+  onAnalyzeJob,
+}: {
+  title: string;
+  eyebrow: string;
+  description: string;
+  jobs: Job[];
+  section: UiDecisionJob["uiDecisionSection"];
+  isScrollable?: boolean;
+  newJobKeys: Set<string>;
+  priorityRankByKey: Map<string, number>;
+  analysis: Record<number, string>;
+  hoveredId: number | null;
+  onHover: (id: number | null) => void;
+  onAnalyzeJob: (job: Job) => void;
+}) {
+  if (jobs.length === 0) return null;
+
+  return (
+    <section
+      className="fade-in"
+      style={{
+        marginBottom: 24,
+        padding: 18,
+        borderRadius: 26,
+        background:
+          "linear-gradient(135deg, rgba(15,23,42,0.78), rgba(15,23,42,0.52))",
+        border: "1px solid rgba(148,163,184,0.14)",
+        boxShadow: "0 20px 55px rgba(0,0,0,0.18)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 18,
+          alignItems: "end",
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <p
+            style={{
+              margin: "0 0 6px",
+              color: "#93c5fd",
+              fontSize: 12,
+              fontWeight: 900,
+              textTransform: "uppercase",
+              letterSpacing: 0.6,
+            }}
+          >
+            {eyebrow}
+          </p>
+
+          <h2
+            style={{
+              margin: 0,
+              color: "#f8fafc",
+              fontSize: 25,
+              lineHeight: 1.1,
+              letterSpacing: -0.4,
+            }}
+          >
+            {title}
+          </h2>
+
+          <p
+            style={{
+              margin: "8px 0 0",
+              color: "#94a3b8",
+              fontSize: 14,
+              lineHeight: 1.55,
+              maxWidth: 760,
+            }}
+          >
+            {description}
+          </p>
+        </div>
+
+        <strong
+          style={{
+            minWidth: 46,
+            height: 42,
+            borderRadius: 16,
+            display: "grid",
+            placeItems: "center",
+            color: "#e0f2fe",
+            background: "rgba(37,99,235,0.15)",
+            border: "1px solid rgba(96,165,250,0.22)",
+            fontSize: 18,
+          }}
+        >
+          {jobs.length}
+        </strong>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gap: 16,
+          maxHeight: isScrollable ? 920 : "none",
+          overflowY: isScrollable ? "auto" : "visible",
+          paddingRight: isScrollable ? 6 : 0,
+        }}
+      >
+        {jobs.map((job, index) => {
+          const decoratedJob = decorateJobForDecision({
+            job,
+            section,
+            newJobKeys,
+            priorityRankByKey,
+          });
+
+          return (
+            <JobCard
+              key={job.url || job.id || `${title}-${index}`}
+              job={decoratedJob}
+              index={index}
+              analysisText={job.id ? analysis[job.id] : undefined}
+              hoveredId={hoveredId}
+              showSavedJobs
+              onHover={onHover}
+              onAnalyze={onAnalyzeJob}
+            />
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -848,11 +1161,18 @@ export function JobDashboard({
   setCvProfile,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const sessionStartedAtRef = useRef(Date.now());
+  const searchWasRunningRef = useRef(false);
+  const activeSearchStartedAtRef = useRef(0);
+  const savedKeysBeforeSearchRef = useRef<Set<string>>(new Set());
 
   const [savedSortMode, setSavedSortMode] = useState<SavedSortMode>("best");
   const [savedFilterMode, setSavedFilterMode] =
     useState<SavedFilterMode>("all");
+  const [minimumScore, setMinimumScore] = useState<ScoreFilterMode>(70);
+  const [lastSearchAt, setLastSearchAt] = useState(readLastSearchAt);
+  const [newSavedJobKeys, setNewSavedJobKeys] = useState<Set<string>>(
+    readStoredNewSavedJobKeys
+  );
 
   const isBusy = searchLoading || profileLoading;
   const isWorkspaceReset = Boolean(workspaceResetAt);
@@ -869,9 +1189,14 @@ export function JobDashboard({
   );
 
   const savedVisibleJobs = useMemo(() => {
-    const filteredJobs = filterSavedJobs(savedBaseJobs, savedFilterMode);
+    const filteredJobs = filterSavedJobs(
+      savedBaseJobs,
+      savedFilterMode,
+      minimumScore
+    );
+
     return sortSavedJobs(filteredJobs, savedSortMode);
-  }, [savedBaseJobs, savedFilterMode, savedSortMode]);
+  }, [savedBaseJobs, savedFilterMode, minimumScore, savedSortMode]);
 
   const activeJobs = useMemo(() => {
     if (isWorkspaceReset) return [];
@@ -885,10 +1210,75 @@ export function JobDashboard({
     logShowSavedFinalOrder(activeJobs);
   }, [activeJobs, isSavedView]);
 
+  useEffect(() => {
+    if (searchLoading) {
+      searchWasRunningRef.current = true;
+      return;
+    }
+
+    if (!searchWasRunningRef.current) return;
+
+    searchWasRunningRef.current = false;
+
+    const previousKeys = savedKeysBeforeSearchRef.current;
+    const searchStartedAt = activeSearchStartedAtRef.current;
+
+    const nextNewKeys = savedBaseJobs
+      .map((job) => {
+        const key = getJobUiKey(job);
+        const savedAtTime = getSavedAtTime(job);
+
+        if (!key) return "";
+        if (!previousKeys.has(key)) return key;
+        if (searchStartedAt > 0 && savedAtTime >= searchStartedAt) return key;
+
+        return "";
+      })
+      .filter(Boolean);
+
+    setNewSavedJobKeys(new Set(nextNewKeys));
+    writeStoredNewSavedJobKeys(nextNewKeys);
+
+    const completedAt = Date.now();
+
+    setLastSearchAt(completedAt);
+    writeLastSearchAt(completedAt);
+  }, [savedBaseJobs, searchLoading]);
+
   const displayedJobs = useMemo(
     () => activeJobs.filter((job) => !onlyTop || getJobDisplayScore(job) >= 80),
     [activeJobs, onlyTop]
   );
+
+  const newSavedJobs = useMemo(
+    () =>
+      savedVisibleJobs
+        .filter((job) => newSavedJobKeys.has(getJobUiKey(job)))
+        .slice(0, NEW_JOBS_LIMIT),
+    [newSavedJobKeys, savedVisibleJobs]
+  );
+
+  const bestMatchJobs = useMemo(
+    () =>
+      savedVisibleJobs
+        .filter((job) => getJobDisplayScore(job) >= 85)
+        .slice(0, BEST_MATCH_LIMIT),
+    [savedVisibleJobs]
+  );
+
+  const priorityRankByKey = useMemo(() => {
+    const priorityMap = new Map<string, number>();
+
+    savedVisibleJobs.slice(0, 3).forEach((job, index) => {
+      const key = getJobUiKey(job);
+
+      if (key) {
+        priorityMap.set(key, index + 1);
+      }
+    });
+
+    return priorityMap;
+  }, [savedVisibleJobs]);
 
   const bestScore = useMemo(() => getBestScore(activeJobs), [activeJobs]);
   const avgScore = useMemo(() => getAverageScore(activeJobs), [activeJobs]);
@@ -901,13 +1291,6 @@ export function JobDashboard({
     () => getAverageScore(savedBaseJobs),
     [savedBaseJobs]
   );
-
-  const newThisSession = useMemo(() => {
-    return savedBaseJobs.filter((job) => {
-      const savedAtTime = getSavedAtTime(job);
-      return savedAtTime > 0 && savedAtTime >= sessionStartedAtRef.current;
-    }).length;
-  }, [savedBaseJobs]);
 
   const canClearCache =
     !isWorkspaceReset &&
@@ -952,6 +1335,22 @@ export function JobDashboard({
     },
     [setCvFile, setCvProfile]
   );
+
+  const handleSearch = useCallback(() => {
+    const now = Date.now();
+
+    activeSearchStartedAtRef.current = now;
+    savedKeysBeforeSearchRef.current = new Set(
+      savedBaseJobs.map(getJobUiKey).filter(Boolean)
+    );
+
+    setLastSearchAt(now);
+    writeLastSearchAt(now);
+    setNewSavedJobKeys(new Set());
+    writeStoredNewSavedJobKeys([]);
+
+    onSearch();
+  }, [onSearch, savedBaseJobs]);
 
   const { skillSignals, languageSignals, roleSignals, highlightSignals } =
     useMemo(() => getProfileSignals(cvProfile), [cvProfile]);
@@ -1007,7 +1406,7 @@ export function JobDashboard({
               marginBottom: 16,
             }}
           >
-            {isSavedView ? "Curated matches" : "AI powered job matching"}
+            {isSavedView ? "Decision engine" : "AI powered job matching"}
           </div>
 
           <h1
@@ -1031,7 +1430,7 @@ export function JobDashboard({
             }}
           >
             {isSavedView
-              ? "Your curated list of strong matches, sorted by fit, distance and recency."
+              ? "Your strongest opportunities, grouped by urgency, fit and decision priority."
               : "Upload your CV, let AI understand your profile, and discover the best matching jobs automatically."}
           </p>
         </div>
@@ -1051,8 +1450,9 @@ export function JobDashboard({
               value={`${savedAvgScore}%`}
             />
             <SavedMetricCard
-              label="New this session"
-              value={newThisSession}
+              label="New last search"
+              value={newSavedJobKeys.size}
+              hint={lastSearchAt ? "tracked locally" : undefined}
             />
           </div>
         )}
@@ -1087,7 +1487,7 @@ export function JobDashboard({
             }}
           >
             {isSavedView
-              ? "Compact profile summary used to rank your saved matches."
+              ? "Compact profile summary used to rank your saved decisions."
               : "Your CV is used to create a profile for job matching."}
           </p>
 
@@ -1221,119 +1621,30 @@ export function JobDashboard({
 
           {hasProfileSignals ? (
             <div style={{ display: "grid", gap: isSavedView ? 12 : 16 }}>
-              {roleSignals.length > 0 && (
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 8px",
-                      color: "#94a3b8",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    Best-fit roles
-                  </p>
+              <SignalGroup
+                title="Best-fit roles"
+                items={roleSignals}
+                limit={isSavedView ? 6 : 8}
+              />
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {roleSignals
-                      .slice(0, isSavedView ? 6 : 8)
-                      .map((signal, index) => (
-                        <SignalPill
-                          key={`role-${signal}-${index}`}
-                          label={signal}
-                        />
-                      ))}
-                  </div>
-                </div>
-              )}
+              <SignalGroup
+                title="Skills & keywords"
+                items={skillSignals}
+                limit={isSavedView ? 8 : 14}
+              />
 
-              {skillSignals.length > 0 && (
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 8px",
-                      color: "#94a3b8",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    Skills & keywords
-                  </p>
+              <SignalGroup
+                title="Languages"
+                items={languageSignals}
+                limit={isSavedView ? 8 : 10}
+              />
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {skillSignals
-                      .slice(0, isSavedView ? 8 : 14)
-                      .map((signal, index) => (
-                        <SignalPill
-                          key={`skill-${signal}-${index}`}
-                          label={signal}
-                        />
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {languageSignals.length > 0 && (
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 8px",
-                      color: "#94a3b8",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    Languages
-                  </p>
-
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {languageSignals.slice(0, 8).map((signal, index) => (
-                      <SignalPill
-                        key={`language-${signal}-${index}`}
-                        label={signal}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!isSavedView && highlightSignals.length > 0 && (
-                <div>
-                  <p
-                    style={{
-                      margin: "0 0 8px",
-                      color: "#94a3b8",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textTransform: "uppercase",
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    Highlights
-                  </p>
-
-                  <ul
-                    style={{
-                      margin: 0,
-                      paddingLeft: 18,
-                      color: "#cbd5e1",
-                      lineHeight: 1.6,
-                      fontSize: 13,
-                    }}
-                  >
-                    {highlightSignals.slice(0, 5).map((highlight, index) => (
-                      <li key={`highlight-${highlight}-${index}`}>
-                        {highlight}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {!isSavedView && (
+                <SignalGroup
+                  title="Highlights"
+                  items={highlightSignals}
+                  limit={5}
+                />
               )}
             </div>
           ) : (
@@ -1358,7 +1669,7 @@ export function JobDashboard({
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
             className="btn btn-primary"
-            onClick={onSearch}
+            onClick={handleSearch}
             disabled={isBusy}
             style={{
               opacity: isBusy ? 0.7 : 1,
@@ -1374,7 +1685,7 @@ export function JobDashboard({
             </button>
           )}
 
-          {!isWorkspaceReset && activeJobs.length > 0 && (
+          {!isSavedView && !isWorkspaceReset && activeJobs.length > 0 && (
             <button className="btn btn-dark" onClick={onToggleTop}>
               {onlyTop ? "Show All Jobs" : "Only Top Jobs"}
             </button>
@@ -1394,13 +1705,7 @@ export function JobDashboard({
               border: "1px solid rgba(148,163,184,0.13)",
             }}
           >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span
                 style={{
                   color: "#94a3b8",
@@ -1410,6 +1715,7 @@ export function JobDashboard({
               >
                 Sort
               </span>
+
               <select
                 value={savedSortMode}
                 onChange={(event) =>
@@ -1432,13 +1738,7 @@ export function JobDashboard({
               </select>
             </label>
 
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span
                 style={{
                   color: "#94a3b8",
@@ -1448,6 +1748,7 @@ export function JobDashboard({
               >
                 Filter
               </span>
+
               <select
                 value={savedFilterMode}
                 onChange={(event) =>
@@ -1465,28 +1766,43 @@ export function JobDashboard({
                 }}
               >
                 <option value="all">All</option>
-                <option value="best">Best Match</option>
-                <option value="top">Top Match</option>
-                <option value="elite">Elite Match</option>
+                <option value="top">Top match 85+</option>
+                <option value="elite">Elite 90+</option>
               </select>
             </label>
 
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                height: 38,
-                padding: "0 12px",
-                borderRadius: 999,
-                background: "rgba(34,197,94,0.1)",
-                border: "1px solid rgba(34,197,94,0.22)",
-                color: "#bbf7d0",
-                fontSize: 12,
-                fontWeight: 900,
-              }}
-            >
-              Minimum score 70+
-            </span>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 12,
+                  fontWeight: 900,
+                }}
+              >
+                Score
+              </span>
+
+              <select
+                value={minimumScore}
+                onChange={(event) =>
+                  setMinimumScore(Number(event.target.value) as ScoreFilterMode)
+                }
+                style={{
+                  height: 38,
+                  borderRadius: 11,
+                  padding: "0 12px",
+                  background: "rgba(2,6,23,0.7)",
+                  color: "#e2e8f0",
+                  border: "1px solid rgba(148,163,184,0.18)",
+                  fontWeight: 800,
+                  outline: "none",
+                }}
+              >
+                <option value={70}>{">= 70"}</option>
+                <option value={80}>{">= 80"}</option>
+                <option value={90}>{">= 90"}</option>
+              </select>
+            </label>
           </div>
         )}
 
@@ -1558,7 +1874,7 @@ export function JobDashboard({
       )}
 
       {!searchLoading && isSavedView && savedBaseJobs.length === 0 && (
-        <EmptySavedJobsState onSearch={onSearch} />
+        <EmptySavedJobsState onSearch={handleSearch} />
       )}
 
       {!searchLoading &&
@@ -1576,6 +1892,7 @@ export function JobDashboard({
             <h3 style={{ margin: 0, fontSize: 22 }}>
               No saved jobs match this filter
             </h3>
+
             <p
               style={{
                 margin: "8px 0 0",
@@ -1583,8 +1900,7 @@ export function JobDashboard({
                 lineHeight: 1.6,
               }}
             >
-              Try switching the filter back to All or lowering the match
-              category.
+              Try switching the filter back to All or lowering the score filter.
             </p>
           </section>
         )}
@@ -1597,12 +1913,64 @@ export function JobDashboard({
         />
       )}
 
-      {!isWorkspaceReset && activeJobs.length > 0 && (
-        <section style={{ display: "grid", gap: isSavedView ? 20 : 22 }}>
+      {!searchLoading && isSavedView && activeJobs.length > 0 && (
+        <>
+          <DecisionSection
+            title="New jobs"
+            eyebrow="Latest search"
+            description="Fresh opportunities found in the latest run. Review these first."
+            jobs={newSavedJobs}
+            section="new"
+            newJobKeys={newSavedJobKeys}
+            priorityRankByKey={priorityRankByKey}
+            analysis={analysis}
+            hoveredId={hoveredId}
+            onHover={onHover}
+            onAnalyzeJob={onAnalyzeJob}
+          />
+
+          <DecisionSection
+            title="Best matches"
+            eyebrow="High confidence"
+            description="Strong fit jobs with score 85+, ordered by your current decision settings."
+            jobs={bestMatchJobs}
+            section="best"
+            newJobKeys={newSavedJobKeys}
+            priorityRankByKey={priorityRankByKey}
+            analysis={analysis}
+            hoveredId={hoveredId}
+            onHover={onHover}
+            onAnalyzeJob={onAnalyzeJob}
+          />
+
+          <DecisionSection
+            title="All saved jobs"
+            eyebrow="Complete shortlist"
+            description="Your full saved list, filtered by score and match quality."
+            jobs={savedVisibleJobs}
+            section="all"
+            isScrollable
+            newJobKeys={newSavedJobKeys}
+            priorityRankByKey={priorityRankByKey}
+            analysis={analysis}
+            hoveredId={hoveredId}
+            onHover={onHover}
+            onAnalyzeJob={onAnalyzeJob}
+          />
+        </>
+      )}
+
+      {!searchLoading && !isSavedView && !isWorkspaceReset && displayedJobs.length > 0 && (
+        <section style={{ display: "grid", gap: 22 }}>
           {displayedJobs.map((job, index) => (
             <JobCard
               key={job.url || job.id || index}
-              job={job}
+              job={
+                {
+                  ...job,
+                  uiDecisionSection: "live",
+                } as UiDecisionJob
+              }
               index={index}
               analysisText={job.id ? analysis[job.id] : undefined}
               hoveredId={hoveredId}

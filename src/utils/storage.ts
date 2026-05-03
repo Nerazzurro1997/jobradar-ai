@@ -72,6 +72,7 @@ export function getSavedJobs(): Job[] {
     }
 
     logSavedSortDebug(cleanedSavedJobs);
+    logShowSavedFinalOrder(cleanedSavedJobs);
 
     return cleanedSavedJobs;
   } catch {
@@ -83,6 +84,7 @@ export function saveJobs(jobs: Job[]) {
   const cleanedSavedJobs = prepareSavedJobsForStorage(jobs);
 
   logSavedSortDebug(cleanedSavedJobs);
+  logShowSavedFinalOrder(cleanedSavedJobs);
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedSavedJobs));
 }

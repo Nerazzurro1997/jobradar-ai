@@ -1,12 +1,18 @@
 import { useCallback, useRef, useState } from "react";
 import type { CvProfile, Job, SearchStats } from "../types";
 import { toBase64 } from "../utils/file";
-import { getSavedJobs, saveJobs } from "../utils/storage";
+import {
+  getSavedJobs,
+  logShowSavedFinalOrder,
+  saveJobs,
+} from "../utils/storage";
 import { analyzeCvAPI, searchJobsAPI, analyzeJobAPI } from "../services/api";
 import {
-  sortJobsByScore,
   getUniqueJobsByUrl,
+  isJobAboveMinimumScore,
   normalizeJobs,
+  prepareSavedJobsForStorage,
+  sortJobsByScore,
 } from "../utils/jobs";
 
 function safeString(value: unknown): string {
@@ -16,7 +22,10 @@ function safeString(value: unknown): string {
 function safeArray(value: unknown, limit = 30): string[] {
   return Array.isArray(value)
     ? value
-        .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+        .filter(
+          (item): item is string =>
+            typeof item === "string" && Boolean(item.trim())
+        )
         .map((item) => item.trim())
         .slice(0, limit)
     : [];
@@ -390,11 +399,46 @@ function recoverProfileFromApiFailure(data: any): CvProfile | null {
   return buildRecoveredProfileFromText(combined);
 }
 
-function mergeSortAndDeduplicateJobs(jobs: Job[]) {
-  const normalizedJobs = normalizeJobs(jobs);
-  const uniqueJobs = getUniqueJobsByUrl(normalizedJobs);
+function buildSavedJobsPipeline({
+  apiJobs,
+  previousSavedJobs,
+}: {
+  apiJobs: Job[];
+  previousSavedJobs: Job[];
+}) {
+  const rawValidApiJobs = apiJobs.filter((job) =>
+    isJobAboveMinimumScore(job, 70)
+  );
+  const normalizedValidApiJobs = normalizeJobs(rawValidApiJobs).filter((job) =>
+    isJobAboveMinimumScore(job, 70)
+  );
 
-  return sortJobsByScore(uniqueJobs);
+  const cleanedPreviousSavedJobs = prepareSavedJobsForStorage(previousSavedJobs);
+  const mergedBeforeDedup = [
+    ...cleanedPreviousSavedJobs,
+    ...normalizedValidApiJobs,
+  ];
+  const mergedAfterDedup = getUniqueJobsByUrl(mergedBeforeDedup);
+  const finalSavedJobs = prepareSavedJobsForStorage(mergedAfterDedup);
+  const latestSearchJobs = sortJobsByScore(normalizedValidApiJobs);
+  const visibleJobs = finalSavedJobs;
+
+  console.log("SAVE PIPELINE DEBUG", {
+    apiJobsCount: apiJobs.length,
+    validAbove70Count: rawValidApiJobs.length,
+    previousSavedCount: cleanedPreviousSavedJobs.length,
+    mergedBeforeDedupCount: mergedBeforeDedup.length,
+    mergedAfterDedupCount: mergedAfterDedup.length,
+    finalSavedCount: finalSavedJobs.length,
+    latestSearchJobsCount: latestSearchJobs.length,
+    visibleJobsCount: visibleJobs.length,
+  });
+
+  return {
+    finalSavedJobs,
+    latestSearchJobs,
+    visibleJobs,
+  };
 }
 
 export function useJobs() {
@@ -404,11 +448,6 @@ export function useJobs() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [stats, setStats] = useState<SearchStats>({});
 
-  /**
-   * Every reset increases this number.
-   * Async requests capture the current value.
-   * If a slow old request finishes after a reset, it is ignored.
-   */
   const resetVersionRef = useRef(0);
   const searchRequestIdRef = useRef(0);
   const profileRequestIdRef = useRef(0);
@@ -508,12 +547,12 @@ export function useJobs() {
         return [];
       }
 
-      const existingSavedJobs = mergeSortAndDeduplicateJobs([
+      const previousSavedJobs = prepareSavedJobsForStorage([
         ...getSavedJobs(),
         ...savedJobs,
       ]);
 
-      const knownUrls = existingSavedJobs
+      const knownUrls = previousSavedJobs
         .map((job) => job.url)
         .filter((url): url is string => Boolean(url));
 
@@ -536,7 +575,18 @@ export function useJobs() {
       }
 
       if (data.noNewJobs) {
-        const sortedSavedJobs = sortJobsByScore(existingSavedJobs);
+        const sortedSavedJobs = prepareSavedJobsForStorage(previousSavedJobs);
+
+        console.log("SAVE PIPELINE DEBUG", {
+          apiJobsCount: 0,
+          validAbove70Count: 0,
+          previousSavedCount: previousSavedJobs.length,
+          mergedBeforeDedupCount: previousSavedJobs.length,
+          mergedAfterDedupCount: sortedSavedJobs.length,
+          finalSavedCount: sortedSavedJobs.length,
+          latestSearchJobsCount: 0,
+          visibleJobsCount: sortedSavedJobs.length,
+        });
 
         setJobs(sortedSavedJobs);
         setStats({
@@ -548,19 +598,18 @@ export function useJobs() {
         return sortedSavedJobs;
       }
 
-      const incomingJobs: Job[] = data.jobs || [];
-      const mergedJobs = getUniqueJobsByUrl(
-        normalizeJobs([
-          ...existingSavedJobs,
-          ...incomingJobs,
-        ])
-      );
-      const updatedSavedJobs = sortJobsByScore(mergedJobs);
+      const apiJobs: Job[] = Array.isArray(data.jobs) ? data.jobs : [];
 
-      setJobs(updatedSavedJobs);
+      const { finalSavedJobs, latestSearchJobs, visibleJobs } =
+        buildSavedJobsPipeline({
+          apiJobs,
+          previousSavedJobs,
+        });
+
+      setJobs(visibleJobs);
 
       try {
-        saveJobs(updatedSavedJobs);
+        saveJobs(finalSavedJobs);
       } catch (error) {
         console.error("Failed to save jobs", error);
       }
@@ -568,10 +617,10 @@ export function useJobs() {
       setStats({
         foundLinks: data.foundLinks,
         scanned: data.scanned,
-        shown: updatedSavedJobs.length,
+        shown: visibleJobs.length,
       });
 
-      return updatedSavedJobs;
+      return finalSavedJobs.length > 0 ? finalSavedJobs : latestSearchJobs;
     } catch (error) {
       console.error("SEARCH JOBS ERROR:", error);
 
@@ -585,6 +634,19 @@ export function useJobs() {
         setSearchLoading(false);
       }
     }
+  }
+
+  function showSavedJobs() {
+    const sortedSavedJobs = prepareSavedJobsForStorage(getSavedJobs());
+
+    logShowSavedFinalOrder(sortedSavedJobs);
+    setJobs(sortedSavedJobs);
+    setStats((prev) => ({
+      ...prev,
+      shown: sortedSavedJobs.length,
+    }));
+
+    return sortedSavedJobs;
   }
 
   async function analyzeJob(job: Job, file: File, profile: CvProfile | null) {
@@ -640,6 +702,7 @@ export function useJobs() {
     searchLoading,
     profileLoading,
     searchJobs,
+    showSavedJobs,
     analyzeJob,
     analyzeCv,
     resetJobs,

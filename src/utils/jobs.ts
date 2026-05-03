@@ -1,7 +1,5 @@
 import type { Job } from "../types";
 
-export const SAVED_JOBS_MIN_SCORE = 70;
-
 type RankedJob = Job & {
   distanceScore?: number | string | null;
   recencyScore?: number | string | null;
@@ -12,6 +10,8 @@ type RankedJob = Job & {
   publishedDate?: string | null;
   savedAt?: number | string | null;
 };
+
+const SAVED_JOBS_MIN_SCORE = 70;
 
 function toNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -50,16 +50,8 @@ export function getJobDisplayScore(job: Job) {
   return getScore(job as RankedJob);
 }
 
-export function isSaveableJob(job: Job) {
-  return getJobDisplayScore(job) >= SAVED_JOBS_MIN_SCORE;
-}
-
-function logSavedFilterDebug(beforeFilterCount: number, afterFilterCount: number) {
-  console.log("SAVED FILTER DEBUG", {
-    beforeFilterCount,
-    afterFilterCount,
-    removedBelow70: beforeFilterCount - afterFilterCount,
-  });
+export function isJobAboveMinimumScore(job: Job, minimumScore = SAVED_JOBS_MIN_SCORE) {
+  return getJobDisplayScore(job) >= minimumScore;
 }
 
 function getDistanceScoreFromLocation(locationValue: unknown) {
@@ -85,7 +77,6 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
   if (location.includes("horgen")) return 96;
   if (location.includes("richterswil")) return 92;
   if (location.includes("thalwil")) return 90;
-  if (location.includes("samstagern")) return 88;
 
   if (
     location.includes("pfäffikon") ||
@@ -107,11 +98,7 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
   if (location.includes("adliswil")) return 78;
   if (location.includes("altendorf")) return 68;
   if (location.includes("lachen")) return 66;
-  if (location.includes("schwerzenbach")) return 65;
   if (location.includes("siebnen")) return 64;
-  if (location.includes("zug")) return 60;
-  if (location.includes("schwyz")) return 58;
-  if (location.includes("winterthur")) return 45;
 
   if (
     location === "zürich" ||
@@ -124,10 +111,14 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
     return 76;
   }
 
+  if (location.includes("samstagern")) return 88;
+  if (location.includes("schwerzenbach")) return 65;
+  if (location.includes("zug")) return 60;
+  if (location.includes("schwyz")) return 58;
+  if (location.includes("winterthur")) return 45;
   if (location.includes("st. gallen") || location.includes("sankt gallen")) {
     return 35;
   }
-
   if (location.includes("tuggen")) return 35;
 
   const otherZurichCantonSignals = [
@@ -161,7 +152,10 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
 }
 
 function getDistanceScore(job: RankedJob) {
-  return getDistanceScoreFromLocation(job.location);
+  const explicitDistanceScore = toNumber(job.distanceScore);
+  return explicitDistanceScore > 0
+    ? explicitDistanceScore
+    : getDistanceScoreFromLocation(job.location);
 }
 
 function getRecencyScore(job: RankedJob) {
@@ -247,7 +241,7 @@ function mergeJob(existingJob: Job, incomingJob: Job) {
     url: incomingJob.url || existingJob.url,
     title: incomingJob.title || existingJob.title,
     company: incomingJob.company || existingJob.company,
-    location: mergedLocation,
+    location: incomingJob.location || existingJob.location,
     snippet: incomingJob.snippet || existingJob.snippet,
     fullDescription:
       incomingJob.fullDescription || existingJob.fullDescription,
@@ -268,6 +262,12 @@ function mergeJob(existingJob: Job, incomingJob: Job) {
     distanceScore: getDistanceScore(mergedDistanceJob),
     requirementMatchScore: bestRequirementMatchScore,
     recencyScore: bestRecencyScore,
+    locationPriority:
+      incomingRankedJob.locationPriority ?? existingRankedJob.locationPriority,
+    matchedLocation:
+      incomingRankedJob.matchedLocation ?? existingRankedJob.matchedLocation,
+    publishedDate:
+      incomingRankedJob.publishedDate ?? existingRankedJob.publishedDate,
     savedAt: existingRankedJob.savedAt ?? incomingRankedJob.savedAt,
   };
 }
@@ -280,15 +280,11 @@ function logSortPreview(sortedJobs: Job[]) {
 
       return {
         title: rankedJob.title,
-        company: rankedJob.company,
         location: rankedJob.location,
         score: getScore(rankedJob),
-        finalScore: rankedJob.finalScore,
         distanceScore: getDistanceScore(rankedJob),
         recencyScore: getRecencyScore(rankedJob),
         requirementMatchScore: getRequirementMatchScore(rankedJob),
-        publishedDate: rankedJob.publishedDate,
-        savedAt: rankedJob.savedAt,
       };
     })
   );
@@ -303,19 +299,15 @@ export function sortJobsByScore(jobs: Job[]) {
     const scoreB = getScore(jobB);
     const scoreDiff = scoreB - scoreA;
 
-    if (Math.abs(scoreDiff) > 1) {
+    if (Math.abs(scoreDiff) >= 10) {
       return scoreDiff;
-    }
-
-    const requirementDiff =
-      getRequirementMatchScore(jobB) - getRequirementMatchScore(jobA);
-    if (Math.abs(requirementDiff) > 6) {
-      return requirementDiff;
     }
 
     const distanceDiff = getDistanceScore(jobB) - getDistanceScore(jobA);
     if (distanceDiff !== 0) return distanceDiff;
 
+    const requirementDiff =
+      getRequirementMatchScore(jobB) - getRequirementMatchScore(jobA);
     if (requirementDiff !== 0) return requirementDiff;
 
     const recencyDiff = getRecencyScore(jobB) - getRecencyScore(jobA);
@@ -383,10 +375,20 @@ export function prepareJobsForDisplay(jobs: Job[]) {
 }
 
 export function prepareSavedJobsForStorage(jobs: Job[]) {
+  const beforeFilterCount = jobs.length;
   const normalizedJobs = normalizeJobs(jobs);
-  const filteredJobs = normalizedJobs.filter(isSaveableJob);
+  const aboveMinimumScoreJobs = normalizedJobs.filter((job) =>
+    isJobAboveMinimumScore(job, SAVED_JOBS_MIN_SCORE)
+  );
+  const removedBelow70 = beforeFilterCount - aboveMinimumScoreJobs.length;
+  const uniqueJobs = getUniqueJobsByUrl(aboveMinimumScoreJobs);
+  const sortedJobs = sortJobsByScore(uniqueJobs);
 
-  logSavedFilterDebug(normalizedJobs.length, filteredJobs.length);
+  console.log("SAVED FILTER DEBUG", {
+    beforeFilterCount,
+    afterFilterCount: aboveMinimumScoreJobs.length,
+    removedBelow70,
+  });
 
-  return sortJobsByScore(getUniqueJobsByUrl(filteredJobs));
+  return sortedJobs;
 }

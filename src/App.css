@@ -22,10 +22,73 @@
 
 .job-card {
   min-width: 0;
+  isolation: isolate;
 }
 
 .job-card * {
   min-width: 0;
+}
+
+.job-card h1,
+.job-card h2,
+.job-card h3,
+.job-card p,
+.job-card span,
+.job-card div {
+  overflow-wrap: anywhere;
+}
+
+.job-card a,
+.job-card button {
+  white-space: nowrap;
+}
+
+.card {
+  min-width: 0;
+}
+
+.card * {
+  min-width: 0;
+}
+
+/* ========================= */
+/* SAVED DECISION ENGINE */
+/* ========================= */
+
+.saved-decision-scroll {
+  scrollbar-gutter: stable;
+}
+
+.saved-decision-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.saved-decision-scroll::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 999px;
+}
+
+.saved-decision-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.65);
+}
+
+/* ========================= */
+/* RESPONSIVE SAFETY */
+/* ========================= */
+
+@media (max-width: 1180px) {
+  .job-card {
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 760px) {
+  .job-card a,
+  .job-card button {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
 }
 
 /* ========================= */

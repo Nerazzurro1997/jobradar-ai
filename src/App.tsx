@@ -437,16 +437,16 @@ export default function App() {
 
       const refreshedSavedJobs = refreshSavedJobs(true);
 
-      if (incomingJobs.length > 0) {
-        setWorkspaceResetAt(null);
-        setShowSavedJobs(false);
-        return;
-      }
-
       if (refreshedSavedJobs.length > 0) {
         setWorkspaceResetAt(null);
         setShowSavedJobs(true);
         logShowSavedFinalOrder(refreshedSavedJobs);
+        return;
+      }
+
+      if (incomingJobs.length > 0) {
+        setWorkspaceResetAt(null);
+        setShowSavedJobs(false);
         return;
       }
 
@@ -477,7 +477,7 @@ export default function App() {
   }
 
   return (
-    <div style={APP_SHELL_STYLE}>
+    <div className="dashboard-shell" style={APP_SHELL_STYLE}>
       <Sidebar
         cvFile={cvFile}
         cvProfile={cvProfile}
