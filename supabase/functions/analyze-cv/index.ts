@@ -62,6 +62,67 @@ function uniqueArray(items: string[], limit = 50) {
   );
 }
 
+function normalizeBlockedFileNameText(value = "") {
+  return value
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getBlockedNonCvReasonFromFileName(fileName: string): string | null {
+  const normalizedFileName = normalizeBlockedFileNameText(fileName);
+  const compactFileName = normalizedFileName.replace(/[^a-z0-9]+/g, "");
+  const blockedTerms = [
+    "arbeitsbestätigung",
+    "arbeitsbestaetigung",
+    "arbeitszeugnis",
+    "arbeitgeberbescheinigung",
+    "employment confirmation",
+    "employment certificate",
+    "work certificate",
+    "attestation de travail",
+    "certificat de travail",
+    "attestato di lavoro",
+    "certificato di lavoro",
+    "conferma di lavoro",
+    "rechnung",
+    "invoice",
+    "fattura",
+    "facture",
+    "vertrag",
+    "contract",
+    "contratto",
+    "contrat",
+    "police",
+    "offerte",
+    "offerte assicurativa",
+    "versicherungsofferte",
+    "stelleninserat",
+    "job ad",
+  ];
+
+  for (const term of blockedTerms) {
+    const normalizedTerm = normalizeBlockedFileNameText(term);
+    const compactTerm = normalizedTerm.replace(/[^a-z0-9]+/g, "");
+
+    if (
+      normalizedFileName.includes(normalizedTerm) ||
+      compactFileName.includes(compactTerm)
+    ) {
+      return `Filename contains non-CV document signal: ${term}`;
+    }
+  }
+
+  return null;
+}
+
 function extractOutputText(data: any): string {
   if (typeof data?.output_text === "string" && data.output_text.trim()) {
     return data.output_text.trim();
@@ -859,6 +920,22 @@ Deno.serve(async (req) => {
       return jsonResponse(
         { success: false, error: "Missing fileName or fileBase64" },
         400
+      );
+    }
+
+    const blockedReason = getBlockedNonCvReasonFromFileName(fileName);
+
+    if (blockedReason) {
+      return jsonResponse(
+        {
+          success: false,
+          errorCode: "NOT_A_CV",
+          error:
+            "The uploaded file does not look like a CV or resume. Please upload your CV.",
+          documentType: "blocked_filename",
+          reason: blockedReason,
+        },
+        200
       );
     }
 
