@@ -473,6 +473,12 @@ export function useJobs() {
       }
 
       if (!data.success || !data.profile) {
+        if (data.errorCode === "NOT_A_CV") {
+          throw new Error(
+            "Questo file non sembra essere un CV. Carica per favore il tuo curriculum."
+          );
+        }
+
         const recoveredProfile = recoverProfileFromApiFailure(data);
 
         if (recoveredProfile) {

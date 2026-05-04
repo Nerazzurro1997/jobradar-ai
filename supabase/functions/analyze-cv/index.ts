@@ -343,6 +343,29 @@ const compactProfileSchema = {
   ],
 };
 
+const cvValidationSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    shouldAnalyze: { type: "boolean" },
+    isCv: { type: "boolean" },
+    confidence: { type: "number" },
+    documentType: { type: "string" },
+    cvSignals: stringArraySchema,
+    nonCvSignals: stringArraySchema,
+    reason: { type: "string" },
+  },
+  required: [
+    "shouldAnalyze",
+    "isCv",
+    "confidence",
+    "documentType",
+    "cvSignals",
+    "nonCvSignals",
+    "reason",
+  ],
+};
+
 async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
   const repairResponse = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -395,6 +418,138 @@ ${brokenText.slice(0, 10000)}
   }
 
   return tryParseJson(repairedText);
+}
+
+async function validateCvDocument(
+  apiKey: string,
+  fileName: string,
+  fileBase64: string
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+
+  let validationResponse: Response;
+
+  try {
+    validationResponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        temperature: 0,
+        max_output_tokens: 700,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "cv_document_validation",
+            strict: true,
+            schema: cvValidationSchema,
+          },
+        },
+        input: [
+          {
+            role: "system",
+            content:
+              "Classify whether the uploaded PDF is a CV/resume/Lebenslauf. Return only valid JSON matching the schema.",
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `
+Validate this uploaded PDF before CV analysis.
+
+Use the filename, the first visible parts of the PDF content, and the document structure.
+Accept CV/resume documents in German, English, Italian, and French.
+
+Strong CV signals include:
+- German: Lebenslauf, CV, Bewerbung, Berufserfahrung, Ausbildung, Fähigkeiten, Kenntnisse, Sprachen
+- English: CV, resume, work experience, education, skills, employment history, languages
+- Italian: curriculum, CV, esperienze lavorative, formazione, competenze, lingue
+- French: CV, curriculum vitae, expérience professionnelle, formation, compétences, langues
+- Structured candidate profile with personal/contact info plus work experience and education/skills.
+
+Block documents that look like:
+- invoices, Rechnungen, fatture
+- contracts, Verträge, contratti
+- insurance offers, Versicherungsofferten, offerte assicurative
+- letters, Briefe, lettere
+- job ads, Stelleninserate, annunci di lavoro
+- standalone certificates without a CV structure
+- reports, rapporti, generic business documents
+
+Decision rules:
+- shouldAnalyze must be true when the document is probably a CV or resume.
+- If uncertain but there are strong CV signals, set shouldAnalyze true.
+- If uncertain and it looks like an invoice, contract, offer, letter, job ad, certificate-only, report, or generic document, set shouldAnalyze false.
+- Do not rely only on the filename.
+- confidence must be between 0 and 1.
+
+Filename: ${fileName}
+`.trim(),
+              },
+              {
+                type: "input_file",
+                filename: fileName,
+                file_data: `data:application/pdf;base64,${fileBase64}`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const parsedValidation = await parseOpenAiResponse(validationResponse);
+
+  if (!parsedValidation.isJson) {
+    return {
+      ok: false,
+      error: "OpenAI returned non-JSON CV validation response",
+      details: parsedValidation.rawText.slice(0, 1200),
+    };
+  }
+
+  const validationData = parsedValidation.data;
+
+  if (!validationResponse.ok) {
+    return {
+      ok: false,
+      error: validationData?.error?.message || "OpenAI CV validation failed",
+      details: validationData?.error || validationData,
+    };
+  }
+
+  const validationText = extractOutputText(validationData);
+  const validation = validationText ? tryParseJson(validationText) : null;
+
+  if (!validation || typeof validation !== "object") {
+    return {
+      ok: false,
+      error: "Could not parse CV validation response",
+      details: validationText || JSON.stringify(validationData).slice(0, 1500),
+    };
+  }
+
+  return {
+    ok: true,
+    validation: {
+      shouldAnalyze: Boolean(validation.shouldAnalyze),
+      isCv: Boolean(validation.isCv),
+      confidence: safeNumber(validation.confidence) ?? 0,
+      documentType: safeString(validation.documentType),
+      cvSignals: safeArray(validation.cvSignals, 12),
+      nonCvSignals: safeArray(validation.nonCvSignals, 12),
+      reason: safeString(validation.reason),
+    },
+  };
 }
 
 function normalizeProfile(raw: any) {
@@ -669,6 +824,35 @@ Deno.serve(async (req) => {
       return jsonResponse(
         { success: false, error: "OPENAI_API_KEY missing in Supabase Secrets" },
         500
+      );
+    }
+
+    const cvValidationResult = await validateCvDocument(
+      apiKey,
+      fileName,
+      fileBase64
+    );
+
+    if (!cvValidationResult.ok) {
+      return jsonResponse(
+        {
+          success: false,
+          error: cvValidationResult.error,
+          details: cvValidationResult.details,
+        },
+        200
+      );
+    }
+
+    if (!cvValidationResult.validation.shouldAnalyze) {
+      return jsonResponse(
+        {
+          success: false,
+          errorCode: "NOT_A_CV",
+          error:
+            "The uploaded file does not look like a CV or resume. Please upload your CV.",
+        },
+        200
       );
     }
 
