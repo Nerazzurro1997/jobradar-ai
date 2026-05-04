@@ -254,6 +254,130 @@ function tryParseJson(text: string) {
   }
 }
 
+function extractJsonFromText(text = "") {
+  const cleaned = cleanJsonText(text);
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
+
+  if (first === -1 || last === -1 || last <= first) {
+    return null;
+  }
+
+  const candidate = cleaned.slice(first, last + 1);
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    // try basic cleanup below
+  }
+
+  try {
+    return JSON.parse(
+      candidate
+        .replace(/,\s*}/g, "}")
+        .replace(/,\s*]/g, "]")
+        .replace(/\u0000/g, "")
+    );
+  } catch {
+    return null;
+  }
+}
+
+function extractBalancedJsonObject(text: string, startIndex: number) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < text.length; index++) {
+    const char = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (char === "{") depth++;
+
+    if (char === "}") {
+      depth--;
+
+      if (depth === 0) {
+        return text.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return "";
+}
+
+function extractStringFieldFromText(text: string, fieldName: string) {
+  const match = text.match(new RegExp(`"${fieldName}"\\s*:\\s*"([^"]*)"`, "i"));
+  return match ? match[1].trim() : "";
+}
+
+function extractNumberFieldFromText(text: string, fieldName: string) {
+  const match = text.match(
+    new RegExp(`"${fieldName}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, "i")
+  );
+
+  if (!match) return null;
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractDocumentValidationFromText(text = "") {
+  const cleaned = cleanJsonText(text);
+  const lower = cleaned.toLowerCase();
+  const keyIndex = lower.indexOf("documentvalidation");
+  const searchStart = keyIndex >= 0 ? keyIndex : 0;
+  const braceIndex = cleaned.indexOf("{", searchStart);
+
+  if (braceIndex >= 0) {
+    const validationText = extractBalancedJsonObject(cleaned, braceIndex);
+    const parsedValidation = validationText
+      ? extractJsonFromText(validationText)
+      : null;
+
+    if (
+      parsedValidation &&
+      typeof parsedValidation.shouldAnalyze === "boolean"
+    ) {
+      return parsedValidation;
+    }
+  }
+
+  const windowText = cleaned.slice(searchStart, searchStart + 2000);
+  const shouldAnalyzeMatch = windowText.match(
+    /"shouldAnalyze"\s*:\s*(true|false)/i
+  );
+
+  if (!shouldAnalyzeMatch) {
+    return null;
+  }
+
+  return {
+    shouldAnalyze: shouldAnalyzeMatch[1].toLowerCase() === "true",
+    documentType: extractStringFieldFromText(windowText, "documentType"),
+    confidence: extractNumberFieldFromText(windowText, "confidence"),
+    cvSignals: [],
+    nonCvSignals: [],
+    reason: extractStringFieldFromText(windowText, "reason"),
+  };
+}
+
 function hasPotentialAnalysisJson(text = "") {
   const cleaned = cleanJsonText(text).toLowerCase();
 
@@ -1089,6 +1213,21 @@ Summaries:
     }
 
     let rawAnalysis = tryParseJson(outputText);
+
+    if (!rawAnalysis) {
+      rawAnalysis = extractJsonFromText(outputText);
+    }
+
+    if (!rawAnalysis) {
+      const recoveredValidation = extractDocumentValidationFromText(outputText);
+
+      if (recoveredValidation?.shouldAnalyze === false) {
+        rawAnalysis = {
+          documentValidation: recoveredValidation,
+          profile: null,
+        };
+      }
+    }
 
     if (!rawAnalysis) {
       if (hasPotentialAnalysisJson(outputText)) {
