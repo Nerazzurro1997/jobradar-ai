@@ -1429,6 +1429,11 @@ Summaries:
       );
     }
 
+    console.info("CV analysis parsed", {
+      hasDocumentValidation: Boolean(rawAnalysis?.documentValidation),
+      hasProfile: Boolean(rawAnalysis?.profile),
+    });
+
     const documentValidation = rawAnalysis?.documentValidation;
 
     if (
@@ -1485,8 +1490,17 @@ Summaries:
 
     const profile = normalizeProfile(rawAnalysis.profile);
 
+    console.info("CV profile normalized", {
+      fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+    });
+
     if (fileHash) {
+      console.info("CV cache save before response", {
+        fileHashPrefix: fileHash.slice(0, 12),
+      });
       await saveCachedCvProfile(fileHash, profile, documentValidation);
+    } else {
+      console.warn("CV cache save skipped: missing fileHash");
     }
 
     return jsonResponse({
