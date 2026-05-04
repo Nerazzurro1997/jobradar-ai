@@ -1,11 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { CvProfile, Job, SearchStats } from "../types";
 import { toBase64 } from "../utils/file";
-import {
-  getSavedJobs,
-  logShowSavedFinalOrder,
-  saveJobs,
-} from "../utils/storage";
+import { getSavedJobs, saveJobs } from "../utils/storage";
 import { analyzeCvAPI, searchJobsAPI, analyzeJobAPI } from "../services/api";
 import {
   getUniqueJobsByUrl,
@@ -423,17 +419,6 @@ function buildSavedJobsPipeline({
   const latestSearchJobs = sortJobsByScore(normalizedValidApiJobs);
   const visibleJobs = finalSavedJobs;
 
-  console.log("SAVE PIPELINE DEBUG", {
-    apiJobsCount: apiJobs.length,
-    validAbove70Count: rawValidApiJobs.length,
-    previousSavedCount: cleanedPreviousSavedJobs.length,
-    mergedBeforeDedupCount: mergedBeforeDedup.length,
-    mergedAfterDedupCount: mergedAfterDedup.length,
-    finalSavedCount: finalSavedJobs.length,
-    latestSearchJobsCount: latestSearchJobs.length,
-    visibleJobsCount: visibleJobs.length,
-  });
-
   return {
     finalSavedJobs,
     latestSearchJobs,
@@ -483,8 +468,6 @@ export function useJobs() {
       const base64 = await toBase64(file);
       const data = await analyzeCvAPI(base64, file.name);
 
-      console.log("ANALYZE CV RESPONSE:", data);
-
       if (!isCurrentProfileRequest()) {
         throw new Error("CV analysis was reset before completion.");
       }
@@ -493,11 +476,6 @@ export function useJobs() {
         const recoveredProfile = recoverProfileFromApiFailure(data);
 
         if (recoveredProfile) {
-          console.warn(
-            "CV profile recovered from partial AI response:",
-            recoveredProfile
-          );
-
           return recoveredProfile;
         }
 
@@ -563,8 +541,6 @@ export function useJobs() {
         knownUrls
       );
 
-      console.log("SEARCH JOBS RESPONSE:", data);
-
       if (!isCurrentSearchRequest()) {
         return [];
       }
@@ -576,17 +552,6 @@ export function useJobs() {
 
       if (data.noNewJobs) {
         const sortedSavedJobs = prepareSavedJobsForStorage(previousSavedJobs);
-
-        console.log("SAVE PIPELINE DEBUG", {
-          apiJobsCount: 0,
-          validAbove70Count: 0,
-          previousSavedCount: previousSavedJobs.length,
-          mergedBeforeDedupCount: previousSavedJobs.length,
-          mergedAfterDedupCount: sortedSavedJobs.length,
-          finalSavedCount: sortedSavedJobs.length,
-          latestSearchJobsCount: 0,
-          visibleJobsCount: sortedSavedJobs.length,
-        });
 
         setJobs(sortedSavedJobs);
         setStats({
@@ -639,7 +604,6 @@ export function useJobs() {
   function showSavedJobs() {
     const sortedSavedJobs = prepareSavedJobsForStorage(getSavedJobs());
 
-    logShowSavedFinalOrder(sortedSavedJobs);
     setJobs(sortedSavedJobs);
     setStats((prev) => ({
       ...prev,
@@ -664,8 +628,6 @@ export function useJobs() {
     try {
       const base64 = await toBase64(file);
       const data = await analyzeJobAPI(base64, file.name, profile, job);
-
-      console.log("ANALYZE JOB RESPONSE:", data);
 
       if (!isCurrentResetVersion(resetVersion)) {
         return;

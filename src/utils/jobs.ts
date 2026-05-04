@@ -430,24 +430,6 @@ function mergeJob(existingJob: Job, incomingJob: Job) {
   };
 }
 
-function logSortPreview(sortedJobs: Job[]) {
-  console.log(
-    "JOB SORT DEBUG:",
-    sortedJobs.slice(0, 10).map((job) => {
-      const rankedJob = job as RankedJob;
-
-      return {
-        title: rankedJob.title,
-        location: rankedJob.location,
-        score: getScore(rankedJob),
-        distanceScore: getDistanceScore(rankedJob),
-        recencyScore: getRecencyScore(rankedJob),
-        requirementMatchScore: getRequirementMatchScore(rankedJob),
-      };
-    })
-  );
-}
-
 function getUniqueJobMapKey(uniqueJobs: Map<string, Job>, job: Job) {
   const key = getJobKey(job);
 
@@ -509,8 +491,6 @@ export function sortJobsByScore(jobs: Job[]) {
     return scoreDiff;
   });
 
-  logSortPreview(sortedJobs);
-
   return sortedJobs;
 }
 
@@ -561,20 +541,12 @@ export function prepareJobsForDisplay(jobs: Job[]) {
 }
 
 export function prepareSavedJobsForStorage(jobs: Job[]) {
-  const beforeFilterCount = jobs.length;
   const normalizedJobs = normalizeJobs(jobs);
   const aboveMinimumScoreJobs = normalizedJobs.filter((job) =>
     isJobAboveMinimumScore(job, SAVED_JOBS_MIN_SCORE)
   );
-  const removedBelow70 = beforeFilterCount - aboveMinimumScoreJobs.length;
   const uniqueJobs = getUniqueJobsByUrl(aboveMinimumScoreJobs);
   const sortedJobs = sortJobsByScore(uniqueJobs);
-
-  console.log("SAVED FILTER DEBUG", {
-    beforeFilterCount,
-    afterFilterCount: aboveMinimumScoreJobs.length,
-    removedBelow70,
-  });
 
   return sortedJobs;
 }

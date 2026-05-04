@@ -2,16 +2,6 @@ import type { Job } from "../types";
 import { prepareSavedJobsForStorage } from "./jobs";
 
 const STORAGE_KEY = "jobradar_saved_jobs";
-const DEBUG_STORAGE_KEY = "jobradar_debug_storage";
-
-type SavedDebugJob = Job & {
-  finalScore?: number | string | null;
-  distanceScore?: number | string | null;
-  requirementMatchScore?: number | string | null;
-  recencyScore?: number | string | null;
-  publishedDate?: string | null;
-  savedAt?: number | string | null;
-};
 
 function getStorage(): Storage | null {
   if (typeof window === "undefined") return null;
@@ -33,45 +23,6 @@ function normalizeStoredJobs(value: unknown): Job[] {
   return value.filter(isRecord) as Job[];
 }
 
-function isStorageDebugEnabled() {
-  return getStorage()?.getItem(DEBUG_STORAGE_KEY) === "1";
-}
-
-function getSavedJobDebugPayload(job: Job) {
-  const savedJob = job as SavedDebugJob;
-
-  return {
-    title: savedJob.title,
-    company: savedJob.company,
-    location: savedJob.location,
-    score: savedJob.score,
-    finalScore: savedJob.finalScore,
-    distanceScore: savedJob.distanceScore,
-    requirementMatchScore: savedJob.requirementMatchScore,
-    recencyScore: savedJob.recencyScore,
-    publishedDate: savedJob.publishedDate,
-    savedAt: savedJob.savedAt,
-  };
-}
-
-function logSavedSortDebug(sortedSavedJobs: Job[]) {
-  if (!isStorageDebugEnabled()) return;
-
-  console.log(
-    "SAVED SORT DEBUG",
-    sortedSavedJobs.slice(0, 10).map(getSavedJobDebugPayload)
-  );
-}
-
-export function logShowSavedFinalOrder(jobs: Job[]) {
-  if (!isStorageDebugEnabled()) return;
-
-  console.log(
-    "SHOW SAVED FINAL ORDER",
-    jobs.slice(0, 20).map(getSavedJobDebugPayload)
-  );
-}
-
 export function getSavedJobs(): Job[] {
   const storage = getStorage();
   if (!storage) return [];
@@ -87,8 +38,6 @@ export function getSavedJobs(): Job[] {
       storage.setItem(STORAGE_KEY, JSON.stringify(cleanedSavedJobs));
     }
 
-    logSavedSortDebug(cleanedSavedJobs);
-
     return cleanedSavedJobs;
   } catch (error) {
     console.error("Failed to read saved jobs", error);
@@ -102,8 +51,6 @@ export function saveJobs(jobs: Job[]) {
 
   try {
     const cleanedSavedJobs = prepareSavedJobsForStorage(jobs);
-
-    logSavedSortDebug(cleanedSavedJobs);
 
     storage.setItem(STORAGE_KEY, JSON.stringify(cleanedSavedJobs));
   } catch (error) {
