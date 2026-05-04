@@ -490,6 +490,7 @@ export default function App() {
       setCvProfile(profile);
       setCvProfileFileMeta(fileMeta);
       writeStoredCvProfile(profile, fileMeta);
+      setWorkspaceResetAt(null);
 
       return profile;
     } catch (error) {

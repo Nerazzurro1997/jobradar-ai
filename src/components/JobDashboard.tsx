@@ -145,6 +145,19 @@ function removeStoredCvProfile() {
   }
 }
 
+function removeStoredSearchUiState() {
+  const storage = getStorage();
+  if (!storage) return;
+
+  try {
+    storage.removeItem(LAST_SEARCH_UI_KEY);
+    storage.removeItem(NEW_SAVED_JOB_KEYS_KEY);
+    storage.removeItem(LATEST_SEARCH_JOB_KEYS_KEY);
+  } catch (error) {
+    console.error("Failed to remove stored search UI state", error);
+  }
+}
+
 function readNumberFromStorage(key: string) {
   const rawValue = getStorage()?.getItem(key);
   const parsed = rawValue ? Number(rawValue) : 0;
@@ -1413,11 +1426,14 @@ export function JobDashboard({
   );
 
   const canClearCache =
-    !isWorkspaceReset &&
-    (savedJobs.length > 0 ||
-      jobs.length > 0 ||
-      Boolean(cvFile) ||
-      Boolean(cvProfile));
+    savedJobs.length > 0 ||
+    jobs.length > 0 ||
+    Boolean(cvFile) ||
+    Boolean(cvProfile) ||
+    lastSearchAt > 0 ||
+    newSavedJobKeys.size > 0 ||
+    latestSearchJobKeys.size > 0 ||
+    Boolean(getStorage()?.getItem(CV_PROFILE_KEY));
 
   const clearFileInput = useCallback(() => {
     if (fileInputRef.current) {
@@ -1434,6 +1450,10 @@ export function JobDashboard({
   useEffect(() => {
     if (workspaceResetAt) {
       closeOpenAiAnalysis();
+      setLastSearchAt(0);
+      setNewSavedJobKeys(new Set());
+      setLatestSearchJobKeys(new Set());
+      removeStoredSearchUiState();
     }
   }, [workspaceResetAt]);
 

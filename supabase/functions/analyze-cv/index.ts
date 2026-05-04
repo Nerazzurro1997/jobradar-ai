@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const CACHE_VERSION = "analyze-cv-v3";
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -60,6 +62,153 @@ function uniqueArray(items: string[], limit = 50) {
     0,
     limit
   );
+}
+
+async function calculateFileHash(fileBase64: string) {
+  const payload = new TextEncoder().encode(`${CACHE_VERSION}:${fileBase64}`);
+  const digest = await crypto.subtle.digest("SHA-256", payload);
+
+  const fileHash = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+  console.info("CV cache file hash", {
+    fileHashPrefix: fileHash.slice(0, 12),
+  });
+
+  return fileHash;
+}
+
+function getCacheConfig() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  const hasSupabaseUrl = Boolean(supabaseUrl);
+  const hasServiceRoleKey = Boolean(serviceRoleKey);
+
+  console.info("CV cache config", {
+    hasSupabaseUrl,
+    hasServiceRoleKey,
+  });
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.warn(
+      "CV cache disabled: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+    );
+    return null;
+  }
+
+  return {
+    supabaseUrl: supabaseUrl.replace(/\/$/, ""),
+    serviceRoleKey,
+  };
+}
+
+async function getCachedCvProfile(fileHash: string) {
+  const fileHashPrefix = fileHash.slice(0, 12);
+
+  console.info("CV cache lookup start", {
+    fileHashPrefix,
+    cacheVersion: CACHE_VERSION,
+  });
+
+  const cacheConfig = getCacheConfig();
+
+  if (!cacheConfig) {
+    return null;
+  }
+
+  try {
+    const url = new URL(`${cacheConfig.supabaseUrl}/rest/v1/cv_profile_cache`);
+
+    url.searchParams.set("file_hash", `eq.${fileHash}`);
+    url.searchParams.set("cache_version", `eq.${CACHE_VERSION}`);
+    url.searchParams.set("select", "profile,document_validation");
+    url.searchParams.set("limit", "1");
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        apikey: cacheConfig.serviceRoleKey,
+        Authorization: `Bearer ${cacheConfig.serviceRoleKey}`,
+      },
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.warn("CV profile cache lookup failed", {
+        status: response.status,
+        body: responseBody.slice(0, 500),
+      });
+      return null;
+    }
+
+    const rows = await response.json();
+    const row = Array.isArray(rows) ? rows[0] : null;
+
+    if (row?.profile) {
+      console.info("CV cache hit", { fileHashPrefix });
+      return row;
+    }
+
+    console.info("CV cache miss", { fileHashPrefix });
+    return null;
+  } catch (error) {
+    console.warn("CV profile cache lookup failed", error);
+    return null;
+  }
+}
+
+async function saveCachedCvProfile(
+  fileHash: string,
+  profile: unknown,
+  documentValidation: unknown
+) {
+  const fileHashPrefix = fileHash.slice(0, 12);
+
+  console.info("CV cache save start", {
+    fileHashPrefix,
+    cacheVersion: CACHE_VERSION,
+  });
+
+  const cacheConfig = getCacheConfig();
+
+  if (!cacheConfig) {
+    return;
+  }
+
+  try {
+    const url = new URL(`${cacheConfig.supabaseUrl}/rest/v1/cv_profile_cache`);
+
+    url.searchParams.set("on_conflict", "file_hash,cache_version");
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        apikey: cacheConfig.serviceRoleKey,
+        Authorization: `Bearer ${cacheConfig.serviceRoleKey}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        file_hash: fileHash,
+        cache_version: CACHE_VERSION,
+        profile,
+        document_validation: documentValidation,
+      }),
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.warn("CV profile cache save failed", {
+        status: response.status,
+        body: responseBody.slice(0, 500),
+      });
+      return;
+    }
+
+    console.info("CV cache save success", { fileHashPrefix });
+  } catch (error) {
+    console.warn("CV profile cache save failed", error);
+  }
 }
 
 function normalizeBlockedFileNameText(value = "") {
@@ -993,6 +1142,33 @@ Deno.serve(async (req) => {
       );
     }
 
+    let fileHash = "";
+
+    try {
+      fileHash = await calculateFileHash(fileBase64);
+
+      const cachedRow = await getCachedCvProfile(fileHash);
+      const cachedProfile = cachedRow?.profile
+        ? normalizeProfile(cachedRow.profile)
+        : null;
+
+      if (cachedProfile) {
+        return jsonResponse({
+          success: true,
+          profile: cachedProfile,
+          meta: {
+            model: "gpt-4.1-mini",
+            profileVersion: "compact-v2-stable",
+            extractedAt: new Date().toISOString(),
+            cacheHit: true,
+            fileHashPrefix: fileHash.slice(0, 12),
+          },
+        });
+      }
+    } catch (error) {
+      console.warn("CV profile cache setup failed", error);
+    }
+
     const apiKey = Deno.env.get("OPENAI_API_KEY");
 
     if (!apiKey) {
@@ -1309,6 +1485,10 @@ Summaries:
 
     const profile = normalizeProfile(rawAnalysis.profile);
 
+    if (fileHash) {
+      await saveCachedCvProfile(fileHash, profile, documentValidation);
+    }
+
     return jsonResponse({
       success: true,
       profile,
@@ -1316,6 +1496,8 @@ Summaries:
         model: openAiData?.model || "gpt-4.1-mini",
         profileVersion: "compact-v2-stable",
         extractedAt: new Date().toISOString(),
+        cacheHit: false,
+        fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
       },
     });
   } catch (error) {
