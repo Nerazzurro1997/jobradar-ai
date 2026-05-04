@@ -19,6 +19,11 @@ const DEFAULT_DANGER_DETAILS = [
   "Current CV selection",
 ];
 
+function getVisibleDetails(details: string[] | undefined, danger: boolean) {
+  if (details && details.length > 0) return details;
+  return danger ? DEFAULT_DANGER_DETAILS : [];
+}
+
 export function ConfirmDialog({
   open,
   title,
@@ -33,12 +38,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const visibleDetails =
-    details && details.length > 0
-      ? details
-      : danger
-        ? DEFAULT_DANGER_DETAILS
-        : [];
+  const visibleDetails = getVisibleDetails(details, danger);
 
   useEffect(() => {
     if (!open || typeof window === "undefined") return;

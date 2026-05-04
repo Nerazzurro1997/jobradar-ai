@@ -22,6 +22,14 @@ type Section = {
   bullets: string[];
 };
 
+type SectionConfig = {
+  icon: string;
+  title: string;
+  color: string;
+  background: string;
+  border: string;
+};
+
 function cleanAnalysisText(text: string) {
   return text
     .replace(/\*\*/g, "")
@@ -60,16 +68,7 @@ function isStandaloneScoreLine(line: string) {
 }
 
 function getSectionConfig(kind: SectionKind) {
-  const configs: Record<
-    SectionKind,
-    {
-      icon: string;
-      title: string;
-      color: string;
-      background: string;
-      border: string;
-    }
-  > = {
+  const configs: Record<SectionKind, SectionConfig> = {
     score: {
       icon: "📊",
       title: "Match Score",
