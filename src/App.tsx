@@ -60,6 +60,79 @@ function getCvFileMeta(file: File): CvFileMeta {
   };
 }
 
+function normalizeBlockedFileNameText(value = "") {
+  return value
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getBlockedNonCvReasonFromFileName(fileName: string): string | null {
+  const normalizedFileName = normalizeBlockedFileNameText(fileName);
+  const compactFileName = normalizedFileName.replace(/[^a-z0-9]+/g, "");
+  const blockedTerms = [
+    "arbeitsbestätigung",
+    "arbeitsbestaetigung",
+    "arbeitszeugnis",
+    "arbeitgeberbescheinigung",
+    "employment confirmation",
+    "employment certificate",
+    "work certificate",
+    "attestation de travail",
+    "certificat de travail",
+    "attestato di lavoro",
+    "certificato di lavoro",
+    "conferma di lavoro",
+    "rechnung",
+    "invoice",
+    "fattura",
+    "facture",
+    "vertrag",
+    "contract",
+    "contratto",
+    "contrat",
+    "police",
+    "offerte",
+    "offerte assicurativa",
+    "versicherungsofferte",
+    "stelleninserat",
+    "job ad",
+  ];
+
+  for (const term of blockedTerms) {
+    const normalizedTerm = normalizeBlockedFileNameText(term);
+    const compactTerm = normalizedTerm.replace(/[^a-z0-9]+/g, "");
+
+    if (
+      normalizedFileName.includes(normalizedTerm) ||
+      compactFileName.includes(compactTerm)
+    ) {
+      return `Filename contains non-CV document signal: ${term}`;
+    }
+  }
+
+  return null;
+}
+
+function getNonCvUploadMessage() {
+  return "Questo file non sembra essere un CV. Carica per favore il tuo curriculum.";
+}
+
+function isRecoveredPartialCvProfile(profile: CvProfile | null | undefined) {
+  return Boolean(
+    profile?.profileSummary
+      ?.toLowerCase()
+      .includes("cv profile recovered from partial ai response")
+  );
+}
+
 function isCvFileMeta(value: unknown): value is CvFileMeta {
   if (!value || typeof value !== "object") return false;
 
@@ -109,15 +182,30 @@ function readStoredCvProfile(): StoredCvProfile | null {
         return null;
       }
 
+      const fileMeta = isCvFileMeta(stored.fileMeta) ? stored.fileMeta : null;
+
+      if (
+        isRecoveredPartialCvProfile(stored.profile as CvProfile) ||
+        (fileMeta?.name && getBlockedNonCvReasonFromFileName(fileMeta.name))
+      ) {
+        storage.removeItem(CV_PROFILE_KEY);
+        return null;
+      }
+
       return {
         version: 1,
         profile: stored.profile as CvProfile,
-        fileMeta: isCvFileMeta(stored.fileMeta) ? stored.fileMeta : null,
+        fileMeta,
         savedAt:
           typeof stored.savedAt === "string"
             ? stored.savedAt
             : new Date().toISOString(),
       };
+    }
+
+    if (isRecoveredPartialCvProfile(parsed as CvProfile)) {
+      storage.removeItem(CV_PROFILE_KEY);
+      return null;
     }
 
     return {
@@ -138,6 +226,8 @@ function writeStoredCvProfile(
 ): void {
   const storage = getStorage();
   if (!storage) return;
+  if (isRecoveredPartialCvProfile(profile)) return;
+  if (fileMeta?.name && getBlockedNonCvReasonFromFileName(fileMeta.name)) return;
 
   const payload: StoredCvProfile = {
     version: 1,
@@ -224,6 +314,14 @@ export default function App() {
   useEffect(() => {
     if (!cvFile) return;
 
+    if (getBlockedNonCvReasonFromFileName(cvFile.name)) {
+      removeStoredCvProfile();
+      setCvFile(null);
+      setCvProfile(null);
+      setCvProfileFileMeta(null);
+      return;
+    }
+
     const selectedFileMeta = getCvFileMeta(cvFile);
 
     if (isSameCvFileMeta(cvProfileFileMeta, selectedFileMeta)) {
@@ -252,6 +350,13 @@ export default function App() {
       return;
     }
 
+    if (isRecoveredPartialCvProfile(cvProfile)) {
+      removeStoredCvProfile();
+      setCvProfile(null);
+      setCvProfileFileMeta(null);
+      return;
+    }
+
     writeStoredCvProfile(cvProfile, cvProfileFileMeta);
   }, [cvProfile, cvProfileFileMeta]);
 
@@ -262,6 +367,14 @@ export default function App() {
           typeof value === "function"
             ? (value as (currentFile: File | null) => File | null)(currentFile)
             : value;
+
+        if (nextFile && getBlockedNonCvReasonFromFileName(nextFile.name)) {
+          removeStoredCvProfile();
+          setCvProfile(null);
+          setCvProfileFileMeta(null);
+          window.alert(getNonCvUploadMessage());
+          return null;
+        }
 
         if (!nextFile) {
           setCvProfile(null);
@@ -362,6 +475,14 @@ export default function App() {
       throw new Error("No CV file selected");
     }
 
+    if (getBlockedNonCvReasonFromFileName(file.name)) {
+      removeStoredCvProfile();
+      setCvFile(null);
+      setCvProfile(null);
+      setCvProfileFileMeta(null);
+      throw new Error(getNonCvUploadMessage());
+    }
+
     try {
       const profile = await analyzeCvFromHook(file);
       const fileMeta = getCvFileMeta(file);
@@ -389,6 +510,14 @@ export default function App() {
   }
 
   async function getProfileForFile(file: File): Promise<CvProfile> {
+    if (getBlockedNonCvReasonFromFileName(file.name)) {
+      removeStoredCvProfile();
+      setCvFile(null);
+      setCvProfile(null);
+      setCvProfileFileMeta(null);
+      throw new Error(getNonCvUploadMessage());
+    }
+
     const currentFileMeta = getCvFileMeta(file);
 
     if (

@@ -516,6 +516,127 @@ function hasBlockedDocumentTypeSignal(
   ].some((term) => text.includes(term));
 }
 
+function parseBooleanFieldFromText(text: string, fieldName: string) {
+  const match = text.match(
+    new RegExp(`"${fieldName}"\\s*:\\s*(true|false)`, "i")
+  );
+
+  return match ? match[1].toLowerCase() === "true" : null;
+}
+
+function parseNumberFieldFromText(text: string, fieldName: string) {
+  const match = text.match(
+    new RegExp(`"${fieldName}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, "i")
+  );
+
+  if (!match) return null;
+
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseStringFieldFromText(text: string, fieldName: string) {
+  const match = text.match(new RegExp(`"${fieldName}"\\s*:\\s*"([^"]*)"`, "i"));
+  return match ? match[1].trim() : "";
+}
+
+function normalizeCvValidation(raw: any) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const hasValidationShape =
+    typeof raw.shouldAnalyze === "boolean" ||
+    typeof raw.isCv === "boolean" ||
+    typeof raw.hasClearCvStructure === "boolean";
+
+  if (!hasValidationShape) return null;
+
+  const shouldAnalyze = Boolean(raw.shouldAnalyze);
+  const isCv = Boolean(raw.isCv);
+  const hasClearCvStructure = Boolean(raw.hasClearCvStructure);
+
+  return {
+    shouldAnalyze,
+    isCv,
+    hasClearCvStructure,
+    confidence: safeNumber(raw.confidence) ?? 0,
+    documentType: safeString(raw.documentType),
+    cvSignals: safeArray(raw.cvSignals, 12),
+    nonCvSignals: safeArray(raw.nonCvSignals, 12),
+    reason: safeString(raw.reason),
+  };
+}
+
+function findCvValidationObject(value: any, depth = 0): any | null {
+  if (!value || depth > 5) return null;
+
+  const normalized = normalizeCvValidation(value);
+  if (normalized) return normalized;
+
+  if (typeof value === "string") {
+    const parsed = tryParseJson(value);
+    return parsed ? findCvValidationObject(parsed, depth + 1) : null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findCvValidationObject(item, depth + 1);
+      if (found) return found;
+    }
+
+    return null;
+  }
+
+  if (typeof value === "object") {
+    for (const item of Object.values(value)) {
+      const found = findCvValidationObject(item, depth + 1);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+function parseCvValidationFromText(text: string) {
+  const parsed = tryParseJson(text);
+  const parsedValidation = findCvValidationObject(parsed);
+
+  if (parsedValidation) return parsedValidation;
+
+  const shouldAnalyze = parseBooleanFieldFromText(text, "shouldAnalyze");
+  const isCv = parseBooleanFieldFromText(text, "isCv");
+  const hasClearCvStructure = parseBooleanFieldFromText(
+    text,
+    "hasClearCvStructure"
+  );
+
+  if (
+    shouldAnalyze === null &&
+    isCv === null &&
+    hasClearCvStructure === null
+  ) {
+    return null;
+  }
+
+  return {
+    shouldAnalyze: Boolean(shouldAnalyze),
+    isCv: Boolean(isCv ?? shouldAnalyze),
+    hasClearCvStructure: Boolean(hasClearCvStructure ?? shouldAnalyze),
+    confidence: parseNumberFieldFromText(text, "confidence") ?? 0,
+    documentType: parseStringFieldFromText(text, "documentType"),
+    cvSignals: [],
+    nonCvSignals: [],
+    reason: parseStringFieldFromText(text, "reason"),
+  };
+}
+
+function parseCvValidationFromOpenAiData(data: any) {
+  const directValidation = findCvValidationObject(data);
+  if (directValidation) return directValidation;
+
+  const validationText = extractOutputText(data);
+  return validationText ? parseCvValidationFromText(validationText) : null;
+}
+
 async function validateCvDocument(
   apiKey: string,
   fileName: string,
@@ -632,7 +753,7 @@ Filename: ${fileName}
   }
 
   const validationText = extractOutputText(validationData);
-  const validation = validationText ? tryParseJson(validationText) : null;
+  const validation = parseCvValidationFromOpenAiData(validationData);
 
   if (!validation || typeof validation !== "object") {
     return {
@@ -644,16 +765,7 @@ Filename: ${fileName}
 
   return {
     ok: true,
-    validation: {
-      shouldAnalyze: Boolean(validation.shouldAnalyze),
-      isCv: Boolean(validation.isCv),
-      hasClearCvStructure: Boolean(validation.hasClearCvStructure),
-      confidence: safeNumber(validation.confidence) ?? 0,
-      documentType: safeString(validation.documentType),
-      cvSignals: safeArray(validation.cvSignals, 12),
-      nonCvSignals: safeArray(validation.nonCvSignals, 12),
-      reason: safeString(validation.reason),
-    },
+    validation,
   };
 }
 

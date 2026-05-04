@@ -172,6 +172,47 @@ function getErrorMessage(error: unknown, fallback = "Unknown error"): string {
   }
 }
 
+function getAnalyzeCvFailureMessage(data: any) {
+  const detailsText = valueToText(data?.details);
+
+  if (
+    detailsText.includes('"shouldAnalyze"') ||
+    detailsText.includes('"hasClearCvStructure"')
+  ) {
+    return data?.error || "CV analysis failed during document validation.";
+  }
+
+  return data?.details || data?.error || "CV analysis failed without details";
+}
+
+function hasUsableProfileSignals(profile: CvProfile) {
+  const skillsValue = profile.skills;
+  const skillSignals = [
+    ...safeArray(profile.searchTerms, 25),
+    ...safeArray(profile.strongKeywords, 60),
+    ...safeArray(profile.skillTags, 40),
+    ...safeArray(profile.cvHighlights, 12),
+    ...safeArray(profile.languageProfile?.languages, 20),
+    ...safeArray(profile.matching?.bestFitRoles, 25),
+    ...safeArray(profile.matching?.acceptableRoles, 25),
+    ...safeArray(profile.search?.preferredRoles, 25),
+    ...(Array.isArray(skillsValue) ? safeArray(skillsValue, 40) : []),
+    ...(!Array.isArray(skillsValue)
+      ? safeArray(skillsValue?.hardSkills, 40)
+      : []),
+    ...(!Array.isArray(skillsValue)
+      ? safeArray(skillsValue?.tools, 30)
+      : []),
+  ];
+
+  return (
+    uniqueArray(skillSignals, 12).length >= 3 &&
+    !safeString(profile.profileSummary)
+      .toLowerCase()
+      .includes("cv profile recovered from partial ai response")
+  );
+}
+
 function buildRecoveredProfileFromText(text: string): CvProfile | null {
   const parsed = tryParseJson(text);
 
@@ -196,11 +237,6 @@ function buildRecoveredProfileFromText(text: string): CvProfile | null {
       : extractArrayFromText(text, "locations", 15).length > 0
       ? extractArrayFromText(text, "locations", 15)
       : ["Zürich"];
-
-  const profileSummary =
-    safeString(parsed?.profileSummary) ||
-    extractStringFromText(text, "profileSummary", 700) ||
-    "CV profile recovered from partial AI response.";
 
   const cvHighlights =
     safeArray(parsed?.cvHighlights, 12).length > 0
@@ -230,6 +266,10 @@ function buildRecoveredProfileFromText(text: string): CvProfile | null {
   const languageSummary =
     safeString(parsed?.languageProfile?.languageSummary) ||
     extractStringFromText(text, "languageSummary", 500);
+
+  const recoveredProfileSummary =
+    safeString(parsed?.profileSummary) ||
+    extractStringFromText(text, "profileSummary", 700);
 
   const skillTags =
     safeArray(parsed?.skillTags, 40).length > 0
@@ -276,8 +316,11 @@ function buildRecoveredProfileFromText(text: string): CvProfile | null {
   const hasEnoughData =
     searchTerms.length > 0 ||
     strongKeywords.length > 0 ||
-    profileSummary.length > 0 ||
-    skillTags.length > 0;
+    skillTags.length > 0 ||
+    bestFitRoles.length > 0 ||
+    acceptableRoles.length > 0 ||
+    cvHighlights.length > 0 ||
+    languages.length > 0;
 
   if (!hasEnoughData) {
     return null;
@@ -370,7 +413,7 @@ function buildRecoveredProfileFromText(text: string): CvProfile | null {
     ),
     avoidKeywords,
     locations,
-    profileSummary,
+    profileSummary: recoveredProfileSummary,
     cvHighlights,
     languageProfile,
     skillTags,
@@ -481,12 +524,11 @@ export function useJobs() {
 
         const recoveredProfile = recoverProfileFromApiFailure(data);
 
-        if (recoveredProfile) {
+        if (recoveredProfile && hasUsableProfileSignals(recoveredProfile)) {
           return recoveredProfile;
         }
 
-        const message =
-          data.details || data.error || "CV analysis failed without details";
+        const message = getAnalyzeCvFailureMessage(data);
 
         console.error("CV ANALYSIS FAILED:", data);
 
