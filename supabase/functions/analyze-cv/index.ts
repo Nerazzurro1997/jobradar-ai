@@ -1419,6 +1419,17 @@ Summaries:
     }
 
     if (!rawAnalysis) {
+      const recoveredValidation = extractDocumentValidationFromText(outputText);
+
+      if (recoveredValidation) {
+        rawAnalysis = {
+          documentValidation: recoveredValidation,
+          profile: null,
+        };
+      }
+    }
+
+    if (!rawAnalysis) {
       return jsonResponse(
         {
           success: false,
@@ -1478,17 +1489,27 @@ Summaries:
       );
     }
 
-    if (!rawAnalysis.profile) {
-      return jsonResponse(
+    console.info("CV document validation passed", {
+      fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+    });
+
+    const rawProfileForNormalization =
+      rawAnalysis &&
+      typeof rawAnalysis.profile === "object" &&
+      rawAnalysis.profile !== null
+        ? rawAnalysis.profile
+        : {};
+
+    if (rawProfileForNormalization !== rawAnalysis.profile) {
+      console.warn(
+        "CV profile missing after valid validation, using empty normalization fallback",
         {
-          success: false,
-          error: "Could not parse CV profile JSON",
-        },
-        200
+          fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+        }
       );
     }
 
-    const profile = normalizeProfile(rawAnalysis.profile);
+    const profile = normalizeProfile(rawProfileForNormalization);
 
     console.info("CV profile normalized", {
       fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
