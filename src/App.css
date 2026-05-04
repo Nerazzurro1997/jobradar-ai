@@ -49,16 +49,15 @@
   white-space: nowrap;
 }
 
-.jr-job-card-main {
-  min-width: 0;
-}
-
-.jr-job-card-body {
+.jr-job-card-main,
+.jr-job-card-body,
+.jr-job-card-content,
+.jr-score-column,
+.card {
   min-width: 0;
 }
 
 .jr-job-card-content {
-  min-width: 0;
   max-width: 100%;
 }
 
@@ -73,16 +72,8 @@
   justify-content: center;
 }
 
-.jr-score-column {
-  min-width: 0;
-}
-
 .jr-score-box {
   flex: 0 0 auto;
-}
-
-.card {
-  min-width: 0;
 }
 
 .card * {

@@ -50,7 +50,10 @@ export function getJobDisplayScore(job: Job) {
   return getScore(job as RankedJob);
 }
 
-export function isJobAboveMinimumScore(job: Job, minimumScore = SAVED_JOBS_MIN_SCORE) {
+export function isJobAboveMinimumScore(
+  job: Job,
+  minimumScore = SAVED_JOBS_MIN_SCORE
+) {
   return getJobDisplayScore(job) >= minimumScore;
 }
 
@@ -78,19 +81,11 @@ function getDistanceScoreFromLocation(locationValue: unknown) {
   if (location.includes("richterswil")) return 92;
   if (location.includes("thalwil")) return 90;
 
-  if (
-    location.includes("pfäffikon") ||
-    location.includes("pfaeffikon") ||
-    location.includes("pfäffikon sz") ||
-    location.includes("pfaeffikon sz")
-  ) {
+  if (location.includes("pfäffikon") || location.includes("pfaeffikon")) {
     return 86;
   }
 
-  if (
-    location.includes("rapperswil-jona") ||
-    location.includes("rapperswil")
-  ) {
+  if (location.includes("rapperswil")) {
     return 84;
   }
 
@@ -241,7 +236,7 @@ function mergeJob(existingJob: Job, incomingJob: Job) {
     url: incomingJob.url || existingJob.url,
     title: incomingJob.title || existingJob.title,
     company: incomingJob.company || existingJob.company,
-    location: incomingJob.location || existingJob.location,
+    location: mergedLocation,
     snippet: incomingJob.snippet || existingJob.snippet,
     fullDescription:
       incomingJob.fullDescription || existingJob.fullDescription,
