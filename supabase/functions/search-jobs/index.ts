@@ -861,6 +861,30 @@ async function fetchHtmlWithRetry(
     : new Error("Fetch failed after retries");
 }
 
+async function promisePool<T, R>(
+  items: T[],
+  limit: number,
+  asyncFn: (item: T, index: number) => Promise<R> | R
+) {
+  const results: Promise<R>[] = [];
+  const executing = new Set<Promise<R>>();
+
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const p = Promise.resolve().then(() => asyncFn(item, index));
+    results.push(p);
+    executing.add(p);
+
+    p.finally(() => executing.delete(p));
+
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+
+  return Promise.all(results);
+}
+
 function extractLinks(html: string) {
   const links: string[] = [];
 
@@ -2686,6 +2710,86 @@ async function collectLinks(
   knownUrlSet: Set<string>,
   maxPagesOverride?: number
 ) {
+  type SearchPageTask = {
+    page: number;
+    loc: string;
+    query: SearchQuery;
+  };
+
+  type SearchPageResult = {
+    hits: SearchHit[];
+    skippedKnown: number;
+    searchPagesFetched: number;
+    searchPagesFailed: number;
+  };
+
+  const fetchSearchPageTask = async (
+    task: SearchPageTask
+  ): Promise<SearchPageResult> => {
+    if (Date.now() - startedAt > maxRuntimeMs - 15000) {
+      return {
+        hits: [],
+        skippedKnown: 0,
+        searchPagesFetched: 0,
+        searchPagesFailed: 0,
+      };
+    }
+
+    const { page, loc, query } = task;
+    const base = `https://www.jobs.ch/de/stellenangebote/?term=${encodeURIComponent(
+      query.term
+    )}&location=${encodeURIComponent(loc)}&page=${page}`;
+    const keyword = `${query.source}: ${query.term} - ${loc}`;
+
+    try {
+      const result = await fetchHtmlWithRetry(`${base}&sort=date`, 0, 5500);
+      const hits = extractSearchHits(result.html, keyword, query);
+
+      if (hits.length > 0) {
+        return {
+          hits,
+          skippedKnown: 0,
+          searchPagesFetched: 1,
+          searchPagesFailed: 0,
+        };
+      }
+
+      try {
+        const fallbackResult = await fetchHtmlWithRetry(base, 0, 5500);
+        return {
+          hits: extractSearchHits(fallbackResult.html, keyword, query),
+          skippedKnown: 0,
+          searchPagesFetched: 2,
+          searchPagesFailed: 0,
+        };
+      } catch {
+        return {
+          hits: [],
+          skippedKnown: 0,
+          searchPagesFetched: 1,
+          searchPagesFailed: 1,
+        };
+      }
+    } catch {
+      try {
+        const fallbackResult = await fetchHtmlWithRetry(base, 0, 5500);
+        return {
+          hits: extractSearchHits(fallbackResult.html, keyword, query),
+          skippedKnown: 0,
+          searchPagesFetched: 1,
+          searchPagesFailed: 1,
+        };
+      } catch {
+        return {
+          hits: [],
+          skippedKnown: 0,
+          searchPagesFetched: 0,
+          searchPagesFailed: 2,
+        };
+      }
+    }
+  };
+
   const foundLinks: SearchHit[] = [];
   const foundUrlSet = new Set<string>();
   let skippedKnown = 0;
@@ -2697,85 +2801,54 @@ async function collectLinks(
     (knownUrlSet.size >= 25 ? 5 : knownUrlSet.size >= 10 ? 4 : 3);
 
   for (let page = 1; page <= maxPages; page++) {
-    for (
-      let locationIndex = 0;
-      locationIndex < locations.length;
-      locationIndex++
-    ) {
-      const loc = locations[locationIndex];
+    if (Date.now() - startedAt > maxRuntimeMs - 15000) {
+      return {
+        foundLinks,
+        skippedKnown,
+        searchPagesFetched,
+        searchPagesFailed,
+      };
+    }
 
-      for (let queryIndex = 0; queryIndex < queries.length; queryIndex++) {
-        const query = queries[queryIndex];
+    const pageTasks: SearchPageTask[] = [];
 
-        if (Date.now() - startedAt > maxRuntimeMs - 15000) {
-          return {
-            foundLinks,
-            skippedKnown,
-            searchPagesFetched,
-            searchPagesFailed,
-          };
+    for (const loc of locations) {
+      for (const query of queries) {
+        pageTasks.push({ page, loc, query });
+      }
+    }
+
+    const pageResults = await promisePool(pageTasks, 3, fetchSearchPageTask);
+
+    for (const result of pageResults) {
+      searchPagesFetched += result.searchPagesFetched;
+      searchPagesFailed += result.searchPagesFailed;
+
+      for (const hit of result.hits) {
+        const normalized = normalizeUrl(hit.url);
+
+        if (knownUrlSet.has(normalized)) {
+          skippedKnown++;
+          continue;
         }
 
-        const base = `https://www.jobs.ch/de/stellenangebote/?term=${encodeURIComponent(
-          query.term
-        )}&location=${encodeURIComponent(loc)}&page=${page}`;
-
-        const urlsToTry = [`${base}&sort=date`, base];
-
-        for (const searchUrl of urlsToTry) {
-          try {
-            const result = await fetchHtmlWithRetry(searchUrl, 0, 5500);
-            searchPagesFetched++;
-
-            const keyword = `${query.source}: ${query.term} - ${loc}`;
-            const hits = extractSearchHits(result.html, keyword, query);
-
-            for (const hit of hits) {
-              const normalized = normalizeUrl(hit.url);
-
-              if (knownUrlSet.has(normalized)) {
-                skippedKnown++;
-                continue;
-              }
-
-              if (!foundUrlSet.has(normalized)) {
-                foundUrlSet.add(normalized);
-                foundLinks.push({
-                  ...hit,
-                  url: normalized,
-                  keyword,
-                  query,
-                });
-              }
-            }
-
-            if (hits.length > 0) break;
-          } catch {
-            searchPagesFailed++;
-            continue;
-          }
-        }
-
-        const hasVisitedAllLocations = locationIndex >= locations.length - 1;
-        const hasTriedAllQueries = queryIndex >= queries.length - 1;
-        const hasCompletedAtLeastOneFullPage =
-          page > 1 ||
-          (page === 1 && hasVisitedAllLocations && hasTriedAllQueries);
-
-        if (
-          foundLinks.length >= targetLinks &&
-          hasVisitedAllLocations &&
-          hasTriedAllQueries &&
-          hasCompletedAtLeastOneFullPage
-        ) {
-          return {
-            foundLinks,
-            skippedKnown,
-            searchPagesFetched,
-            searchPagesFailed,
-          };
+        if (!foundUrlSet.has(normalized)) {
+          foundUrlSet.add(normalized);
+          foundLinks.push({
+            ...hit,
+            url: normalized,
+          });
         }
       }
+    }
+
+    if (foundLinks.length >= targetLinks) {
+      return {
+        foundLinks,
+        skippedKnown,
+        searchPagesFetched,
+        searchPagesFailed,
+      };
     }
   }
 
@@ -3232,43 +3305,126 @@ Deno.serve(async (req: Request) => {
     };
 
     const detailLimit = lightMode ? maxDetailJobsUsed : 45;
+    const detailItems = foundLinks.slice(0, detailLimit);
+    let detailCursor = 0;
 
-    for (const item of foundLinks.slice(0, detailLimit)) {
+    type DetailFetchTask = {
+      item: SearchHit;
+      normalizedItemUrl: string;
+    };
+
+    type DetailFetchResult = DetailFetchTask & {
+      html: string | null;
+      failed: boolean;
+      skippedByTimeout: boolean;
+    };
+
+    while (detailCursor < detailItems.length) {
       if (Date.now() - startedAt > maxRuntimeMs - 3500) break;
       if (jobs.length >= maxDetailJobsUsed) break;
 
-      const normalizedItemUrl = normalizeUrl(item.url);
+      const detailBatch: DetailFetchTask[] = [];
+      const batchLimit = Math.min(4, maxDetailJobsUsed - jobs.length);
 
-      if (knownUrlSet.has(normalizedItemUrl)) {
-        skippedKnown++;
+      while (
+        detailCursor < detailItems.length &&
+        detailBatch.length < batchLimit
+      ) {
+        const item = detailItems[detailCursor];
+        detailCursor++;
+        const normalizedItemUrl = normalizeUrl(item.url);
+
+        if (knownUrlSet.has(normalizedItemUrl)) {
+          skippedKnown++;
+          continue;
+        }
+
+        if (usedUrls.has(normalizedItemUrl)) {
+          skippedDuplicate++;
+          continue;
+        }
+
+        detailBatch.push({ item, normalizedItemUrl });
+      }
+
+      if (detailBatch.length === 0) {
         continue;
       }
 
-      if (usedUrls.has(normalizedItemUrl)) {
-        skippedDuplicate++;
-        continue;
-      }
+      const detailResults = await promisePool<DetailFetchTask, DetailFetchResult>(
+        detailBatch,
+        4,
+        async ({ item, normalizedItemUrl }) => {
+          if (Date.now() - startedAt > maxRuntimeMs - 3500) {
+            return {
+              item,
+              normalizedItemUrl,
+              html: null,
+              failed: false,
+              skippedByTimeout: true,
+            };
+          }
 
-      let job: Job | null = null;
-      detailAttempts++;
-      const allowSectionParsing = detailAttempts <= 20;
+          try {
+            const detailResult = await fetchHtmlWithRetry(item.url, 0, 3000);
 
-      try {
-        const detailResult = await fetchHtmlWithRetry(item.url, 0, 3000);
-        const detailedJob = extractJobDetail(
-          detailResult.html,
-          item.url,
-          jobs.length + 1,
-          item.keyword,
-          profile,
-          item,
-          sectionStats,
-          allowSectionParsing
-        );
+            return {
+              item,
+              normalizedItemUrl,
+              html: detailResult.html,
+              failed: false,
+              skippedByTimeout: false,
+            };
+          } catch {
+            return {
+              item,
+              normalizedItemUrl,
+              html: null,
+              failed: true,
+              skippedByTimeout: false,
+            };
+          }
+        }
+      );
 
-        if (isUsefulDetailedJob(detailedJob)) {
-          job = detailedJob;
-          detailSuccess++;
+      for (const detailResult of detailResults) {
+        if (detailResult.skippedByTimeout) {
+          continue;
+        }
+
+        if (jobs.length >= maxDetailJobsUsed) break;
+
+        const { item, normalizedItemUrl } = detailResult;
+        let job: Job | null = null;
+        detailAttempts++;
+        const allowSectionParsing = detailAttempts <= 20;
+
+        if (!detailResult.failed && detailResult.html) {
+          const detailedJob = extractJobDetail(
+            detailResult.html,
+            item.url,
+            jobs.length + 1,
+            item.keyword,
+            profile,
+            item,
+            sectionStats,
+            allowSectionParsing
+          );
+
+          if (isUsefulDetailedJob(detailedJob)) {
+            job = detailedJob;
+            detailSuccess++;
+          } else {
+            detailFailed++;
+            job = createFallbackJobFromHit(
+              item,
+              jobs.length + 1,
+              profile,
+              sectionStats,
+              allowSectionParsing
+            );
+            fallbackUsed++;
+          }
         } else {
           detailFailed++;
           job = createFallbackJobFromHit(
@@ -3280,40 +3436,30 @@ Deno.serve(async (req: Request) => {
           );
           fallbackUsed++;
         }
-      } catch {
-        detailFailed++;
-        job = createFallbackJobFromHit(
-          item,
-          jobs.length + 1,
-          profile,
-          sectionStats,
-          allowSectionParsing
-        );
-        fallbackUsed++;
-      }
 
-      if (isTooOldJob(job)) {
-        skippedOld++;
-        oldUrls.add(normalizedItemUrl);
-        continue;
-      }
+        if (isTooOldJob(job)) {
+          skippedOld++;
+          oldUrls.add(normalizedItemUrl);
+          continue;
+        }
 
-      const normalizedJobUrl = normalizeUrl(job.url);
+        const normalizedJobUrl = normalizeUrl(job.url);
 
-      if (knownUrlSet.has(normalizedJobUrl)) {
-        skippedKnown++;
-        continue;
-      }
+        if (knownUrlSet.has(normalizedJobUrl)) {
+          skippedKnown++;
+          continue;
+        }
 
-      if (addOrReplaceDuplicateJob(jobs, job)) {
-        skippedDuplicate++;
+        if (addOrReplaceDuplicateJob(jobs, job)) {
+          skippedDuplicate++;
+          usedUrls.add(normalizedJobUrl);
+          continue;
+        }
+
         usedUrls.add(normalizedJobUrl);
-        continue;
+
+        if (jobs.length >= maxDetailJobsUsed) break;
       }
-
-      usedUrls.add(normalizedJobUrl);
-
-      if (jobs.length >= maxDetailJobsUsed) break;
     }
 
     if (jobs.length < 15) {
