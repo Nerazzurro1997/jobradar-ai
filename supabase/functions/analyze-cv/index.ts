@@ -855,6 +855,40 @@ const nullableCompactProfileSchema = {
   type: ["object", "null"],
 };
 
+const aiProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    profileSummary: { type: "string" },
+    cvHighlights: stringArraySchema,
+    languageProfile: languageProfileSchema,
+    identity: identitySchema,
+    search: searchProfileSchema,
+    experience: experienceProfileSchema,
+    skills: skillsProfileSchema,
+    preferences: preferencesProfileSchema,
+    matching: matchingProfileSchema,
+    summary: summaryProfileSchema,
+  },
+  required: [
+    "profileSummary",
+    "cvHighlights",
+    "languageProfile",
+    "identity",
+    "search",
+    "experience",
+    "skills",
+    "preferences",
+    "matching",
+    "summary",
+  ],
+};
+
+const nullableAiProfileSchema = {
+  ...aiProfileSchema,
+  type: ["object", "null"],
+};
+
 const documentValidationSchema = {
   type: "object",
   additionalProperties: false,
@@ -881,7 +915,7 @@ const cvAnalysisSchema = {
   additionalProperties: false,
   properties: {
     documentValidation: documentValidationSchema,
-    profile: nullableCompactProfileSchema,
+    profile: nullableAiProfileSchema,
   },
   required: ["documentValidation", "profile"],
 };
@@ -902,7 +936,7 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         temperature: 0,
-        max_output_tokens: 4500,
+        max_output_tokens: 4200,
         text: {
           format: {
             type: "json_schema",
@@ -1199,6 +1233,40 @@ function normalizeProfile(raw: any) {
   };
 }
 
+function buildAnalyzeCvPrompt(fileName: string) {
+  return `
+Validate the uploaded PDF first. Analyze it only if it is clearly a real CV/resume/Lebenslauf.
+
+Return one JSON object matching the schema:
+- documentValidation: shouldAnalyze, documentType, confidence, cvSignals, nonCvSignals, reason.
+- profile: null when shouldAnalyze is false; otherwise a compact profile with profileSummary, cvHighlights, identity, search, experience, skills, preferences, languageProfile, matching, summary.
+
+Strict CV validation:
+- Accept CVs/resumes/Lebenslauf in German, English, Italian, or French only when they show real CV structure.
+- Strong CV structure means personal/contact profile plus multiple sections such as Berufserfahrung/work experience/esperienze lavorative/experience professionnelle, Ausbildung/education/formazione, skills/Faehigkeiten/competenze, languages/Sprachen/lingue, profile/Profil, or multiple roles/stations.
+- Block invoices/Rechnungen/fatture, contracts/Vertraege/contratti, insurance offers/policies, Arbeitsbestaetigung, Arbeitszeugnis single document, Arbeitgeberbescheinigung, employment/work certificates, attestation/certificat de travail, attestato/certificato/conferma di lavoro, cover letters/application letters without a full CV, job ads/Stelleninserate, standalone certificates/diplomas/references/training records, reports, and generic business documents.
+- A document is not a CV merely because it contains a person name, employer, employment dates, job title, or experience at one company.
+- shouldAnalyze must be true only when the document is clearly a CV and confidence is at least 0.75. If uncertain, set shouldAnalyze false and profile null.
+
+Filename: ${fileName}
+
+Profile extraction for valid CVs:
+- Do not invent facts. Use "", [], or null when the CV does not support a field.
+- Keep arrays concise, evidence-based, ordered by matching importance, and free of duplicates.
+- Use Swiss/German job-market wording where useful for jobs.ch.
+- search.searchTerms must be real jobs.ch role queries, not skills. Prefer 6-12 short queries fitting the CV, e.g. Versicherung Innendienst, Sachbearbeiter Versicherung, Kundenberater Innendienst, Backoffice Versicherung, Underwriting Assistant, Schaden Sachbearbeiter.
+- search.strongKeywords should include domain terms, hard skills, tools, certifications, languages, insurance/admin/customer-service keywords, and CV-specific strengths.
+- search.avoidKeywords/search.avoidRoles only for real negative signals supported by the CV, e.g. Aussendienst, Provision, Kaltakquise, Praktikum, Lehrstelle, Senior Leadership.
+- identity: currentRole, targetRole, seniorityLevel, yearsOfExperience if inferable, industryFocus.
+- experience: separate insuranceExperience, adminExperience, salesExperience, customerExperience, underwritingRelatedExperience, claimsRelatedExperience.
+- skills: concrete hardSkills, evidenced softSkills, tools, languages, certifications.
+- languageProfile: all languages, strongest/business languages, useful language keywords, short business relevance summary.
+- matching: bestFitRoles, acceptableRoles, weakFitRoles, dealBreakers, sellingPoints, riskAreas, scoringHints, applicationPositioning.
+- preferences: fill workload, employmentType, workMode, salaryExpectation, fixumPreference, commutePreference only if explicitly present.
+- profileSummary max 220 chars; cvHighlights 4-8 short points; summary.detailedSummary max 500 chars.
+`.trim();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1324,7 +1392,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model: "gpt-4.1-mini",
           temperature: 0,
-          max_output_tokens: 6500,
+          max_output_tokens: 4500,
           text: {
             format: {
               type: "json_schema",
@@ -1344,126 +1412,7 @@ Deno.serve(async (req) => {
               content: [
                 {
                   type: "input_text",
-                  text: `
-First validate the uploaded PDF. Then, only if it is clearly a real CV/resume/Lebenslauf, analyze it for Swiss job matching.
-
-Return exactly:
-{
-  "documentValidation": {
-    "shouldAnalyze": boolean,
-    "documentType": string,
-    "confidence": number,
-    "cvSignals": string[],
-    "nonCvSignals": string[],
-    "reason": string
-  },
-  "profile": { ...compact CV profile... } | null
-}
-
-Document validation:
-- Use the filename, the visible PDF content, and the document structure.
-- Accept CV/resume documents in German, English, Italian, and French.
-- Strong CV signals include:
-  - German: Lebenslauf, CV, Bewerbung, Berufserfahrung, Ausbildung, FÃ¤higkeiten, Kenntnisse, Sprachen
-  - English: CV, resume, work experience, education, skills, employment history, languages
-  - Italian: curriculum, CV, esperienze lavorative, formazione, competenze, lingue
-  - French: CV, curriculum vitae, expÃ©rience professionnelle, formation, compÃ©tences, langues
-  - Structured candidate profile with personal/contact info plus work experience and education/skills.
-- Block documents that look like:
-  - invoices, Rechnungen, fatture
-  - contracts, VertrÃ¤ge, contratti
-  - insurance offers, Versicherungsofferten, offerte assicurative
-  - ArbeitsbestÃ¤tigung, Arbeitszeugnis single document, Arbeitgeberbescheinigung
-  - employment confirmation, employment certificate, work certificate
-  - attestation de travail, certificat de travail
-  - attestato di lavoro, certificato di lavoro, conferma di lavoro
-  - letters, Briefe, lettere, cover letters, application letters without a full CV structure
-  - job ads, Stelleninserate, annunci di lavoro
-  - standalone certificates, diplomas, attestati, diplomi, references, or training records without a CV structure
-  - insurance policies, polizze, police, generic business documents, reports
-- A document is not a CV merely because it contains a person's name, employer, employment dates, job title, or experience at one company.
-- A real CV must have clear CV structure, usually multiple sections such as Berufserfahrung/work experience/esperienze lavorative/expÃ©rience professionnelle, Ausbildung/education/formazione, FÃ¤higkeiten/skills/competenze/compÃ©tences, Sprachen/languages/lingue/langues, Profil/profile/profilo, or multiple roles/stations.
-- documentValidation.documentType must classify the document, e.g. "cv", "arbeitsbestaetigung", "employment_certificate", "certificate", "diploma", "cover_letter", "contract", "invoice", "insurance_policy", "job_ad", or "generic_document".
-- documentValidation.confidence must be between 0 and 1.
-- documentValidation.cvSignals must contain only concrete CV structure signals found in the document.
-- documentValidation.nonCvSignals must contain concrete non-CV signals such as Arbeitsbestaetigung, employment certificate, diploma, certificate-only, cover letter, contract, invoice, insurance policy, or job ad.
-- documentValidation.shouldAnalyze must be true only when the document is clearly a CV/resume, has typical CV structure, and confidence is at least 0.75.
-- If uncertain, prefer documentValidation.shouldAnalyze false.
-- If shouldAnalyze is false, explain the reason clearly and set profile to null. Do not extract a candidate profile from non-CV documents.
-- Do not rely only on the filename.
-
-Filename: ${fileName}
-
-Profile extraction rules, used only when documentValidation.shouldAnalyze is true:
-
-Primary matching domains:
-- Insurance, health insurance, broker support, policy administration
-- Administration, backoffice, office coordination
-- Customer service, client service, sales support, internal sales
-- Underwriting assistant, claims assistant, claims support
-
-Critical extraction rules:
-- Do not invent facts or preferences.
-- If a field is not clearly present or inferable from the CV, use "", [], or null.
-- Keep arrays concise, ordered by matching importance, and free of duplicates.
-- Use Swiss/German job-market wording where useful for jobs.ch.
-
-searchTerms:
-- Must be real jobs.ch search queries, not generic skills.
-- Prefer 6 to 14 short role queries such as "Versicherung Innendienst", "Sachbearbeiter Versicherung", "Kundenberater Innendienst", "Backoffice Versicherung", "Underwriting Assistant", "Schaden Sachbearbeiter".
-- Include only queries that fit the CV evidence.
-- Do not include skills-only terms like "CRM", "MS Office", "Deutsch", or "Teamwork".
-
-strongKeywords:
-- Include match-relevant domain terms, hard skills, tools, certifications, languages, insurance/admin/customer-service keywords, and CV-specific strengths.
-- Avoid generic soft skills unless unusually important in the CV.
-
-avoidKeywords:
-- Include only real negative matching signals supported by the CV goals or constraints.
-- Use for roles/conditions to avoid, e.g. "Aussendienst", "Provision", "Kaltakquise", "Praktikum", "Lehrstelle", "Senior Leadership", only when appropriate.
-
-identity:
-- currentRole, targetRole, seniorityLevel, yearsOfExperience, industryFocus.
-- seniorityLevel examples: Entry, Junior, Professional, Senior, Lead, Management.
-- yearsOfExperience must be a number only if reasonably inferable, otherwise null.
-
-experience:
-- Separate insuranceExperience, adminExperience, salesExperience, customerExperience, underwritingRelatedExperience, and claimsRelatedExperience.
-- Each item should be a short evidence-based phrase from the CV.
-
-skills:
-- hardSkills: concrete role skills.
-- softSkills: interpersonal or work-style skills only if evidenced.
-- tools: software/tools/systems.
-- languages: language names only.
-- certifications: degrees/certificates/training if present.
-
-languageProfile:
-- languages: all languages found.
-- strongestLanguages: languages clearly strongest/native/fluent.
-- businessLanguages: languages usable professionally.
-- languageKeywords: useful matching terms such as "Deutsch", "Italienisch", "Franzoesisch", "Englisch", "bilingual", "fluent".
-- languageSummary: short business relevance summary.
-
-matching:
-- bestFitRoles: strongest realistic target roles.
-- acceptableRoles: plausible adjacent roles.
-- weakFitRoles: roles with partial fit or notable gaps.
-- dealBreakers: conditions likely unsuitable.
-- sellingPoints: evidence-based strengths for applications.
-- riskAreas: gaps or points recruiters may question.
-- scoringHints: concise signals useful for ranking.
-- applicationPositioning: how to position the candidate.
-
-preferences:
-- Fill workload, employmentType, workMode, salaryExpectation, fixumPreference, commutePreference only if explicitly present in the CV.
-- Do not infer salary or fixed-salary preference from role history.
-
-Summaries:
-- profileSummary max 220 characters.
-- cvHighlights 4 to 8 short points.
-- detailedSummary max 500 characters.
-`.trim(),
+                  text: buildAnalyzeCvPrompt(fileName),
                 },
                 {
                   type: "input_file",
