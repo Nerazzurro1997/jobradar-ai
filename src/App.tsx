@@ -3,6 +3,8 @@ import type { CSSProperties, Dispatch, SetStateAction } from "react";
 import type { CvProfile, Job } from "./types";
 import { clearJobs, getSavedJobs, saveJobs } from "./utils/storage";
 import { prepareJobsForDisplay } from "./utils/jobs";
+import { toBase64 } from "./utils/file";
+import { clearCvCacheAPI } from "./services/api";
 import { Sidebar } from "./components/Sidebar";
 import { JobDashboard } from "./components/JobDashboard";
 import { ConfirmDialog } from "./components/ConfirmDialog";
@@ -432,8 +434,27 @@ export default function App() {
     setClearConfirmOpen(false);
   }
 
-  function confirmClearSavedJobs() {
+  async function clearBackendCvCacheForFile(file: File | null) {
+    if (!file) return;
+
     try {
+      const base64 = await toBase64(file);
+      const result = await clearCvCacheAPI(base64);
+
+      if (!result?.success || !result?.cleared) {
+        console.warn("Backend CV cache clear did not delete a cache row", result);
+      }
+    } catch (error) {
+      console.warn("Failed to clear backend CV cache", error);
+    }
+  }
+
+  async function confirmClearSavedJobs() {
+    const cvFileToClear = cvFile;
+
+    try {
+      await clearBackendCvCacheForFile(cvFileToClear);
+
       clearJobs();
       removeStoredCvProfile();
       resetJobsFromHook();

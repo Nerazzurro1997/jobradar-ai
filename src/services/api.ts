@@ -28,6 +28,16 @@ export async function analyzeCvAPI(base64: string, fileName: string) {
   return data;
 }
 
+export async function clearCvCacheAPI(base64: string) {
+  const response = await postSupabaseJson(SUPABASE_ANALYZE_CV_URL, {
+    action: "clear_cv_cache",
+    fileBase64: base64,
+  });
+
+  const data = await response.json();
+  return data;
+}
+
 export async function searchJobsAPI(
   base64: string,
   fileName: string,

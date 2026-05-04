@@ -7,6 +7,21 @@ const corsHeaders = {
 
 const CACHE_VERSION = "analyze-cv-v3";
 
+function getDurationMs(start: number) {
+  return Math.round(performance.now() - start);
+}
+
+function logDuration(
+  label: string,
+  start: number,
+  details: Record<string, unknown> = {}
+) {
+  console.info(label, {
+    durationMs: getDurationMs(start),
+    ...details,
+  });
+}
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -211,6 +226,52 @@ async function saveCachedCvProfile(
   }
 }
 
+async function clearCachedCvProfile(fileHash: string) {
+  const fileHashPrefix = fileHash.slice(0, 12);
+
+  console.info("CV cache clear start", {
+    fileHashPrefix,
+    cacheVersion: CACHE_VERSION,
+  });
+
+  const cacheConfig = getCacheConfig();
+
+  if (!cacheConfig) {
+    return false;
+  }
+
+  try {
+    const url = new URL(`${cacheConfig.supabaseUrl}/rest/v1/cv_profile_cache`);
+
+    url.searchParams.set("file_hash", `eq.${fileHash}`);
+    url.searchParams.set("cache_version", `eq.${CACHE_VERSION}`);
+
+    const response = await fetch(url.toString(), {
+      method: "DELETE",
+      headers: {
+        apikey: cacheConfig.serviceRoleKey,
+        Authorization: `Bearer ${cacheConfig.serviceRoleKey}`,
+        Prefer: "return=minimal",
+      },
+    });
+
+    if (!response.ok) {
+      const responseBody = await response.text().catch(() => "");
+      console.warn("CV cache clear failed", {
+        status: response.status,
+        body: responseBody.slice(0, 500),
+      });
+      return false;
+    }
+
+    console.info("CV cache clear success", { fileHashPrefix });
+    return true;
+  } catch (error) {
+    console.warn("CV cache clear failed", error);
+    return false;
+  }
+}
+
 function normalizeBlockedFileNameText(value = "") {
   return value
     .toLowerCase()
@@ -320,6 +381,34 @@ function getBlockedNonCvReasonFromValidation(validation: any): string | null {
 
     if (text.includes(normalizedTerm) || compactText.includes(compactTerm)) {
       return `Document validation found non-CV signal: ${term}`;
+    }
+  }
+
+  return null;
+}
+
+function extractStructuredOutput(data: any) {
+  if (typeof data?.output_parsed === "object" && data.output_parsed) {
+    return data.output_parsed;
+  }
+
+  if (typeof data?.parsed === "object" && data.parsed) {
+    return data.parsed;
+  }
+
+  if (Array.isArray(data?.output)) {
+    for (const item of data.output) {
+      if (!Array.isArray(item?.content)) continue;
+
+      for (const content of item.content) {
+        if (typeof content?.parsed === "object" && content.parsed) {
+          return content.parsed;
+        }
+
+        if (typeof content?.json === "object" && content.json) {
+          return content.json;
+        }
+      }
     }
   }
 
@@ -761,6 +850,11 @@ const compactProfileSchema = {
   ],
 };
 
+const nullableCompactProfileSchema = {
+  ...compactProfileSchema,
+  type: ["object", "null"],
+};
+
 const documentValidationSchema = {
   type: "object",
   additionalProperties: false,
@@ -787,9 +881,7 @@ const cvAnalysisSchema = {
   additionalProperties: false,
   properties: {
     documentValidation: documentValidationSchema,
-    profile: {
-      anyOf: [compactProfileSchema, { type: "null" }],
-    },
+    profile: nullableCompactProfileSchema,
   },
   required: ["documentValidation", "profile"],
 };
@@ -1116,8 +1208,39 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "Use POST request" }, 405);
   }
 
+  const analyzeStartedAt = performance.now();
+
   try {
-    const { fileName, fileBase64 } = await req.json();
+    const { action, fileName, fileBase64 } = await req.json();
+
+    if (action === "clear_cv_cache") {
+      if (!fileBase64) {
+        return jsonResponse({
+          success: true,
+          cleared: false,
+          reason: "Missing fileBase64",
+        });
+      }
+
+      try {
+        const fileHash = await calculateFileHash(fileBase64);
+        const cleared = await clearCachedCvProfile(fileHash);
+
+        return jsonResponse({
+          success: true,
+          cleared,
+          fileHashPrefix: fileHash.slice(0, 12),
+        });
+      } catch (error) {
+        console.warn("CV cache clear request failed", error);
+
+        return jsonResponse({
+          success: true,
+          cleared: false,
+          reason: "CV cache clear failed",
+        });
+      }
+    }
 
     if (!fileName || !fileBase64) {
       return jsonResponse(
@@ -1147,7 +1270,13 @@ Deno.serve(async (req) => {
     try {
       fileHash = await calculateFileHash(fileBase64);
 
+      const cacheLookupStartedAt = performance.now();
       const cachedRow = await getCachedCvProfile(fileHash);
+      logDuration("CV cache lookup duration", cacheLookupStartedAt, {
+        fileHashPrefix: fileHash.slice(0, 12),
+        cacheHit: Boolean(cachedRow?.profile),
+      });
+
       const cachedProfile = cachedRow?.profile
         ? normalizeProfile(cachedRow.profile)
         : null;
@@ -1182,6 +1311,7 @@ Deno.serve(async (req) => {
     const timeout = setTimeout(() => controller.abort(), 120_000);
 
     let openAiResponse: Response;
+    const primaryOpenAiStartedAt = performance.now();
 
     try {
       openAiResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -1194,7 +1324,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model: "gpt-4.1-mini",
           temperature: 0,
-          max_output_tokens: 4500,
+          max_output_tokens: 6500,
           text: {
             format: {
               type: "json_schema",
@@ -1207,7 +1337,7 @@ Deno.serve(async (req) => {
             {
               role: "system",
               content:
-                "Return only valid JSON matching the combined documentValidation and profile schema. No markdown. No explanations. Validate the document first, then extract the profile only when it is clearly a real CV/resume/Lebenslauf. Be conservative: when in doubt set documentValidation.shouldAnalyze to false. Do not invent facts. Use empty arrays, empty strings, or null when the CV does not support a field.",
+                "Return only valid JSON matching the combined documentValidation and profile schema. No markdown. No explanations. Validate the document first, then extract the profile only when it is clearly a real CV/resume/Lebenslauf. Be conservative: when in doubt set documentValidation.shouldAnalyze to false. Do not invent facts. Use empty arrays, empty strings, or null when the CV does not support a field. Keep strings concise and complete the single JSON object without truncation.",
             },
             {
               role: "user",
@@ -1347,6 +1477,7 @@ Summaries:
       });
     } finally {
       clearTimeout(timeout);
+      logDuration("CV primary OpenAI call duration", primaryOpenAiStartedAt);
     }
 
     const parsedOpenAi = await parseOpenAiResponse(openAiResponse);
@@ -1375,9 +1506,12 @@ Summaries:
       );
     }
 
-    const outputText = extractOutputText(openAiData);
+    const jsonParseStartedAt = performance.now();
+    let rawAnalysis = extractStructuredOutput(openAiData);
+    const usedStructuredOutput = Boolean(rawAnalysis);
+    const outputText = rawAnalysis ? "" : extractOutputText(openAiData);
 
-    if (!outputText) {
+    if (!rawAnalysis && !outputText) {
       return jsonResponse(
         {
           success: false,
@@ -1388,7 +1522,9 @@ Summaries:
       );
     }
 
-    let rawAnalysis = tryParseJson(outputText);
+    if (!rawAnalysis) {
+      rawAnalysis = tryParseJson(outputText);
+    }
 
     if (!rawAnalysis) {
       rawAnalysis = extractJsonFromText(outputText);
@@ -1405,17 +1541,44 @@ Summaries:
       }
     }
 
+    logDuration("CV JSON parse duration", jsonParseStartedAt, {
+      parsed: Boolean(rawAnalysis),
+      usedStructuredOutput,
+    });
+
     if (!rawAnalysis) {
       if (hasPotentialAnalysisJson(outputText)) {
         console.error("Initial JSON parse failed. Trying repair.");
-        console.error("Broken output:", outputText.slice(0, 2000));
+        console.error("Broken output metadata", {
+          length: outputText.length,
+          hasDocumentValidation: outputText
+            .toLowerCase()
+            .includes("documentvalidation"),
+          hasProfile: outputText.toLowerCase().includes("profile"),
+        });
 
-        rawAnalysis = await repairJsonWithOpenAI(apiKey, outputText);
+        const repairStartedAt = performance.now();
+        try {
+          rawAnalysis = await repairJsonWithOpenAI(apiKey, outputText);
+        } finally {
+          logDuration("CV repair JSON duration", repairStartedAt, {
+            repaired: Boolean(rawAnalysis),
+          });
+        }
       } else {
         console.error(
           "Initial JSON parse failed. Skipping repair because no CV analysis JSON signal was found."
         );
+        console.info("CV repair JSON duration", {
+          durationMs: 0,
+          skipped: true,
+        });
       }
+    } else {
+      console.info("CV repair JSON duration", {
+        durationMs: 0,
+        skipped: true,
+      });
     }
 
     if (!rawAnalysis) {
@@ -1519,9 +1682,17 @@ Summaries:
       console.info("CV cache save before response", {
         fileHashPrefix: fileHash.slice(0, 12),
       });
+      const cacheSaveStartedAt = performance.now();
       await saveCachedCvProfile(fileHash, profile, documentValidation);
+      logDuration("CV cache save duration", cacheSaveStartedAt, {
+        fileHashPrefix: fileHash.slice(0, 12),
+      });
     } else {
       console.warn("CV cache save skipped: missing fileHash");
+      console.info("CV cache save duration", {
+        durationMs: 0,
+        skipped: true,
+      });
     }
 
     return jsonResponse({
@@ -1544,5 +1715,7 @@ Summaries:
       },
       200
     );
+  } finally {
+    logDuration("total analyze-cv duration", analyzeStartedAt);
   }
 });
