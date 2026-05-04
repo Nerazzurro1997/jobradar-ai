@@ -45,7 +45,14 @@ function safeString(value: unknown) {
 }
 
 function safeNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value.trim().match(/\d+(\.\d+)?/)?.[0]);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 }
 
 function uniqueArray(items: string[], limit = 50) {
@@ -132,123 +139,190 @@ function tryParseJson(text: string) {
   }
 }
 
+const stringArraySchema = {
+  type: "array",
+  items: { type: "string" },
+};
+
+const languageProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    languages: stringArraySchema,
+    strongestLanguages: stringArraySchema,
+    businessLanguages: stringArraySchema,
+    languageKeywords: stringArraySchema,
+    languageSummary: { type: "string" },
+  },
+  required: [
+    "languages",
+    "strongestLanguages",
+    "businessLanguages",
+    "languageKeywords",
+    "languageSummary",
+  ],
+};
+
+const identitySchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    currentRole: { type: "string" },
+    targetRole: { type: "string" },
+    seniorityLevel: { type: "string" },
+    yearsOfExperience: { type: ["number", "null"] },
+    industryFocus: stringArraySchema,
+  },
+  required: [
+    "currentRole",
+    "targetRole",
+    "seniorityLevel",
+    "yearsOfExperience",
+    "industryFocus",
+  ],
+};
+
+const searchProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    searchTerms: stringArraySchema,
+    strongKeywords: stringArraySchema,
+    avoidKeywords: stringArraySchema,
+    preferredLocations: stringArraySchema,
+    preferredRoles: stringArraySchema,
+    acceptableRoles: stringArraySchema,
+    avoidRoles: stringArraySchema,
+  },
+  required: [
+    "searchTerms",
+    "strongKeywords",
+    "avoidKeywords",
+    "preferredLocations",
+    "preferredRoles",
+    "acceptableRoles",
+    "avoidRoles",
+  ],
+};
+
+const experienceProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    roles: stringArraySchema,
+    insuranceExperience: stringArraySchema,
+    adminExperience: stringArraySchema,
+    salesExperience: stringArraySchema,
+    customerExperience: stringArraySchema,
+    underwritingRelatedExperience: stringArraySchema,
+    claimsRelatedExperience: stringArraySchema,
+  },
+  required: [
+    "roles",
+    "insuranceExperience",
+    "adminExperience",
+    "salesExperience",
+    "customerExperience",
+    "underwritingRelatedExperience",
+    "claimsRelatedExperience",
+  ],
+};
+
+const skillsProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    hardSkills: stringArraySchema,
+    softSkills: stringArraySchema,
+    tools: stringArraySchema,
+    languages: stringArraySchema,
+    certifications: stringArraySchema,
+  },
+  required: [
+    "hardSkills",
+    "softSkills",
+    "tools",
+    "languages",
+    "certifications",
+  ],
+};
+
+const preferencesProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    workload: { type: "string" },
+    employmentType: { type: "string" },
+    workMode: { type: "string" },
+    salaryExpectation: { type: "string" },
+    fixumPreference: { type: "string" },
+    commutePreference: { type: "string" },
+  },
+  required: [
+    "workload",
+    "employmentType",
+    "workMode",
+    "salaryExpectation",
+    "fixumPreference",
+    "commutePreference",
+  ],
+};
+
+const matchingProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    bestFitRoles: stringArraySchema,
+    acceptableRoles: stringArraySchema,
+    weakFitRoles: stringArraySchema,
+    dealBreakers: stringArraySchema,
+    sellingPoints: stringArraySchema,
+    riskAreas: stringArraySchema,
+    scoringHints: stringArraySchema,
+    applicationPositioning: stringArraySchema,
+  },
+  required: [
+    "bestFitRoles",
+    "acceptableRoles",
+    "weakFitRoles",
+    "dealBreakers",
+    "sellingPoints",
+    "riskAreas",
+    "scoringHints",
+    "applicationPositioning",
+  ],
+};
+
+const summaryProfileSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    shortSummary: { type: "string" },
+    detailedSummary: { type: "string" },
+    recruiterPitch: { type: "string" },
+  },
+  required: ["shortSummary", "detailedSummary", "recruiterPitch"],
+};
+
 const compactProfileSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    searchTerms: {
-      type: "array",
-      items: { type: "string" },
-    },
-    strongKeywords: {
-      type: "array",
-      items: { type: "string" },
-    },
-    avoidKeywords: {
-      type: "array",
-      items: { type: "string" },
-    },
-    locations: {
-      type: "array",
-      items: { type: "string" },
-    },
-    profileSummary: {
-      type: "string",
-    },
-    cvHighlights: {
-      type: "array",
-      items: { type: "string" },
-    },
-    skillTags: {
-      type: "array",
-      items: { type: "string" },
-    },
-    languageProfile: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        languages: {
-          type: "array",
-          items: { type: "string" },
-        },
-        strongestLanguages: {
-          type: "array",
-          items: { type: "string" },
-        },
-        businessLanguages: {
-          type: "array",
-          items: { type: "string" },
-        },
-        languageKeywords: {
-          type: "array",
-          items: { type: "string" },
-        },
-        languageSummary: {
-          type: "string",
-        },
-      },
-      required: [
-        "languages",
-        "strongestLanguages",
-        "businessLanguages",
-        "languageKeywords",
-        "languageSummary",
-      ],
-    },
-    matching: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        bestFitRoles: {
-          type: "array",
-          items: { type: "string" },
-        },
-        acceptableRoles: {
-          type: "array",
-          items: { type: "string" },
-        },
-        weakFitRoles: {
-          type: "array",
-          items: { type: "string" },
-        },
-        dealBreakers: {
-          type: "array",
-          items: { type: "string" },
-        },
-        sellingPoints: {
-          type: "array",
-          items: { type: "string" },
-        },
-        riskAreas: {
-          type: "array",
-          items: { type: "string" },
-        },
-      },
-      required: [
-        "bestFitRoles",
-        "acceptableRoles",
-        "weakFitRoles",
-        "dealBreakers",
-        "sellingPoints",
-        "riskAreas",
-      ],
-    },
-    summary: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        shortSummary: {
-          type: "string",
-        },
-        detailedSummary: {
-          type: "string",
-        },
-        recruiterPitch: {
-          type: "string",
-        },
-      },
-      required: ["shortSummary", "detailedSummary", "recruiterPitch"],
-    },
+    searchTerms: stringArraySchema,
+    strongKeywords: stringArraySchema,
+    avoidKeywords: stringArraySchema,
+    locations: stringArraySchema,
+    profileSummary: { type: "string" },
+    cvHighlights: stringArraySchema,
+    skillTags: stringArraySchema,
+    languageProfile: languageProfileSchema,
+    matching: matchingProfileSchema,
+    summary: summaryProfileSchema,
+    identity: identitySchema,
+    search: searchProfileSchema,
+    experience: experienceProfileSchema,
+    skills: skillsProfileSchema,
+    preferences: preferencesProfileSchema,
   },
   required: [
     "searchTerms",
@@ -261,6 +335,11 @@ const compactProfileSchema = {
     "languageProfile",
     "matching",
     "summary",
+    "identity",
+    "search",
+    "experience",
+    "skills",
+    "preferences",
   ],
 };
 
@@ -274,7 +353,7 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
     body: JSON.stringify({
       model: "gpt-4.1-mini",
       temperature: 0,
-      max_output_tokens: 3000,
+      max_output_tokens: 4500,
       text: {
         format: {
           type: "json_schema",
@@ -294,7 +373,7 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
           content: `
 Repair this broken JSON into the requested schema.
 
-If information is missing, use empty arrays or empty strings.
+If information is missing, use empty arrays, empty strings, or null.
 
 Broken JSON:
 ${brokenText.slice(0, 10000)}
@@ -319,25 +398,73 @@ ${brokenText.slice(0, 10000)}
 }
 
 function normalizeProfile(raw: any) {
+  const rawIdentity = raw?.identity || raw?.deepProfile?.identity || {};
+  const rawSearch = raw?.search || raw?.deepProfile?.search || {};
+  const rawExperience = raw?.experience || raw?.deepProfile?.experience || {};
+  const rawSkills = raw?.skills || raw?.deepProfile?.skills || {};
+  const rawPreferences =
+    raw?.preferences || raw?.deepProfile?.preferences || {};
+  const rawMatching = raw?.matching || raw?.deepProfile?.matching || {};
+  const rawSummary = raw?.summary || raw?.deepProfile?.summary || {};
+  const rawLanguageProfile =
+    raw?.languageProfile || raw?.deepProfile?.languageProfile || {};
+
   const languageProfile = {
-    languages: safeArray(raw?.languageProfile?.languages, 20),
-    strongestLanguages: safeArray(raw?.languageProfile?.strongestLanguages, 10),
-    businessLanguages: safeArray(raw?.languageProfile?.businessLanguages, 10),
-    languageKeywords: safeArray(raw?.languageProfile?.languageKeywords, 20),
-    languageSummary: safeString(raw?.languageProfile?.languageSummary),
+    languages: uniqueArray(
+      [
+        ...safeArray(rawLanguageProfile?.languages, 20),
+        ...safeArray(rawSkills?.languages, 20),
+      ],
+      25
+    ),
+    strongestLanguages: safeArray(rawLanguageProfile?.strongestLanguages, 10),
+    businessLanguages: safeArray(rawLanguageProfile?.businessLanguages, 10),
+    languageKeywords: safeArray(rawLanguageProfile?.languageKeywords, 20),
+    languageSummary: safeString(rawLanguageProfile?.languageSummary),
   };
 
   const allLanguages = uniqueArray(languageProfile.languages, 25);
 
-  const searchTerms = safeArray(raw?.searchTerms, 25);
+  const searchTerms = uniqueArray(
+    [
+      ...safeArray(raw?.searchTerms, 25),
+      ...safeArray(rawSearch?.searchTerms, 25),
+    ],
+    25
+  );
 
-  const skillTags = uniqueArray(safeArray(raw?.skillTags, 40), 30);
+  const skills = {
+    hardSkills: uniqueArray(
+      [
+        ...safeArray(rawSkills?.hardSkills, 80),
+        ...safeArray(raw?.skillTags, 40),
+      ],
+      60
+    ),
+    softSkills: safeArray(rawSkills?.softSkills, 40),
+    tools: safeArray(rawSkills?.tools, 40),
+    languages: allLanguages,
+    certifications: safeArray(rawSkills?.certifications, 30),
+  };
+
+  const skillTags = uniqueArray(
+    [
+      ...safeArray(raw?.skillTags, 40),
+      ...skills.hardSkills,
+      ...skills.tools,
+      ...skills.certifications,
+    ],
+    40
+  );
 
   const strongKeywords = uniqueArray(
     [
       ...safeArray(raw?.strongKeywords, 60),
+      ...safeArray(rawSearch?.strongKeywords, 60),
       ...skillTags,
-      ...allLanguages,
+      ...skills.hardSkills,
+      ...skills.tools,
+      ...skills.certifications,
       ...languageProfile.languageKeywords,
       ...languageProfile.strongestLanguages,
       ...languageProfile.businessLanguages,
@@ -345,86 +472,153 @@ function normalizeProfile(raw: any) {
     90
   );
 
-  const avoidKeywords = safeArray(raw?.avoidKeywords, 45);
+  const bestFitRoles = uniqueArray(
+    [
+      ...safeArray(rawMatching?.bestFitRoles, 25),
+      ...safeArray(rawSearch?.preferredRoles, 25),
+    ],
+    25
+  );
+  const acceptableRoles = uniqueArray(
+    [
+      ...safeArray(rawMatching?.acceptableRoles, 25),
+      ...safeArray(rawSearch?.acceptableRoles, 25),
+    ],
+    25
+  );
+  const weakFitRoles = safeArray(rawMatching?.weakFitRoles, 25);
+  const avoidRoles = uniqueArray(
+    [
+      ...safeArray(rawSearch?.avoidRoles, 25),
+      ...safeArray(rawMatching?.dealBreakers, 25),
+    ],
+    35
+  );
+  const dealBreakers = uniqueArray(
+    [
+      ...safeArray(rawMatching?.dealBreakers, 25),
+      ...safeArray(rawSearch?.avoidKeywords, 25),
+    ],
+    25
+  );
 
-  const locations =
-    safeArray(raw?.locations, 15).length > 0
-      ? safeArray(raw?.locations, 15)
-      : ["Zürich"];
+  const avoidKeywords = uniqueArray(
+    [
+      ...safeArray(raw?.avoidKeywords, 45),
+      ...safeArray(rawSearch?.avoidKeywords, 45),
+      ...avoidRoles,
+      ...dealBreakers,
+    ],
+    45
+  );
+
+  const locations = uniqueArray(
+    [
+      ...safeArray(raw?.locations, 15),
+      ...safeArray(rawSearch?.preferredLocations, 15),
+    ],
+    15
+  );
 
   const profileSummary =
     safeString(raw?.profileSummary) ||
-    safeString(raw?.summary?.shortSummary) ||
-    "CV profile analyzed successfully.";
+    safeString(rawSummary?.shortSummary) ||
+    safeString(rawSummary?.detailedSummary);
 
   const cvHighlights = uniqueArray(safeArray(raw?.cvHighlights, 12), 12);
 
-  const bestFitRoles = safeArray(raw?.matching?.bestFitRoles, 25);
-  const acceptableRoles = safeArray(raw?.matching?.acceptableRoles, 25);
-  const weakFitRoles = safeArray(raw?.matching?.weakFitRoles, 25);
-  const dealBreakers = safeArray(raw?.matching?.dealBreakers, 25);
-  const sellingPoints = safeArray(raw?.matching?.sellingPoints, 35);
-  const riskAreas = safeArray(raw?.matching?.riskAreas, 25);
+  const sellingPoints = safeArray(rawMatching?.sellingPoints, 35);
+  const scoringHints = uniqueArray(
+    [...safeArray(rawMatching?.scoringHints, 35), ...sellingPoints],
+    35
+  );
+  const riskAreas = safeArray(rawMatching?.riskAreas, 25);
+  const applicationPositioning = uniqueArray(
+    [
+      ...safeArray(rawMatching?.applicationPositioning, 15),
+      safeString(rawSummary?.recruiterPitch),
+    ],
+    15
+  );
+
+  const identity = {
+    currentRole: safeString(rawIdentity?.currentRole),
+    targetRole:
+      safeString(rawIdentity?.targetRole) ||
+      bestFitRoles[0] ||
+      searchTerms[0] ||
+      "",
+    seniorityLevel: safeString(rawIdentity?.seniorityLevel),
+    yearsOfExperience: safeNumber(rawIdentity?.yearsOfExperience),
+    industryFocus: safeArray(rawIdentity?.industryFocus, 20),
+  };
+
+  const search = {
+    searchTerms,
+    strongKeywords,
+    avoidKeywords,
+    preferredLocations: locations,
+    preferredRoles: bestFitRoles,
+    acceptableRoles,
+    avoidRoles,
+  };
+
+  const experience = {
+    roles: safeArray(rawExperience?.roles, 30),
+    insuranceExperience: safeArray(rawExperience?.insuranceExperience, 30),
+    adminExperience: safeArray(rawExperience?.adminExperience, 30),
+    salesExperience: safeArray(rawExperience?.salesExperience, 30),
+    customerExperience: safeArray(rawExperience?.customerExperience, 30),
+    underwritingRelatedExperience: safeArray(
+      rawExperience?.underwritingRelatedExperience,
+      30
+    ),
+    claimsRelatedExperience: safeArray(
+      rawExperience?.claimsRelatedExperience,
+      30
+    ),
+  };
+
+  const preferences = {
+    workload: safeString(rawPreferences?.workload),
+    employmentType: safeString(rawPreferences?.employmentType),
+    workMode: safeString(rawPreferences?.workMode),
+    salaryExpectation: safeString(rawPreferences?.salaryExpectation),
+    fixumPreference: safeString(rawPreferences?.fixumPreference),
+    commutePreference: safeString(rawPreferences?.commutePreference),
+  };
+
+  const matching = {
+    bestFitRoles,
+    acceptableRoles,
+    weakFitRoles,
+    dealBreakers,
+    scoringHints,
+    sellingPoints,
+    applicationPositioning,
+    riskAreas,
+  };
+
+  const summary = {
+    shortSummary: safeString(rawSummary?.shortSummary),
+    detailedSummary: safeString(rawSummary?.detailedSummary),
+    recruiterPitch: safeString(rawSummary?.recruiterPitch),
+  };
 
   const deepProfile = {
-    identity: {
-      currentRole: "",
-      targetRole: bestFitRoles[0] || "",
-      seniorityLevel: "",
-      yearsOfExperience: null,
-      industryFocus: ["Insurance", "Administration", "Customer Service"],
-    },
-
+    identity,
     languageProfile,
-
-    search: {
-      searchTerms,
-      strongKeywords,
-      avoidKeywords,
-      preferredLocations: locations,
-      preferredRoles: bestFitRoles,
-      avoidRoles: weakFitRoles,
-    },
-
-    experience: {
-      roles: [],
-      insuranceExperience: [],
-      adminExperience: [],
-      salesExperience: [],
-      customerExperience: [],
-      underwritingRelatedExperience: [],
-      claimsRelatedExperience: [],
-    },
-
-    skills: {
-      hardSkills: skillTags,
-      softSkills: [],
-      tools: [],
-      languages: allLanguages,
-      certifications: [],
-    },
-
-    matching: {
-      bestFitRoles,
-      acceptableRoles,
-      weakFitRoles,
-      dealBreakers,
-      scoringHints: sellingPoints,
-      sellingPoints,
-      applicationPositioning: safeArray(raw?.summary?.recruiterPitch, 5),
-    },
-
+    search,
+    experience,
+    skills,
+    preferences,
+    matching,
     gaps: {
-      missingSkills: [],
+      missingSkills: safeArray(raw?.gaps?.missingSkills, 25),
       riskAreas,
-      howToCompensate: [],
+      howToCompensate: safeArray(raw?.gaps?.howToCompensate, 25),
     },
-
-    summary: {
-      shortSummary: safeString(raw?.summary?.shortSummary),
-      detailedSummary: safeString(raw?.summary?.detailedSummary),
-      recruiterPitch: safeString(raw?.summary?.recruiterPitch),
-    },
+    summary,
   };
 
   return {
@@ -439,13 +633,14 @@ function normalizeProfile(raw: any) {
 
     deepProfile,
 
-    identity: deepProfile.identity,
-    search: deepProfile.search,
-    experience: deepProfile.experience,
-    skills: deepProfile.skills,
-    matching: deepProfile.matching,
+    identity,
+    search,
+    experience,
+    skills,
+    preferences,
+    matching,
     gaps: deepProfile.gaps,
-    summary: deepProfile.summary,
+    summary,
   };
 }
 
@@ -493,7 +688,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model: "gpt-4.1-mini",
           temperature: 0,
-          max_output_tokens: 2500,
+          max_output_tokens: 4500,
           text: {
             format: {
               type: "json_schema",
@@ -506,7 +701,7 @@ Deno.serve(async (req) => {
             {
               role: "system",
               content:
-                "Return only valid compact JSON matching the schema. No markdown. No explanations. Keep every string short.",
+                "Return only valid compact JSON matching the schema. No markdown. No explanations. Do not invent facts. Use empty arrays, empty strings, or null when the CV does not support a field.",
             },
             {
               role: "user",
@@ -516,22 +711,72 @@ Deno.serve(async (req) => {
                   text: `
 Analyze the uploaded CV for Swiss job matching.
 
-Focus:
-- Insurance roles
-- Administration
-- Backoffice
-- Customer service
-- Underwriting assistant
-- Claims assistant
-- Office roles
+Primary matching domains:
+- Insurance, health insurance, broker support, policy administration
+- Administration, backoffice, office coordination
+- Customer service, client service, sales support, internal sales
+- Underwriting assistant, claims assistant, claims support
 
-Rules:
-- Do not invent facts.
-- Keep arrays concise.
-- Extract languages carefully.
-- Search terms must be useful for jobs.ch.
-- profileSummary must be short and useful for a UI card.
-- cvHighlights must contain 4 to 8 short points.
+Critical extraction rules:
+- Do not invent facts or preferences.
+- If a field is not clearly present or inferable from the CV, use "", [], or null.
+- Keep arrays concise, ordered by matching importance, and free of duplicates.
+- Use Swiss/German job-market wording where useful for jobs.ch.
+
+searchTerms:
+- Must be real jobs.ch search queries, not generic skills.
+- Prefer 6 to 14 short role queries such as "Versicherung Innendienst", "Sachbearbeiter Versicherung", "Kundenberater Innendienst", "Backoffice Versicherung", "Underwriting Assistant", "Schaden Sachbearbeiter".
+- Include only queries that fit the CV evidence.
+- Do not include skills-only terms like "CRM", "MS Office", "Deutsch", or "Teamwork".
+
+strongKeywords:
+- Include match-relevant domain terms, hard skills, tools, certifications, languages, insurance/admin/customer-service keywords, and CV-specific strengths.
+- Avoid generic soft skills unless unusually important in the CV.
+
+avoidKeywords:
+- Include only real negative matching signals supported by the CV goals or constraints.
+- Use for roles/conditions to avoid, e.g. "Aussendienst", "Provision", "Kaltakquise", "Praktikum", "Lehrstelle", "Senior Leadership", only when appropriate.
+
+identity:
+- currentRole, targetRole, seniorityLevel, yearsOfExperience, industryFocus.
+- seniorityLevel examples: Entry, Junior, Professional, Senior, Lead, Management.
+- yearsOfExperience must be a number only if reasonably inferable, otherwise null.
+
+experience:
+- Separate insuranceExperience, adminExperience, salesExperience, customerExperience, underwritingRelatedExperience, and claimsRelatedExperience.
+- Each item should be a short evidence-based phrase from the CV.
+
+skills:
+- hardSkills: concrete role skills.
+- softSkills: interpersonal or work-style skills only if evidenced.
+- tools: software/tools/systems.
+- languages: language names only.
+- certifications: degrees/certificates/training if present.
+
+languageProfile:
+- languages: all languages found.
+- strongestLanguages: languages clearly strongest/native/fluent.
+- businessLanguages: languages usable professionally.
+- languageKeywords: useful matching terms such as "Deutsch", "Italienisch", "Franzoesisch", "Englisch", "bilingual", "fluent".
+- languageSummary: short business relevance summary.
+
+matching:
+- bestFitRoles: strongest realistic target roles.
+- acceptableRoles: plausible adjacent roles.
+- weakFitRoles: roles with partial fit or notable gaps.
+- dealBreakers: conditions likely unsuitable.
+- sellingPoints: evidence-based strengths for applications.
+- riskAreas: gaps or points recruiters may question.
+- scoringHints: concise signals useful for ranking.
+- applicationPositioning: how to position the candidate.
+
+preferences:
+- Fill workload, employmentType, workMode, salaryExpectation, fixumPreference, commutePreference only if explicitly present in the CV.
+- Do not infer salary or fixed-salary preference from role history.
+
+Summaries:
+- profileSummary max 220 characters.
+- cvHighlights 4 to 8 short points.
 - detailedSummary max 500 characters.
 `.trim(),
                 },
@@ -615,7 +860,7 @@ Rules:
       profile,
       meta: {
         model: openAiData?.model || "gpt-4.1-mini",
-        profileVersion: "compact-v1-stable",
+        profileVersion: "compact-v2-stable",
         extractedAt: new Date().toISOString(),
       },
     });
