@@ -349,6 +349,7 @@ const cvValidationSchema = {
   properties: {
     shouldAnalyze: { type: "boolean" },
     isCv: { type: "boolean" },
+    hasClearCvStructure: { type: "boolean" },
     confidence: { type: "number" },
     documentType: { type: "string" },
     cvSignals: stringArraySchema,
@@ -358,6 +359,7 @@ const cvValidationSchema = {
   required: [
     "shouldAnalyze",
     "isCv",
+    "hasClearCvStructure",
     "confidence",
     "documentType",
     "cvSignals",
@@ -420,6 +422,39 @@ ${brokenText.slice(0, 10000)}
   return tryParseJson(repairedText);
 }
 
+function hasBlockedDocumentTypeSignal(
+  fileName: string,
+  validation: {
+    documentType: string;
+    reason: string;
+    nonCvSignals: string[];
+  }
+) {
+  const text = [
+    fileName,
+    validation.documentType,
+    validation.reason,
+    ...validation.nonCvSignals,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return [
+    "arbeitsbestätigung",
+    "arbeitsbestaetigung",
+    "arbeitszeugnis",
+    "arbeitgeberbescheinigung",
+    "employment confirmation",
+    "employment certificate",
+    "work certificate",
+    "attestation de travail",
+    "certificat de travail",
+    "attestato di lavoro",
+    "certificato di lavoro",
+    "conferma di lavoro",
+  ].some((term) => text.includes(term));
+}
+
 async function validateCvDocument(
   apiKey: string,
   fileName: string,
@@ -454,7 +489,7 @@ async function validateCvDocument(
           {
             role: "system",
             content:
-              "Classify whether the uploaded PDF is a CV/resume/Lebenslauf. Return only valid JSON matching the schema.",
+              "Classify whether the uploaded PDF is a CV/resume/Lebenslauf. Be conservative: employment confirmations and work certificates are not CVs. Return only valid JSON matching the schema.",
           },
           {
             role: "user",
@@ -478,15 +513,23 @@ Block documents that look like:
 - invoices, Rechnungen, fatture
 - contracts, Verträge, contratti
 - insurance offers, Versicherungsofferten, offerte assicurative
+- Arbeitsbestätigung, Arbeitszeugnis single document, Arbeitgeberbescheinigung
+- employment confirmation, employment certificate, work certificate
+- attestation de travail, certificat de travail
+- attestato di lavoro, certificato di lavoro, conferma di lavoro
 - letters, Briefe, lettere
 - job ads, Stelleninserate, annunci di lavoro
 - standalone certificates without a CV structure
 - reports, rapporti, generic business documents
 
 Decision rules:
-- shouldAnalyze must be true when the document is probably a CV or resume.
-- If uncertain but there are strong CV signals, set shouldAnalyze true.
+- A document is not a CV merely because it contains a person's name, employer, employment dates, a job title, or experience at one company.
+- A CV must have clear CV structure, usually multiple sections such as Berufserfahrung/work experience/esperienze lavorative/expérience professionnelle, Ausbildung/education/formazione, Fähigkeiten/skills/competenze/compétences, Sprachen/languages/lingue/langues, Profil/profile/profilo, or multiple roles/stations.
+- Set hasClearCvStructure true only when the document has clear CV/resume structure.
+- shouldAnalyze must be true only when the document is probably a CV/resume and has clear CV structure.
+- If uncertain but there are strong CV structure signals, set shouldAnalyze true.
 - If uncertain and it looks like an invoice, contract, offer, letter, job ad, certificate-only, report, or generic document, set shouldAnalyze false.
+- If confidence is below 0.75 and there is no clear CV structure, set shouldAnalyze false.
 - Do not rely only on the filename.
 - confidence must be between 0 and 1.
 
@@ -543,6 +586,7 @@ Filename: ${fileName}
     validation: {
       shouldAnalyze: Boolean(validation.shouldAnalyze),
       isCv: Boolean(validation.isCv),
+      hasClearCvStructure: Boolean(validation.hasClearCvStructure),
       confidence: safeNumber(validation.confidence) ?? 0,
       documentType: safeString(validation.documentType),
       cvSignals: safeArray(validation.cvSignals, 12),
@@ -844,13 +888,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!cvValidationResult.validation.shouldAnalyze) {
+    const cvValidation = cvValidationResult.validation;
+    const hasLowConfidenceWithoutClearCvStructure =
+      cvValidation.confidence < 0.75 && !cvValidation.hasClearCvStructure;
+    const hasBlockedDocumentType =
+      hasBlockedDocumentTypeSignal(fileName, cvValidation) &&
+      !cvValidation.hasClearCvStructure;
+
+    if (
+      !cvValidation.shouldAnalyze ||
+      hasLowConfidenceWithoutClearCvStructure ||
+      hasBlockedDocumentType
+    ) {
       return jsonResponse(
         {
           success: false,
           errorCode: "NOT_A_CV",
           error:
             "The uploaded file does not look like a CV or resume. Please upload your CV.",
+          documentType: cvValidation.documentType || "not_cv",
+          reason:
+            cvValidation.reason ||
+            "The document does not have clear CV or resume structure.",
         },
         200
       );
