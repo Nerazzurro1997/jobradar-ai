@@ -1,13 +1,12 @@
 import type { BadgeProps, BadgeTone } from "./JobCardTypes";
 
-const badgeStyles: Record<
-  BadgeTone,
-  {
-    background: string;
-    border: string;
-    color: string;
-  }
-> = {
+type BadgeStyle = {
+  background: string;
+  border: string;
+  color: string;
+};
+
+const badgeStyles: Record<BadgeTone, BadgeStyle> = {
   neutral: {
     background: "rgba(15,23,42,0.055)",
     border: "1px solid rgba(15,23,42,0.07)",

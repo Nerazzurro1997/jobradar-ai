@@ -3,21 +3,14 @@ import { renderAnalysis } from "../../utils/renderAnalysis";
 import type { RecommendationStyle } from "./JobCardTypes";
 import { parseMobileAnalysisSections } from "./JobCardUtils";
 
-type DesktopAnalysisContentProps = {
+type AnalysisContentProps = {
   analysisText: string;
   isAnalyzing: boolean;
   analysisSummary: string;
   recommendationStyle: RecommendationStyle;
 };
 
-type MobileAnalysisContentProps = {
-  analysisText: string;
-  isAnalyzing: boolean;
-  analysisSummary: string;
-  recommendationStyle: RecommendationStyle;
-};
-
-type MobileAnalysisModalProps = MobileAnalysisContentProps & {
+type MobileAnalysisModalProps = AnalysisContentProps & {
   open: boolean;
   title: string;
   onClose: () => void;
@@ -28,7 +21,7 @@ export function DesktopAnalysisContent({
   isAnalyzing,
   analysisSummary,
   recommendationStyle,
-}: DesktopAnalysisContentProps) {
+}: AnalysisContentProps) {
   return (
     <>
       <div className="jr-analysis-head">
@@ -103,7 +96,7 @@ function MobileAnalysisContent({
   isAnalyzing,
   analysisSummary,
   recommendationStyle,
-}: MobileAnalysisContentProps) {
+}: AnalysisContentProps) {
   const sections = parseMobileAnalysisSections(analysisText);
 
   if (isAnalyzing) {
