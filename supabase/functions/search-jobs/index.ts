@@ -1283,15 +1283,13 @@ function isWeakSearchTerm(term: string) {
 
   const weakTerms = [
     "crm",
-    "office manager",
-    "administration",
-    "kundenberatung",
-    "backoffice",
-    "innendienst",
-    "verkauf",
     "deutsch",
     "italienisch",
     "englisch",
+    "french",
+    "german",
+    "italian",
+    "english",
     "französisch",
   ];
 
@@ -1302,14 +1300,90 @@ function isLowPriorityQuery(term: string) {
   const lower = term.toLowerCase().trim();
 
   const lowPriorityTerms = [
-    "administration versicherung",
-    "office manager versicherung",
-    "operations assistant versicherung",
-    "client service versicherung",
-    "customer service zürich",
+    "administration",
+    "mitarbeiter administration",
+    "sachbearbeiter",
+    "kundenservice",
+    "customer service",
+    "backoffice",
+    "office manager",
+    "support",
   ];
 
   return lowPriorityTerms.includes(lower);
+}
+
+function getRoleLikeSearchSignals() {
+  return [
+    "administrator",
+    "administration",
+    "advisor",
+    "analyst",
+    "assistant",
+    "backoffice",
+    "berater",
+    "beraterin",
+    "broker",
+    "buchhalter",
+    "consultant",
+    "controller",
+    "coordinator",
+    "customer service",
+    "data",
+    "designer",
+    "developer",
+    "engineer",
+    "entwickler",
+    "fachfrau",
+    "fachmann",
+    "claims",
+    "informatiker",
+    "innendienst",
+    "kaufmann",
+    "kauffrau",
+    "koordinator",
+    "kundenberater",
+    "kundenberatung",
+    "kundenservice",
+    "manager",
+    "marketing",
+    "mitarbeiter",
+    "nurse",
+    "pflege",
+    "pflegefach",
+    "project manager",
+    "policen",
+    "sachbearbeiter",
+    "sales",
+    "schaden",
+    "software",
+    "specialist",
+    "support",
+    "technician",
+    "techniker",
+    "underwriting",
+    "verkaufer",
+    "verkaeufer",
+    "verkauf",
+    "verkaeuferin",
+    "verkaufsberater",
+  ];
+}
+
+function isRoleLikeSearchTerm(term: string) {
+  const normalized = normalizeForKeywordMatch(term);
+
+  if (!normalized) return false;
+
+  return getRoleLikeSearchSignals().some((signal) => {
+    const normalizedSignal = normalizeForKeywordMatch(signal);
+    return Boolean(
+      normalizedSignal &&
+        (` ${normalized} `.includes(` ${normalizedSignal} `) ||
+          ` ${normalizedSignal} `.includes(` ${normalized} `) ||
+          normalized.includes(normalizedSignal))
+    );
+  });
 }
 
 function toJobSearchQuery(term: string): string | null {
@@ -1317,104 +1391,106 @@ function toJobSearchQuery(term: string): string | null {
 
   if (!cleaned || cleaned.length < 4) return null;
 
-  const lower = cleaned.toLowerCase();
-
-  const exactMappings: Record<string, string> = {
-    versicherung: "Versicherung Innendienst",
-    innendienst: "Versicherung Innendienst",
-    backoffice: "Backoffice Versicherung",
-    administration: "Administration Versicherung",
-    kundenberatung: "Kundenberater Innendienst",
-    kundenservice: "Kundenservice Versicherung",
-    "customer service": "Customer Service Versicherung",
-    underwriting: "Underwriting Assistant",
-    schaden: "Schaden Sachbearbeiter",
-    broker: "Broker Versicherung",
-    policen: "Policen Sachbearbeiter",
-    vertragsänderungen: "Vertragsmanagement Versicherung",
-    büroorganisation: "Office Manager Versicherung",
-    prozessoptimierung: "Operations Assistant Versicherung",
-  };
-
-  if (exactMappings[lower]) {
-    return exactMappings[lower];
-  }
-
-  if (/^backoffice\s+/.test(lower)) {
-    return "Backoffice Versicherung";
-  }
-
-  if (/^administration\s+/.test(lower)) {
-    return "Administration Versicherung";
-  }
-
-  if (/^office manager\s+/.test(lower)) {
-    return "Office Manager Versicherung";
-  }
-
-  if (/^innendienst\s+/.test(lower)) {
-    return "Versicherung Innendienst";
-  }
-
-  if (/^kundenberatung\s+/.test(lower)) {
-    return "Kundenberater Innendienst";
-  }
-
   if (isWeakSearchTerm(cleaned)) return null;
-
-  const roleSignals = [
-    "sachbearbeiter",
-    "berater",
-    "kundenberater",
-    "versicherungsberater",
-    "versicherungsfachmann",
-    "innendienst",
-    "backoffice",
-    "administration",
-    "assistant",
-    "manager",
-    "specialist",
-    "customer service",
-    "kundenservice",
-    "support",
-    "underwriting",
-    "claims",
-    "schaden",
-    "broker",
-    "office manager",
-    "operations",
-    "vertragsmanagement",
-  ];
-
-  const hasRoleSignal = roleSignals.some((signal) => lower.includes(signal));
-
-  if (!hasRoleSignal) return null;
-
-  const words = cleaned.split(/\s+/).filter(Boolean);
-
-  if (words.length === 1) {
-    if (
-      lower.includes("versicherungsfachmann") ||
-      lower.includes("versicherungsberater")
-    ) {
-      return cleaned;
-    }
-
-    return `${cleaned} Versicherung`;
-  }
+  if (!isRoleLikeSearchTerm(cleaned)) return null;
 
   return cleaned;
+}
+
+function toSkillBasedJobSearchQuery(term: string): string | null {
+  const query = toJobSearchQuery(term);
+
+  if (!query) return null;
+
+  const words = query.split(/\s+/).filter(Boolean);
+  return words.length > 1 ? query : null;
+}
+
+function getProfileSkillQuerySignals(profile: CvProfile) {
+  const skillsValue = profile.skills;
+
+  return uniqueArray(
+    [
+      ...safeArray(profile.skillTags, 40),
+      ...(Array.isArray(skillsValue) ? safeArray(skillsValue, 40) : []),
+      ...(!Array.isArray(skillsValue)
+        ? safeArray(skillsValue?.hardSkills, 40)
+        : []),
+      ...(!Array.isArray(skillsValue)
+        ? safeArray(skillsValue?.tools, 30)
+        : []),
+      ...(!Array.isArray(skillsValue)
+        ? safeArray(skillsValue?.certifications, 20)
+        : []),
+    ],
+    70
+  );
+}
+
+function getProfileRoleQuerySignals(profile: CvProfile) {
+  const identity = profile.deepProfile?.identity || {};
+  const experience = profile.deepProfile?.experience || {};
+
+  return uniqueArray(
+    [
+      ...getPreferredRoleSignals(profile),
+      ...safeArray(profile.search?.searchTerms, 20),
+      cleanText(identity.targetRole),
+      cleanText(identity.currentRole),
+      ...safeArray(experience.roles, 20),
+    ],
+    50
+  );
+}
+
+function getGenericFallbackQueriesFromProfile(profile: CvProfile) {
+  const profileText = normalizeForKeywordMatch(getProfileSearchText(profile));
+  const fallbackTerms: string[] = [];
+
+  if (
+    includesAny(profileText, [
+      "administration",
+      "admin",
+      "office",
+      "backoffice",
+      "sachbearbeiter",
+      "kaufmann",
+      "kauffrau",
+      "kaufmaennisch",
+    ])
+  ) {
+    fallbackTerms.push("Mitarbeiter Administration", "Sachbearbeiter");
+  }
+
+  if (
+    includesAny(profileText, [
+      "kunden",
+      "customer",
+      "client",
+      "service",
+      "support",
+      "beratung",
+      "berater",
+    ])
+  ) {
+    fallbackTerms.push("Kundenservice");
+  }
+
+  if (includesAny(profileText, ["backoffice", "office", "innendienst"])) {
+    fallbackTerms.push("Backoffice");
+  }
+
+  return uniqueArray(fallbackTerms, 4);
 }
 
 function getSearchQueries(
   profile: CvProfile,
   knownUrlSet: Set<string>
 ): SearchQuery[] {
-  const preferredRoles = getPreferredRoleSignals(profile);
   const maxQueries = 16;
 
   const directTerms = uniqueArray(
-    [...preferredRoles, ...profile.searchTerms]
+    getProfileRoleQuerySignals(profile)
       .map(toJobSearchQuery)
       .filter((term): term is string => Boolean(term)),
     16
@@ -1429,22 +1505,20 @@ function getSearchQueries(
       weight: 1.35,
     }));
 
-  const expandedRoleSeeds = [
-    "Sachbearbeiter Versicherung",
-    "Versicherung Innendienst",
-    "Kundenberater Innendienst",
-    "Kundenservice Versicherung",
-    "Backoffice Versicherung",
-    "Verkaufssupport Versicherung",
-    "Underwriting Assistant",
-    "Schaden Sachbearbeiter",
-    "Broker Versicherung",
-    "Krankenkasse Sachbearbeiter",
-    "Policen Sachbearbeiter",
-    "Vertragsmanagement Versicherung",
-  ];
+  const expandedRoleSeeds = uniqueArray(
+    getProfileSkillQuerySignals(profile)
+      .map(toSkillBasedJobSearchQuery)
+      .filter((term): term is string => Boolean(term))
+      .filter(
+        (term) =>
+          !directTerms.some(
+            (directTerm) => directTerm.toLowerCase() === term.toLowerCase()
+          )
+      ),
+    12
+  );
 
-  const expandedQueries = uniqueArray(expandedRoleSeeds, 12).map((term) => ({
+  const expandedQueries = expandedRoleSeeds.map((term) => ({
     term,
     source: "cv-expanded" as const,
     weight: 1.05,
@@ -1452,7 +1526,7 @@ function getSearchQueries(
 
   const primaryQueries = [...coreDirectQueries, ...expandedQueries];
   const shouldUseFallbackQueries =
-    knownUrlSet.size > 20 || primaryQueries.length < 10;
+    knownUrlSet.size > 20 || primaryQueries.length < 6;
 
   const lowPriorityDirectQueries = shouldUseFallbackQueries
     ? directTerms
@@ -1466,12 +1540,13 @@ function getSearchQueries(
     : [];
 
   const fallbackQueries = shouldUseFallbackQueries
-    ? [
-        "Administration Versicherung",
-        "Client Service Versicherung",
-        "Office Manager Versicherung",
-        "Operations Assistant Versicherung",
-      ]
+    ? getGenericFallbackQueriesFromProfile(profile)
+        .filter(
+          (term) =>
+            !primaryQueries.some(
+              (query) => query.term.toLowerCase() === term.toLowerCase()
+            )
+        )
         .slice(0, 2)
         .map((term) => ({
           term,
