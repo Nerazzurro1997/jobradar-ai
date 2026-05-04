@@ -514,7 +514,9 @@ const cvAnalysisSchema = {
   additionalProperties: false,
   properties: {
     documentValidation: documentValidationSchema,
-    profile: compactProfileSchema,
+    profile: {
+      anyOf: [compactProfileSchema, { type: "null" }],
+    },
   },
   required: ["documentValidation", "profile"],
 };
@@ -556,7 +558,7 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
 Repair this broken JSON into the requested schema.
 
 If information is missing, use empty arrays, empty strings, or null.
-If the documentValidation says the file is not a real CV, keep shouldAnalyze false and keep the profile empty according to the schema.
+If documentValidation.shouldAnalyze is false, keep shouldAnalyze false and set profile to null.
 
 Broken JSON:
 ${brokenText.slice(0, 10000)}
@@ -925,7 +927,7 @@ Return exactly:
     "nonCvSignals": string[],
     "reason": string
   },
-  "profile": { ...compact CV profile... }
+  "profile": { ...compact CV profile... } | null
 }
 
 Document validation:
@@ -957,7 +959,7 @@ Document validation:
 - documentValidation.nonCvSignals must contain concrete non-CV signals such as Arbeitsbestaetigung, employment certificate, diploma, certificate-only, cover letter, contract, invoice, insurance policy, or job ad.
 - documentValidation.shouldAnalyze must be true only when the document is clearly a CV/resume, has typical CV structure, and confidence is at least 0.75.
 - If uncertain, prefer documentValidation.shouldAnalyze false.
-- If shouldAnalyze is false, explain the reason clearly and keep profile empty according to the schema. Do not extract a candidate profile from non-CV documents.
+- If shouldAnalyze is false, explain the reason clearly and set profile to null. Do not extract a candidate profile from non-CV documents.
 - Do not rely only on the filename.
 
 Filename: ${fileName}
@@ -1151,6 +1153,16 @@ Summaries:
             (hasLowValidationConfidence
               ? "The document validation confidence is below the threshold for a clear CV."
               : "The document does not have clear CV or resume structure."),
+        },
+        200
+      );
+    }
+
+    if (!rawAnalysis.profile) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Could not parse CV profile JSON",
         },
         200
       );
