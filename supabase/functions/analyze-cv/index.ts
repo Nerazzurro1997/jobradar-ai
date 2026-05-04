@@ -855,40 +855,6 @@ const nullableCompactProfileSchema = {
   type: ["object", "null"],
 };
 
-const aiProfileSchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    profileSummary: { type: "string" },
-    cvHighlights: stringArraySchema,
-    languageProfile: languageProfileSchema,
-    identity: identitySchema,
-    search: searchProfileSchema,
-    experience: experienceProfileSchema,
-    skills: skillsProfileSchema,
-    preferences: preferencesProfileSchema,
-    matching: matchingProfileSchema,
-    summary: summaryProfileSchema,
-  },
-  required: [
-    "profileSummary",
-    "cvHighlights",
-    "languageProfile",
-    "identity",
-    "search",
-    "experience",
-    "skills",
-    "preferences",
-    "matching",
-    "summary",
-  ],
-};
-
-const nullableAiProfileSchema = {
-  ...aiProfileSchema,
-  type: ["object", "null"],
-};
-
 const documentValidationSchema = {
   type: "object",
   additionalProperties: false,
@@ -915,7 +881,7 @@ const cvAnalysisSchema = {
   additionalProperties: false,
   properties: {
     documentValidation: documentValidationSchema,
-    profile: nullableAiProfileSchema,
+    profile: nullableCompactProfileSchema,
   },
   required: ["documentValidation", "profile"],
 };
@@ -936,7 +902,7 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         temperature: 0,
-        max_output_tokens: 4200,
+        max_output_tokens: 6500,
         text: {
           format: {
             type: "json_schema",
@@ -984,6 +950,111 @@ ${brokenText.slice(0, 10000)}
   }
 
   return tryParseJson(repairedText);
+}
+
+async function recoverIncompleteProfileWithOpenAI(
+  apiKey: string,
+  fileName: string,
+  fileBase64: string
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
+  let profileResponse: Response;
+
+  try {
+    profileResponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        temperature: 0,
+        max_output_tokens: 6500,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "cv_profile_recovery",
+            strict: true,
+            schema: compactProfileSchema,
+          },
+        },
+        input: [
+          {
+            role: "system",
+            content:
+              "Extract a complete compact CV profile from the uploaded CV. Return only valid JSON matching the schema. Do not validate the document again. Do not invent facts. Use empty arrays or empty strings only when unsupported by the CV, but for a real CV extract useful profile signals whenever evidence exists.",
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `
+Extract the profile for this already-validated CV.
+
+Populate the top-level fields that drive matching:
+- searchTerms: 6-12 real jobs.ch role queries.
+- strongKeywords: domain terms, hard skills, tools, certifications, languages, and relevant strengths.
+- skillTags: most relevant hard skills, tools, certifications, and domain skills.
+- matching.bestFitRoles: roles that fit this CV best.
+- languageProfile.languages: languages explicitly present in the CV.
+- cvHighlights: 4-8 concise evidence-based highlights.
+- profileSummary: concise profile summary.
+
+Also fill the nested compatible fields: search, experience, skills, preferences, matching, languageProfile, summary, identity.
+
+Filename: ${fileName}
+`.trim(),
+              },
+              {
+                type: "input_file",
+                filename: fileName,
+                file_data: `data:application/pdf;base64,${fileBase64}`,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+  } catch (error) {
+    console.warn("CV profile recovery request failed", error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const parsedProfile = await parseOpenAiResponse(profileResponse);
+
+  if (!parsedProfile.isJson || !profileResponse.ok) {
+    console.warn("CV profile recovery returned invalid response", {
+      ok: profileResponse.ok,
+      status: profileResponse.status,
+      isJson: parsedProfile.isJson,
+    });
+    return null;
+  }
+
+  const structuredProfile = extractStructuredOutput(parsedProfile.data);
+  if (
+    structuredProfile &&
+    typeof structuredProfile === "object" &&
+    !Array.isArray(structuredProfile)
+  ) {
+    return structuredProfile;
+  }
+
+  const outputText = extractOutputText(parsedProfile.data);
+  const parsedTextProfile =
+    tryParseJson(outputText) || extractJsonFromText(outputText);
+
+  return parsedTextProfile &&
+    typeof parsedTextProfile === "object" &&
+    !Array.isArray(parsedTextProfile)
+    ? parsedTextProfile
+    : null;
 }
 
 function normalizeProfile(raw: any) {
@@ -1251,7 +1322,7 @@ Validate the uploaded PDF first. Analyze it only if it is clearly a real CV/resu
 
 Return one JSON object matching the schema:
 - documentValidation: shouldAnalyze, documentType, confidence, cvSignals, nonCvSignals, reason.
-- profile: null when shouldAnalyze is false; otherwise a compact profile with profileSummary, cvHighlights, identity, search, experience, skills, preferences, languageProfile, matching, summary.
+- profile: null when shouldAnalyze is false; otherwise a compact profile with these top-level fields populated from CV evidence: searchTerms, strongKeywords, avoidKeywords, locations, profileSummary, cvHighlights, skillTags, languageProfile, matching, summary, identity, search, experience, skills, preferences.
 
 Strict CV validation:
 - Accept CVs/resumes/Lebenslauf in German, English, Italian, or French only when they show real CV structure.
@@ -1266,6 +1337,11 @@ Profile extraction for valid CVs:
 - Do not invent facts. Use "", [], or null when the CV does not support a field.
 - Keep arrays concise, evidence-based, ordered by matching importance, and free of duplicates.
 - Use Swiss/German job-market wording where useful for jobs.ch.
+- Populate both the top-level core fields and the nested compatible fields. For valid CVs, do not leave all signal fields empty.
+- Top-level searchTerms must mirror the best job queries from search.searchTerms.
+- Top-level strongKeywords must include the strongest matching keywords from search.strongKeywords, skills, languages, certifications, and domain terms.
+- Top-level skillTags must include the most relevant hard skills, tools, certifications, and domain skills.
+- Top-level locations must mirror preferredLocations when present.
 - search.searchTerms must be real jobs.ch role queries, not skills. Prefer 6-12 short queries fitting the CV, e.g. Versicherung Innendienst, Sachbearbeiter Versicherung, Kundenberater Innendienst, Backoffice Versicherung, Underwriting Assistant, Schaden Sachbearbeiter.
 - search.strongKeywords should include domain terms, hard skills, tools, certifications, languages, insurance/admin/customer-service keywords, and CV-specific strengths.
 - search.avoidKeywords/search.avoidRoles only for real negative signals supported by the CV, e.g. Aussendienst, Provision, Kaltakquise, Praktikum, Lehrstelle, Senior Leadership.
@@ -1410,7 +1486,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           model: "gpt-4.1-mini",
           temperature: 0,
-          max_output_tokens: 4500,
+          max_output_tokens: 6500,
           text: {
             format: {
               type: "json_schema",
@@ -1623,25 +1699,48 @@ Deno.serve(async (req) => {
       fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
     });
 
+    let usedProfileRecovery = false;
+    let rawProfileForNormalization =
+      rawAnalysis &&
+      typeof rawAnalysis.profile === "object" &&
+      rawAnalysis.profile !== null
+        ? rawAnalysis.profile
+        : null;
+
     if (
-      !rawAnalysis ||
-      typeof rawAnalysis.profile !== "object" ||
-      rawAnalysis.profile === null
+      !rawProfileForNormalization
     ) {
       console.warn("CV profile extraction incomplete: missing profile object", {
         fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
       });
 
-      return jsonResponse(
-        {
-          success: false,
-          error: "CV profile extraction incomplete",
-        },
-        200
-      );
+      const recoveryStartedAt = performance.now();
+      try {
+        rawProfileForNormalization = await recoverIncompleteProfileWithOpenAI(
+          apiKey,
+          fileName,
+          fileBase64
+        );
+        usedProfileRecovery = Boolean(rawProfileForNormalization);
+      } finally {
+        logDuration("CV profile recovery OpenAI call duration", recoveryStartedAt, {
+          recovered: Boolean(rawProfileForNormalization),
+          reason: "missing_profile_object",
+        });
+      }
+
+      if (!rawProfileForNormalization) {
+        return jsonResponse(
+          {
+            success: false,
+            error: "CV profile extraction incomplete",
+          },
+          200
+        );
+      }
     }
 
-    const profile = normalizeProfile(rawAnalysis.profile);
+    let profile = normalizeProfile(rawProfileForNormalization);
 
     console.info("CV profile normalized", {
       fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
@@ -1652,6 +1751,35 @@ Deno.serve(async (req) => {
         fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
       });
 
+      if (!usedProfileRecovery) {
+        const recoveryStartedAt = performance.now();
+        let recoveredRawProfile: any = null;
+
+        try {
+          recoveredRawProfile = await recoverIncompleteProfileWithOpenAI(
+            apiKey,
+            fileName,
+            fileBase64
+          );
+        } finally {
+          logDuration("CV profile recovery OpenAI call duration", recoveryStartedAt, {
+            recovered: Boolean(recoveredRawProfile),
+            reason: "empty_profile_signals",
+          });
+        }
+
+        if (recoveredRawProfile) {
+          profile = normalizeProfile(recoveredRawProfile);
+          usedProfileRecovery = true;
+
+          console.info("CV profile normalized from recovery", {
+            fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+          });
+        }
+      }
+    }
+
+    if (!hasUsefulProfileSignals(profile)) {
       return jsonResponse(
         {
           success: false,

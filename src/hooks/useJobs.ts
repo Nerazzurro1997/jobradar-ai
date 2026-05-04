@@ -180,15 +180,34 @@ function getErrorMessage(error: unknown, fallback = "Unknown error"): string {
 
 function getAnalyzeCvFailureMessage(data: any) {
   const detailsText = valueToText(data?.details);
+  const errorMessage = typeof data?.error === "string" ? data.error : "";
+
+  if (data?.errorCode === "NOT_A_CV" || errorMessage.includes("NOT_A_CV")) {
+    return "Questo file non sembra essere un CV. Carica per favore il tuo curriculum.";
+  }
+
+  if (errorMessage.includes("CV profile extraction incomplete")) {
+    return "CV profile extraction incomplete";
+  }
 
   if (
+    errorMessage.includes("Could not parse") ||
+    errorMessage.includes("parse") ||
     detailsText.includes('"shouldAnalyze"') ||
     detailsText.includes('"hasClearCvStructure"')
   ) {
-    return data?.error || "CV analysis failed during document validation.";
+    return errorMessage || "CV analysis failed during document validation.";
   }
 
-  return data?.details || data?.error || "CV analysis failed without details";
+  if (errorMessage) {
+    return errorMessage;
+  }
+
+  if (detailsText) {
+    return detailsText;
+  }
+
+  return "This file could not be analyzed. Please try again.";
 }
 
 function hasUsableProfileSignals(profile: CvProfile) {
