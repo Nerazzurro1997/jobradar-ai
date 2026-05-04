@@ -864,20 +864,31 @@ async function fetchHtmlWithRetry(
 async function promisePool<T, R>(
   items: T[],
   limit: number,
-  asyncFn: (item: T, index: number) => Promise<R> | R
+  asyncFn: (item: T, index: number) => Promise<R> | R,
+  fallbackFn: (item: T, index: number, error: unknown) => R
 ) {
   const results: Promise<R>[] = [];
-  const executing = new Set<Promise<R>>();
+  const executing = new Set<Promise<void>>();
+  const safeLimit = Math.max(1, limit);
 
   for (let index = 0; index < items.length; index++) {
     const item = items[index];
-    const p = Promise.resolve().then(() => asyncFn(item, index));
+    const p = Promise.resolve()
+      .then(() => asyncFn(item, index))
+      .catch((error) => fallbackFn(item, index, error));
     results.push(p);
-    executing.add(p);
 
-    p.finally(() => executing.delete(p));
+    const done = p.then(
+      () => {
+        executing.delete(done);
+      },
+      () => {
+        executing.delete(done);
+      }
+    );
+    executing.add(done);
 
-    if (executing.size >= limit) {
+    if (executing.size >= safeLimit) {
       await Promise.race(executing);
     }
   }
@@ -2818,9 +2829,20 @@ async function collectLinks(
       }
     }
 
-    const pageResults = await promisePool(pageTasks, 3, fetchSearchPageTask);
+    const pageResults = await promisePool(
+      pageTasks,
+      2,
+      fetchSearchPageTask,
+      () => ({
+        hits: [],
+        skippedKnown: 0,
+        searchPagesFetched: 0,
+        searchPagesFailed: 1,
+      })
+    );
 
     for (const result of pageResults) {
+      skippedKnown += result.skippedKnown;
       searchPagesFetched += result.searchPagesFetched;
       searchPagesFailed += result.searchPagesFailed;
 
@@ -3353,7 +3375,7 @@ Deno.serve(async (req: Request) => {
 
       const detailResults = await promisePool<DetailFetchTask, DetailFetchResult>(
         detailBatch,
-        4,
+        2,
         async ({ item, normalizedItemUrl }) => {
           if (Date.now() - startedAt > maxRuntimeMs - 3500) {
             return {
@@ -3384,7 +3406,14 @@ Deno.serve(async (req: Request) => {
               skippedByTimeout: false,
             };
           }
-        }
+        },
+        ({ item, normalizedItemUrl }) => ({
+          item,
+          normalizedItemUrl,
+          html: null,
+          failed: true,
+          skippedByTimeout: false,
+        })
       );
 
       for (const detailResult of detailResults) {
