@@ -1233,6 +1233,18 @@ function normalizeProfile(raw: any) {
   };
 }
 
+function hasUsefulProfileSignals(profile: any) {
+  return (
+    safeArray(profile?.searchTerms, 25).length > 0 ||
+    safeArray(profile?.strongKeywords, 60).length > 0 ||
+    safeArray(profile?.skillTags, 40).length > 0 ||
+    safeArray(profile?.matching?.bestFitRoles, 25).length > 0 ||
+    safeArray(profile?.languageProfile?.languages, 20).length > 0 ||
+    safeArray(profile?.cvHighlights, 12).length > 0 ||
+    Boolean(safeString(profile?.profileSummary))
+  );
+}
+
 function buildAnalyzeCvPrompt(fileName: string) {
   return `
 Validate the uploaded PDF first. Analyze it only if it is clearly a real CV/resume/Lebenslauf.
@@ -1349,7 +1361,7 @@ Deno.serve(async (req) => {
         ? normalizeProfile(cachedRow.profile)
         : null;
 
-      if (cachedProfile) {
+      if (cachedProfile && hasUsefulProfileSignals(cachedProfile)) {
         return jsonResponse({
           success: true,
           profile: cachedProfile,
@@ -1360,6 +1372,12 @@ Deno.serve(async (req) => {
             cacheHit: true,
             fileHashPrefix: fileHash.slice(0, 12),
           },
+        });
+      }
+
+      if (cachedProfile) {
+        console.warn("CV cache hit ignored: incomplete cached profile", {
+          fileHashPrefix: fileHash.slice(0, 12),
         });
       }
     } catch (error) {
@@ -1605,27 +1623,43 @@ Deno.serve(async (req) => {
       fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
     });
 
-    const rawProfileForNormalization =
-      rawAnalysis &&
-      typeof rawAnalysis.profile === "object" &&
-      rawAnalysis.profile !== null
-        ? rawAnalysis.profile
-        : {};
+    if (
+      !rawAnalysis ||
+      typeof rawAnalysis.profile !== "object" ||
+      rawAnalysis.profile === null
+    ) {
+      console.warn("CV profile extraction incomplete: missing profile object", {
+        fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+      });
 
-    if (rawProfileForNormalization !== rawAnalysis.profile) {
-      console.warn(
-        "CV profile missing after valid validation, using empty normalization fallback",
+      return jsonResponse(
         {
-          fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
-        }
+          success: false,
+          error: "CV profile extraction incomplete",
+        },
+        200
       );
     }
 
-    const profile = normalizeProfile(rawProfileForNormalization);
+    const profile = normalizeProfile(rawAnalysis.profile);
 
     console.info("CV profile normalized", {
       fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
     });
+
+    if (!hasUsefulProfileSignals(profile)) {
+      console.warn("CV profile extraction incomplete: no useful signals", {
+        fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+      });
+
+      return jsonResponse(
+        {
+          success: false,
+          error: "CV profile extraction incomplete",
+        },
+        200
+      );
+    }
 
     if (fileHash) {
       console.info("CV cache save before response", {

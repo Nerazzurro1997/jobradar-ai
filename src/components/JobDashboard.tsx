@@ -17,8 +17,10 @@ type Stats = {
 };
 
 type ProfileSignals = {
+  searchTerms?: string[];
   skillTags?: string[];
   strongKeywords?: string[];
+  locations?: string[];
   cvHighlights?: string[];
   profileSummary?: string;
   languageProfile?: {
@@ -31,6 +33,8 @@ type ProfileSignals = {
   skills?:
     | string[]
     | {
+        skillTags?: string[];
+        strongKeywords?: string[];
         hardSkills?: string[];
         softSkills?: string[];
         tools?: string[];
@@ -46,11 +50,28 @@ type ProfileSignals = {
     sellingPoints?: string[];
     applicationPositioning?: string[];
   };
+  deepProfile?: {
+    searchTerms?: string[];
+    skillTags?: string[];
+    strongKeywords?: string[];
+    cvHighlights?: string[];
+    profileSummary?: string;
+    languageProfile?: ProfileSignals["languageProfile"];
+    search?: ProfileSignals["search"];
+    skills?: Exclude<ProfileSignals["skills"], string[]>;
+    matching?: ProfileSignals["matching"];
+    summary?: ProfileSignals["summary"];
+  };
   search?: {
     strongKeywords?: string[];
     searchTerms?: string[];
     preferredRoles?: string[];
     preferredLocations?: string[];
+  };
+  summary?: {
+    shortSummary?: string;
+    detailedSummary?: string;
+    recruiterPitch?: string;
   };
 };
 
@@ -117,6 +138,47 @@ const JOB_CARD_GRID_STYLE: CSSProperties = {
   width: "100%",
   maxWidth: "100%",
   margin: 0,
+};
+
+const DASHBOARD_BUTTON_STYLE: CSSProperties = {
+  border: "1px solid rgba(148,163,184,0.2)",
+  boxShadow: "0 12px 26px rgba(0,0,0,0.24)",
+  transition:
+    "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
+};
+
+const DASHBOARD_PRIMARY_BUTTON_STYLE: CSSProperties = {
+  ...DASHBOARD_BUTTON_STYLE,
+  background: "linear-gradient(135deg, #22c55e 0%, #14b8a6 100%)",
+  border: "1px solid rgba(134,239,172,0.34)",
+  boxShadow: "0 16px 34px rgba(20,184,166,0.22)",
+};
+
+const DASHBOARD_BLUE_BUTTON_STYLE: CSSProperties = {
+  ...DASHBOARD_BUTTON_STYLE,
+  background: "linear-gradient(135deg, #2563eb 0%, #0891b2 100%)",
+  border: "1px solid rgba(147,197,253,0.34)",
+  boxShadow: "0 16px 34px rgba(37,99,235,0.24)",
+};
+
+const DASHBOARD_DARK_BUTTON_STYLE: CSSProperties = {
+  ...DASHBOARD_BUTTON_STYLE,
+  background:
+    "linear-gradient(135deg, rgba(30,41,59,0.98), rgba(15,23,42,0.98))",
+  border: "1px solid rgba(148,163,184,0.26)",
+};
+
+const DASHBOARD_DANGER_BUTTON_STYLE: CSSProperties = {
+  ...DASHBOARD_BUTTON_STYLE,
+  background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+  border: "1px solid rgba(252,165,165,0.32)",
+  boxShadow: "0 16px 34px rgba(239,68,68,0.22)",
+};
+
+const DASHBOARD_FILE_BUTTON_STYLE: CSSProperties = {
+  ...DASHBOARD_DARK_BUTTON_STYLE,
+  background:
+    "linear-gradient(135deg, rgba(51,65,85,0.98), rgba(30,41,59,0.98))",
 };
 
 function resetPageOverflow() {
@@ -339,6 +401,24 @@ function getSavedAtTime(job: Job) {
   return getDateTime((job as RankedDebugJob).savedAt);
 }
 
+function getSkillSignalsFromValue(value: ProfileSignals["skills"]) {
+  if (Array.isArray(value)) return safeArray(value);
+  if (!value) return [];
+
+  return [
+    ...safeArray(value.skillTags),
+    ...safeArray(value.strongKeywords),
+    ...safeArray(value.hardSkills),
+    ...safeArray(value.softSkills),
+    ...safeArray(value.tools),
+    ...safeArray(value.certifications),
+  ];
+}
+
+function getLanguageSignalsFromSkills(value: ProfileSignals["skills"]) {
+  return !Array.isArray(value) ? safeArray(value?.languages) : [];
+}
+
 function getProfileSignals(cvProfile: CvProfile | null) {
   const profile = cvProfile as unknown as ProfileSignals | null;
 
@@ -351,20 +431,20 @@ function getProfileSignals(cvProfile: CvProfile | null) {
     };
   }
 
+  const deepProfile = profile.deepProfile;
   const skillsValue = profile.skills;
+  const deepSkillsValue = deepProfile?.skills;
 
   const skillSignals = uniqueItems(
     [
       ...safeArray(profile.skillTags),
+      ...safeArray(deepProfile?.skillTags),
       ...safeArray(profile.strongKeywords),
+      ...safeArray(deepProfile?.strongKeywords),
       ...safeArray(profile.search?.strongKeywords),
-      ...(Array.isArray(skillsValue) ? safeArray(skillsValue) : []),
-      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.hardSkills) : []),
-      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.softSkills) : []),
-      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.tools) : []),
-      ...(!Array.isArray(skillsValue)
-        ? safeArray(skillsValue?.certifications)
-        : []),
+      ...safeArray(deepProfile?.search?.strongKeywords),
+      ...getSkillSignalsFromValue(skillsValue),
+      ...getSkillSignalsFromValue(deepSkillsValue),
     ],
     18
   );
@@ -375,7 +455,12 @@ function getProfileSignals(cvProfile: CvProfile | null) {
       ...safeArray(profile.languageProfile?.strongestLanguages),
       ...safeArray(profile.languageProfile?.businessLanguages),
       ...safeArray(profile.languageProfile?.languageKeywords),
-      ...(!Array.isArray(skillsValue) ? safeArray(skillsValue?.languages) : []),
+      ...safeArray(deepProfile?.languageProfile?.languages),
+      ...safeArray(deepProfile?.languageProfile?.strongestLanguages),
+      ...safeArray(deepProfile?.languageProfile?.businessLanguages),
+      ...safeArray(deepProfile?.languageProfile?.languageKeywords),
+      ...getLanguageSignalsFromSkills(skillsValue),
+      ...getLanguageSignalsFromSkills(deepSkillsValue),
     ],
     12
   );
@@ -384,8 +469,14 @@ function getProfileSignals(cvProfile: CvProfile | null) {
     [
       ...safeArray(profile.matching?.bestFitRoles),
       ...safeArray(profile.matching?.acceptableRoles),
+      ...safeArray(deepProfile?.matching?.bestFitRoles),
+      ...safeArray(deepProfile?.matching?.acceptableRoles),
       ...safeArray(profile.search?.preferredRoles),
+      ...safeArray(deepProfile?.search?.preferredRoles),
+      ...safeArray(profile.searchTerms),
       ...safeArray(profile.search?.searchTerms),
+      ...safeArray(deepProfile?.searchTerms),
+      ...safeArray(deepProfile?.search?.searchTerms),
     ],
     10
   );
@@ -393,8 +484,11 @@ function getProfileSignals(cvProfile: CvProfile | null) {
   const highlightSignals = uniqueItems(
     [
       ...safeArray(profile.cvHighlights),
+      ...safeArray(deepProfile?.cvHighlights),
       ...safeArray(profile.matching?.sellingPoints),
       ...safeArray(profile.matching?.scoringHints),
+      ...safeArray(deepProfile?.matching?.sellingPoints),
+      ...safeArray(deepProfile?.matching?.scoringHints),
     ],
     8
   );
@@ -516,14 +610,16 @@ function SignalPill({ label }: { label: string }) {
   return (
     <span
       style={{
-        padding: "6px 9px",
+        padding: "7px 10px",
         borderRadius: 999,
-        background: "rgba(59,130,246,0.16)",
-        border: "1px solid rgba(59,130,246,0.24)",
-        color: "#bfdbfe",
+        background:
+          "linear-gradient(135deg, rgba(37,99,235,0.22), rgba(20,184,166,0.12))",
+        border: "1px solid rgba(147,197,253,0.26)",
+        color: "#dbeafe",
         fontSize: 11,
         fontWeight: 800,
         lineHeight: 1,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
       }}
     >
       {label}
@@ -551,7 +647,7 @@ function SignalGroup({
           fontSize: 11,
           fontWeight: 800,
           textTransform: "uppercase",
-          letterSpacing: 0.5,
+          letterSpacing: 0,
         }}
       >
         {title}
@@ -562,6 +658,49 @@ function SignalGroup({
           <SignalPill key={`${title}-${signal}-${index}`} label={signal} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function ProfileSignalsEmptyState() {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "44px minmax(0, 1fr)",
+        gap: 13,
+        alignItems: "center",
+        padding: 14,
+        borderRadius: 18,
+        background:
+          "linear-gradient(135deg, rgba(15,23,42,0.72), rgba(2,6,23,0.34))",
+        border: "1px solid rgba(148,163,184,0.14)",
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 16,
+          display: "grid",
+          placeItems: "center",
+          color: "#bfdbfe",
+          fontSize: 15,
+          fontWeight: 900,
+          background:
+            "radial-gradient(circle at 30% 20%, rgba(96,165,250,0.34), transparent 45%), linear-gradient(135deg, rgba(37,99,235,0.2), rgba(20,184,166,0.12))",
+          border: "1px solid rgba(147,197,253,0.22)",
+          boxShadow: "0 12px 26px rgba(15,23,42,0.32)",
+        }}
+      >
+        AI
+      </div>
+
+      <p style={{ margin: 0, color: "#a8b5c8", lineHeight: 1.55 }}>
+        Skills, languages and matching signals will appear here after the CV
+        profile is created.
+      </p>
     </div>
   );
 }
@@ -580,9 +719,11 @@ function SavedMetricCard({
       style={{
         minWidth: 118,
         padding: 13,
-        borderRadius: 16,
-        background: "rgba(2,6,23,0.38)",
-        border: "1px solid rgba(148,163,184,0.14)",
+        borderRadius: 18,
+        background:
+          "linear-gradient(135deg, rgba(15,23,42,0.76), rgba(2,6,23,0.42))",
+        border: "1px solid rgba(148,163,184,0.18)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
       }}
     >
       <p
@@ -813,12 +954,13 @@ function EmptyJobsState({
         position: "relative",
         overflow: "hidden",
         padding: 0,
-        marginBottom: 22,
-        borderRadius: 26,
+        marginBottom: 24,
+        borderRadius: 28,
         background:
-          "linear-gradient(135deg, rgba(15,23,42,0.94), rgba(30,41,59,0.72))",
-        border: "1px solid rgba(148,163,184,0.18)",
-        boxShadow: "0 22px 58px rgba(0,0,0,0.24)",
+          "radial-gradient(circle at 12% 8%, rgba(96,165,250,0.2), transparent 32%), radial-gradient(circle at 92% 84%, rgba(20,184,166,0.18), transparent 34%), linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.72))",
+        border: "1px solid rgba(148,163,184,0.2)",
+        boxShadow:
+          "0 28px 76px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)",
       }}
     >
       <div
@@ -836,8 +978,8 @@ function EmptyJobsState({
           position: "relative",
           display: "grid",
           gridTemplateColumns: "1.05fr 0.95fr",
-          gap: 24,
-          padding: 28,
+          gap: 28,
+          padding: 32,
           alignItems: "center",
         }}
       >
@@ -859,6 +1001,7 @@ function EmptyJobsState({
               fontSize: 12,
               fontWeight: 900,
               marginBottom: 16,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.05)",
             }}
           >
             {isResetState ? "Clean workspace" : "Ready to start"}
@@ -867,9 +1010,9 @@ function EmptyJobsState({
           <h3
             style={{
               margin: 0,
-              fontSize: 28,
+              fontSize: 30,
               lineHeight: 1.08,
-              letterSpacing: -0.5,
+              letterSpacing: 0,
               color: "#f8fafc",
             }}
           >
@@ -902,11 +1045,12 @@ function EmptyJobsState({
                   style={{
                     padding: "8px 11px",
                     borderRadius: 999,
-                    background: "rgba(15,23,42,0.62)",
-                    border: "1px solid rgba(148,163,184,0.16)",
+                    background: "rgba(15,23,42,0.72)",
+                    border: "1px solid rgba(148,163,184,0.18)",
                     color: "#dbeafe",
                     fontSize: 12,
                     fontWeight: 900,
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                   }}
                 >
                   Previous results hidden
@@ -916,11 +1060,12 @@ function EmptyJobsState({
                   style={{
                     padding: "8px 11px",
                     borderRadius: 999,
-                    background: "rgba(15,23,42,0.62)",
-                    border: "1px solid rgba(148,163,184,0.16)",
+                    background: "rgba(15,23,42,0.72)",
+                    border: "1px solid rgba(148,163,184,0.18)",
                     color: "#dbeafe",
                     fontSize: 12,
                     fontWeight: 900,
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                   }}
                 >
                   Storage cleared
@@ -931,11 +1076,12 @@ function EmptyJobsState({
                     style={{
                       padding: "8px 11px",
                       borderRadius: 999,
-                      background: "rgba(15,23,42,0.62)",
-                      border: "1px solid rgba(148,163,184,0.16)",
+                      background: "rgba(15,23,42,0.72)",
+                      border: "1px solid rgba(148,163,184,0.18)",
                       color: "#dbeafe",
                       fontSize: 12,
                       fontWeight: 900,
+                      boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                     }}
                   >
                     Reset at {resetTime}
@@ -954,6 +1100,7 @@ function EmptyJobsState({
                   color: "#bfdbfe",
                   fontSize: 12,
                   fontWeight: 900,
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                 }}
               >
                 CV selected
@@ -970,6 +1117,7 @@ function EmptyJobsState({
                   color: "#bbf7d0",
                   fontSize: 12,
                   fontWeight: 900,
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                 }}
               >
                 Profile ready
@@ -995,11 +1143,12 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
         alignItems: "center",
         padding: 24,
         marginBottom: 22,
-        borderRadius: 24,
+        borderRadius: 26,
         background:
-          "linear-gradient(135deg, rgba(15,23,42,0.94), rgba(30,41,59,0.68))",
-        border: "1px solid rgba(148,163,184,0.18)",
-        boxShadow: "0 22px 58px rgba(0,0,0,0.22)",
+          "radial-gradient(circle at 10% 20%, rgba(96,165,250,0.18), transparent 30%), linear-gradient(135deg, rgba(15,23,42,0.94), rgba(30,41,59,0.68))",
+        border: "1px solid rgba(148,163,184,0.2)",
+        boxShadow:
+          "0 24px 64px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.05)",
       }}
     >
       <div
@@ -1015,6 +1164,7 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
           color: "#bfdbfe",
           fontSize: 24,
           fontWeight: 900,
+          boxShadow: "0 14px 32px rgba(37,99,235,0.16)",
         }}
       >
         SJ
@@ -1026,7 +1176,7 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
             margin: 0,
             color: "#f8fafc",
             fontSize: 25,
-            letterSpacing: -0.4,
+            letterSpacing: 0,
           }}
         >
           No saved jobs yet
@@ -1045,7 +1195,11 @@ function EmptySavedJobsState({ onSearch }: { onSearch: () => void }) {
         </p>
       </div>
 
-      <button className="btn btn-primary" onClick={onSearch}>
+      <button
+        className="btn btn-primary"
+        onClick={onSearch}
+        style={DASHBOARD_PRIMARY_BUTTON_STYLE}
+      >
         Search Jobs
       </button>
     </section>
@@ -1642,31 +1796,35 @@ export function JobDashboard({
             : "minmax(0, 1fr)",
           gap: 20,
           alignItems: "stretch",
-          marginBottom: 18,
-          padding: 24,
-          borderRadius: 26,
+          marginBottom: 22,
+          padding: isSavedView ? 26 : 32,
+          borderRadius: 30,
+          position: "relative",
+          overflow: "hidden",
           background:
-            "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.66))",
-          border: "1px solid rgba(148,163,184,0.17)",
-          boxShadow: "0 22px 58px rgba(0,0,0,0.24)",
+            "radial-gradient(circle at 12% 10%, rgba(96,165,250,0.25), transparent 30%), radial-gradient(circle at 92% 18%, rgba(20,184,166,0.2), transparent 28%), linear-gradient(135deg, rgba(8,13,30,0.98), rgba(15,23,42,0.94) 56%, rgba(6,78,59,0.32))",
+          border: "1px solid rgba(148,163,184,0.22)",
+          boxShadow:
+            "0 30px 82px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.06)",
         }}
       >
-        <div>
+        <div style={{ position: "relative", zIndex: 1 }}>
           <div
             style={{
               display: "inline-flex",
-              padding: "7px 12px",
+              padding: "8px 13px",
               borderRadius: 999,
               background: isSavedView
                 ? "rgba(34,197,94,0.12)"
-                : "rgba(37,99,235,0.16)",
+                : "linear-gradient(135deg, rgba(37,99,235,0.22), rgba(20,184,166,0.12))",
               border: isSavedView
                 ? "1px solid rgba(34,197,94,0.24)"
-                : "1px solid rgba(96,165,250,0.25)",
+                : "1px solid rgba(147,197,253,0.3)",
               color: isSavedView ? "#bbf7d0" : "#bfdbfe",
               fontSize: 12,
               fontWeight: 900,
-              marginBottom: 14,
+              marginBottom: 18,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
             }}
           >
             {isSavedView ? "Decision engine" : "AI powered job matching"}
@@ -1675,9 +1833,10 @@ export function JobDashboard({
           <h1
             style={{
               margin: 0,
-              fontSize: isSavedView ? 42 : 48,
+              fontSize: isSavedView ? 43 : 54,
               lineHeight: 1,
-              letterSpacing: -1.1,
+              letterSpacing: 0,
+              textShadow: "0 12px 38px rgba(0,0,0,0.28)",
             }}
           >
             {isSavedView ? "Saved Jobs" : "AI Job Radar"}
@@ -1685,11 +1844,11 @@ export function JobDashboard({
 
           <p
             style={{
-              margin: "12px 0 0",
-              color: "#cbd5e1",
-              fontSize: 16,
-              maxWidth: 760,
-              lineHeight: 1.5,
+              margin: "14px 0 0",
+              color: "#d8e2f0",
+              fontSize: 17,
+              maxWidth: 780,
+              lineHeight: 1.55,
             }}
           >
             {isSavedView
@@ -1701,6 +1860,8 @@ export function JobDashboard({
         {isSavedView && (
           <div
             style={{
+              position: "relative",
+              zIndex: 1,
               display: "grid",
               gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
               gap: 10,
@@ -1724,29 +1885,42 @@ export function JobDashboard({
       <section
         className="fade-in"
         style={{
-          marginBottom: 18,
+          marginBottom: 20,
           display: "grid",
           gridTemplateColumns: isSavedView ? "0.78fr 1.22fr" : "1.05fr 0.95fr",
-          gap: 16,
+          gap: 18,
           alignItems: "stretch",
-          padding: 16,
-          borderRadius: 22,
-          background: "rgba(15,23,42,0.7)",
-          border: "1px solid rgba(148,163,184,0.14)",
-          boxShadow: "0 18px 46px rgba(0,0,0,0.18)",
+          padding: 18,
+          borderRadius: 26,
+          background:
+            "radial-gradient(circle at 8% 0%, rgba(59,130,246,0.13), transparent 30%), linear-gradient(135deg, rgba(15,23,42,0.82), rgba(2,6,23,0.58))",
+          border: "1px solid rgba(148,163,184,0.18)",
+          boxShadow:
+            "0 22px 58px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.05)",
           backdropFilter: "blur(12px)",
         }}
       >
-        <div>
-          <h2 style={{ margin: 0, fontSize: isSavedView ? 19 : 22 }}>
+        <div
+          style={{
+            padding: 2,
+            minWidth: 0,
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              fontSize: isSavedView ? 20 : 24,
+              letterSpacing: 0,
+            }}
+          >
             CV Intelligence
           </h2>
 
           <p
             style={{
-              margin: "7px 0 13px",
-              color: "#94a3b8",
-              lineHeight: 1.45,
+              margin: "8px 0 15px",
+              color: "#a8b5c8",
+              lineHeight: 1.5,
               fontSize: 14,
             }}
           >
@@ -1759,11 +1933,13 @@ export function JobDashboard({
             <div
               className="loading"
               style={{
-                padding: 13,
-                borderRadius: 15,
-                background: "rgba(250,204,21,0.08)",
-                border: "1px solid rgba(250,204,21,0.25)",
-                marginBottom: 12,
+                padding: 15,
+                borderRadius: 18,
+                background:
+                  "linear-gradient(135deg, rgba(250,204,21,0.12), rgba(59,130,246,0.08))",
+                border: "1px solid rgba(250,204,21,0.26)",
+                marginBottom: 14,
+                boxShadow: "0 14px 32px rgba(250,204,21,0.08)",
               }}
             >
               <strong style={{ color: "#facc15" }}>{profileLoadingStep}</strong>
@@ -1812,10 +1988,13 @@ export function JobDashboard({
             <div
               style={{
                 padding: 13,
-                borderRadius: 15,
-                background: "rgba(34,197,94,0.1)",
-                border: "1px solid rgba(34,197,94,0.26)",
+                borderRadius: 18,
+                background:
+                  "linear-gradient(135deg, rgba(34,197,94,0.14), rgba(20,184,166,0.08))",
+                border: "1px solid rgba(74,222,128,0.28)",
                 marginBottom: isSavedView ? 0 : 14,
+                boxShadow:
+                  "0 16px 36px rgba(34,197,94,0.1), inset 0 1px 0 rgba(255,255,255,0.05)",
               }}
             >
               <div
@@ -1845,10 +2024,11 @@ export function JobDashboard({
                           : "1px solid rgba(34,197,94,0.28)",
                         fontSize: 11,
                         fontWeight: 900,
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
                       }}
                     >
                       {cvAnalysisFeedback.cacheHit
-                        ? "⚡ Fast (cached)"
+                        ? "Fast cached"
                         : "Full analysis"}
                     </span>
 
@@ -1896,6 +2076,7 @@ export function JobDashboard({
                 <label
                   className="file-upload"
                   style={{
+                    ...DASHBOARD_FILE_BUTTON_STYLE,
                     opacity: isBusy ? 0.7 : 1,
                     cursor: isBusy ? "not-allowed" : "pointer",
                   }}
@@ -1912,13 +2093,21 @@ export function JobDashboard({
                 </label>
 
                 {cvFile && !cvProfile && !profileLoading && (
-                  <button className="btn btn-blue" onClick={handleAnalyzeCv}>
+                  <button
+                    className="btn btn-blue"
+                    onClick={handleAnalyzeCv}
+                    style={DASHBOARD_BLUE_BUTTON_STYLE}
+                  >
                     Analyze CV
                   </button>
                 )}
 
                 {cvProfile && (
-                  <button className="btn btn-dark" onClick={handleClearCv}>
+                  <button
+                    className="btn btn-dark"
+                    onClick={handleClearCv}
+                    style={DASHBOARD_DARK_BUTTON_STYLE}
+                  >
                     Reset Profile
                   </button>
                 )}
@@ -1941,10 +2130,13 @@ export function JobDashboard({
 
         <div
           style={{
-            padding: 14,
-            borderRadius: 18,
-            background: "rgba(2,6,23,0.36)",
-            border: "1px solid rgba(148,163,184,0.13)",
+            padding: 18,
+            borderRadius: 22,
+            background:
+              "linear-gradient(135deg, rgba(2,6,23,0.58), rgba(15,23,42,0.48))",
+            border: "1px solid rgba(148,163,184,0.16)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+            minWidth: 0,
           }}
         >
           <div
@@ -1956,7 +2148,9 @@ export function JobDashboard({
               alignItems: "start",
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 16 }}>Profile signals</h3>
+            <h3 style={{ margin: 0, fontSize: 18, letterSpacing: 0 }}>
+              Profile signals
+            </h3>
 
             {isSavedView && cvFile && (
               <small
@@ -2001,10 +2195,7 @@ export function JobDashboard({
               )}
             </div>
           ) : (
-            <p style={{ margin: 0, color: "#94a3b8", lineHeight: 1.5 }}>
-              Skills, languages and matching signals will appear here after the
-              CV profile is created.
-            </p>
+            <ProfileSignalsEmptyState />
           )}
         </div>
       </section>
@@ -2025,6 +2216,7 @@ export function JobDashboard({
             onClick={handleSearch}
             disabled={isBusy}
             style={{
+              ...DASHBOARD_PRIMARY_BUTTON_STYLE,
               opacity: isBusy ? 0.7 : 1,
               cursor: isBusy ? "not-allowed" : "pointer",
             }}
@@ -2033,13 +2225,21 @@ export function JobDashboard({
           </button>
 
           {!isWorkspaceReset && savedJobs.length > 0 && (
-            <button className="btn btn-dark" onClick={handleToggleSaved}>
+            <button
+              className="btn btn-dark"
+              onClick={handleToggleSaved}
+              style={DASHBOARD_DARK_BUTTON_STYLE}
+            >
               {isSavedView ? "Show Live Jobs" : "Show Saved Jobs"}
             </button>
           )}
 
           {!isSavedView && !isWorkspaceReset && activeJobs.length > 0 && (
-            <button className="btn btn-dark" onClick={handleToggleTop}>
+            <button
+              className="btn btn-dark"
+              onClick={handleToggleTop}
+              style={DASHBOARD_DARK_BUTTON_STYLE}
+            >
               {onlyTop ? "Show All Jobs" : "Only Top Jobs"}
             </button>
           )}
@@ -2051,6 +2251,7 @@ export function JobDashboard({
             onClick={handleClearCacheClick}
             disabled={isBusy}
             style={{
+              ...DASHBOARD_DANGER_BUTTON_STYLE,
               opacity: isBusy ? 0.7 : 1,
               cursor: isBusy ? "not-allowed" : "pointer",
               marginLeft: isSavedView ? 0 : "auto",
@@ -2077,7 +2278,18 @@ export function JobDashboard({
             ["Best Score", `${bestScore}%`],
             ["Avg Match", `${avgScore}%`],
           ].map(([label, value]) => (
-            <div key={String(label)} className="card">
+            <div
+              key={String(label)}
+              className="card"
+              style={{
+                borderRadius: 18,
+                background:
+                  "linear-gradient(135deg, rgba(15,23,42,0.84), rgba(2,6,23,0.58))",
+                border: "1px solid rgba(148,163,184,0.18)",
+                boxShadow:
+                  "0 14px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)",
+              }}
+            >
               <p
                 style={{
                   margin: "0 0 7px",
@@ -2089,7 +2301,14 @@ export function JobDashboard({
                 {label}
               </p>
 
-              <p style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 23,
+                  fontWeight: 900,
+                  color: "#f8fafc",
+                }}
+              >
                 {value}
               </p>
             </div>
@@ -2107,7 +2326,17 @@ export function JobDashboard({
           }}
         >
           {[1, 2, 3].map((item) => (
-            <div key={item} className="card loading" style={{ minHeight: 130 }} />
+            <div
+              key={item}
+              className="card loading"
+              style={{
+                minHeight: 132,
+                borderRadius: 20,
+                background:
+                  "linear-gradient(135deg, rgba(15,23,42,0.8), rgba(30,41,59,0.52))",
+                border: "1px solid rgba(148,163,184,0.16)",
+              }}
+            />
           ))}
         </section>
       )}
@@ -2147,7 +2376,13 @@ export function JobDashboard({
         !isSavedView &&
         !isWorkspaceReset &&
         displayedJobs.length > 0 && (
-          <section style={{ display: "grid", gap: 14 }}>
+          <section
+            style={{
+              display: "grid",
+              gap: 18,
+              paddingBottom: 8,
+            }}
+          >
             {displayedJobs.map((job, index) => (
               <JobCard
                 key={job.url || job.id || index}

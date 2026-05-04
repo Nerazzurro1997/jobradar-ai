@@ -249,20 +249,21 @@ export function JobCard({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+          background:
+            "radial-gradient(circle at 8% 0%, rgba(59,130,246,0.08), transparent 34%), linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
           color: "#0f172a",
           padding: 0,
-          borderRadius: 20,
+          borderRadius: 21,
           border: isBestChoice
             ? "1px solid rgba(34,197,94,0.42)"
             : showSavedJobs
               ? "1px solid rgba(34,197,94,0.22)"
               : "1px solid rgba(226,232,240,0.9)",
           boxShadow: isHovered
-            ? "0 24px 58px rgba(0,0,0,0.24)"
+            ? "0 28px 70px rgba(0,0,0,0.26)"
             : isBestChoice
-              ? "0 18px 42px rgba(34,197,94,0.16)"
-              : "0 16px 38px rgba(0,0,0,0.16)",
+              ? "0 20px 48px rgba(34,197,94,0.16), inset 0 1px 0 rgba(255,255,255,0.92)"
+              : "0 18px 44px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.9)",
           transform: isHovered ? "translateY(-3px)" : "none",
           transition:
             "transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease",
@@ -571,6 +572,10 @@ export function JobCard({
                     target="_blank"
                     rel="noreferrer"
                     style={{
+                      background:
+                        "linear-gradient(135deg, #1f2937 0%, #0f172a 100%)",
+                      border: "1px solid rgba(15,23,42,0.16)",
+                      boxShadow: "0 10px 20px rgba(15,23,42,0.18)",
                       textDecoration: "none",
                       padding: "9px 13px",
                       fontSize: 13,
@@ -584,6 +589,10 @@ export function JobCard({
                   className="btn btn-blue"
                   onClick={handleAnalyzeClick}
                   style={{
+                    background:
+                      "linear-gradient(135deg, #2563eb 0%, #0891b2 100%)",
+                    border: "1px solid rgba(37,99,235,0.18)",
+                    boxShadow: "0 10px 20px rgba(37,99,235,0.18)",
                     padding: "9px 13px",
                     fontSize: 13,
                     opacity: isAnalyzing ? 0.85 : 1,
@@ -614,7 +623,9 @@ export function JobCard({
                 width: 82,
                 height: 86,
                 borderRadius: 19,
-                background: scoreColor(score),
+                background: `linear-gradient(135deg, ${scoreColor(
+                  score
+                )} 0%, ${scoreColor(score)}dd 100%)`,
                 color: "white",
                 display: "flex",
                 alignItems: "center",
