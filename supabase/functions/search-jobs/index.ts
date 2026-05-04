@@ -2687,6 +2687,7 @@ async function collectLinks(
   maxPagesOverride?: number
 ) {
   const foundLinks: SearchHit[] = [];
+  const foundUrlSet = new Set<string>();
   let skippedKnown = 0;
   let searchPagesFetched = 0;
   let searchPagesFailed = 0;
@@ -2737,7 +2738,8 @@ async function collectLinks(
                 continue;
               }
 
-              if (!foundLinks.some((x) => x.url === normalized)) {
+              if (!foundUrlSet.has(normalized)) {
+                foundUrlSet.add(normalized);
                 foundLinks.push({
                   ...hit,
                   url: normalized,
@@ -2786,8 +2788,11 @@ async function collectLinks(
 }
 
 function mergeSearchHits(target: SearchHit[], incoming: SearchHit[]) {
+  const targetUrls = new Set(target.map((link) => link.url));
+
   for (const link of incoming) {
-    if (!target.some((x) => x.url === link.url)) {
+    if (!targetUrls.has(link.url)) {
+      targetUrls.add(link.url);
       target.push(link);
     }
   }
@@ -3293,18 +3298,20 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      if (knownUrlSet.has(normalizeUrl(job.url))) {
+      const normalizedJobUrl = normalizeUrl(job.url);
+
+      if (knownUrlSet.has(normalizedJobUrl)) {
         skippedKnown++;
         continue;
       }
 
       if (addOrReplaceDuplicateJob(jobs, job)) {
         skippedDuplicate++;
-        usedUrls.add(normalizeUrl(job.url));
+        usedUrls.add(normalizedJobUrl);
         continue;
       }
 
-      usedUrls.add(normalizeUrl(job.url));
+      usedUrls.add(normalizedJobUrl);
 
       if (jobs.length >= maxDetailJobsUsed) break;
     }

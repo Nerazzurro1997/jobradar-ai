@@ -65,6 +65,10 @@ function uniqueArray(items: string[], limit = 50) {
 function normalizeBlockedFileNameText(value = "") {
   return value
     .toLowerCase()
+    .replace(/\u00e4/g, "ae")
+    .replace(/\u00f6/g, "oe")
+    .replace(/\u00fc/g, "ue")
+    .replace(/\u00df/g, "ss")
     .replace(/ä/g, "ae")
     .replace(/ö/g, "oe")
     .replace(/ü/g, "ue")
@@ -198,6 +202,33 @@ function tryParseJson(text: string) {
   } catch {
     return null;
   }
+}
+
+function hasPotentialProfileJson(text = "") {
+  const cleaned = cleanJsonText(text).toLowerCase();
+
+  if (!cleaned.includes("{")) {
+    return false;
+  }
+
+  return [
+    "searchterms",
+    "strongkeywords",
+    "avoidkeywords",
+    "locations",
+    "profilesummary",
+    "cvhighlights",
+    "skilltags",
+    "languageprofile",
+    "matching",
+    "summary",
+    "identity",
+    "search",
+    "experience",
+    "skills",
+    "preferences",
+    "deepprofile",
+  ].some((key) => cleaned.includes(`"${key}"`));
 }
 
 const stringArraySchema = {
@@ -430,33 +461,39 @@ const cvValidationSchema = {
 };
 
 async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
-  const repairResponse = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      temperature: 0,
-      max_output_tokens: 4500,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "cv_profile_compact_repair",
-          strict: true,
-          schema: compactProfileSchema,
-        },
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  let repairResponse: Response;
+
+  try {
+    repairResponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      input: [
-        {
-          role: "system",
-          content:
-            "You repair broken JSON. Return only valid JSON matching the schema. No markdown. No explanations.",
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        temperature: 0,
+        max_output_tokens: 4500,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "cv_profile_compact_repair",
+            strict: true,
+            schema: compactProfileSchema,
+          },
         },
-        {
-          role: "user",
-          content: `
+        input: [
+          {
+            role: "system",
+            content:
+              "You repair broken JSON. Return only valid JSON matching the schema. No markdown. No explanations.",
+          },
+          {
+            role: "user",
+            content: `
 Repair this broken JSON into the requested schema.
 
 If information is missing, use empty arrays, empty strings, or null.
@@ -464,10 +501,15 @@ If information is missing, use empty arrays, empty strings, or null.
 Broken JSON:
 ${brokenText.slice(0, 10000)}
 `.trim(),
-        },
-      ],
-    }),
-  });
+          },
+        ],
+      }),
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const parsedRepair = await parseOpenAiResponse(repairResponse);
 
@@ -1279,10 +1321,16 @@ Summaries:
     let rawProfile = tryParseJson(outputText);
 
     if (!rawProfile) {
-      console.error("Initial JSON parse failed. Trying repair.");
-      console.error("Broken output:", outputText.slice(0, 2000));
+      if (hasPotentialProfileJson(outputText)) {
+        console.error("Initial JSON parse failed. Trying repair.");
+        console.error("Broken output:", outputText.slice(0, 2000));
 
-      rawProfile = await repairJsonWithOpenAI(apiKey, outputText);
+        rawProfile = await repairJsonWithOpenAI(apiKey, outputText);
+      } else {
+        console.error(
+          "Initial JSON parse failed. Skipping repair because no profile JSON signal was found."
+        );
+      }
     }
 
     if (!rawProfile) {
