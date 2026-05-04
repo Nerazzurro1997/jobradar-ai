@@ -889,6 +889,17 @@ Deno.serve(async (req) => {
     }
 
     const cvValidation = cvValidationResult.validation;
+
+    if (!cvValidation) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Could not validate whether the uploaded file is a CV",
+        },
+        200
+      );
+    }
+
     const hasLowConfidenceWithoutClearCvStructure =
       cvValidation.confidence < 0.75 && !cvValidation.hasClearCvStructure;
     const hasBlockedDocumentType =
