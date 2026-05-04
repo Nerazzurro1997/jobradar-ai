@@ -1717,6 +1717,109 @@ function getProfileSearchText(profile: CvProfile) {
     .toLowerCase();
 }
 
+function getProfileRoleScoringTerms(profile: CvProfile) {
+  return uniqueArray(
+    [
+      ...getProfileRoleQuerySignals(profile),
+      ...getPreferredRoleSignals(profile),
+    ],
+    45
+  ).filter((term) => normalizeForKeywordMatch(term).length > 2);
+}
+
+function getProfileKeywordScoringTerms(profile: CvProfile) {
+  return uniqueArray(
+    [
+      ...profile.strongKeywords,
+      ...safeArray(profile.search?.strongKeywords, 80),
+      ...safeArray(profile.skillTags, 80),
+      ...flattenProfileSkills(profile),
+      ...safeArray(profile.languageProfile?.languages, 40),
+      ...safeArray(profile.languageProfile?.languageKeywords, 40),
+    ],
+    120
+  ).filter((term) => normalizeForKeywordMatch(term).length > 2);
+}
+
+function getProfileRequirementTerms(profile: CvProfile) {
+  return uniqueArray(
+    [
+      ...getProfileRoleScoringTerms(profile),
+      ...getProfileKeywordScoringTerms(profile),
+      ...getLanguageSignals(profile),
+    ],
+    90
+  );
+}
+
+function getProfileAvoidTerms(profile: CvProfile) {
+  return uniqueArray(
+    [
+      ...profile.avoidKeywords,
+      ...safeArray(profile.search?.avoidRoles, 50),
+      ...safeArray(profile.matching?.weakFitRoles, 50),
+      ...safeArray(profile.matching?.dealBreakers, 50),
+    ],
+    90
+  );
+}
+
+function getJobSearchableText(job: Job) {
+  return [
+    job.title,
+    job.company,
+    job.location,
+    job.snippet,
+    job.fullDescription,
+    job.keyword,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function hasProfileSupportForTerm(profile: CvProfile, term: string) {
+  const profileText = getProfileSearchText(profile);
+  const normalizedTerm = normalizeForKeywordMatch(term);
+
+  if (!normalizedTerm) return false;
+  if (includesDomainTerm(profileText, normalizedTerm)) return true;
+
+  return normalizedTerm
+    .split(" ")
+    .filter((part) => part.length > 3)
+    .some((part) => includesDomainTerm(profileText, part));
+}
+
+function hasProfileAlignedSignal(job: Job, profile: CvProfile) {
+  const jobText = getJobSearchableText(job);
+  const roleMatches = findNormalizedMatches(
+    jobText,
+    getProfileRoleScoringTerms(profile)
+  );
+  const keywordMatches = findNormalizedMatches(
+    jobText,
+    getProfileKeywordScoringTerms(profile)
+  );
+
+  return roleMatches.length > 0 || keywordMatches.length > 0;
+}
+
+function isEntryLevelProfile(profile: CvProfile) {
+  return includesAny(getProfileSearchText(profile), [
+    "junior",
+    "entry level",
+    "entry-level",
+    "praktikum",
+    "trainee",
+    "lehrstelle",
+    "lernende",
+    "internship",
+    "apprentice",
+    "ausbildung",
+    "graduate",
+  ]);
+}
+
 function includesDomainTerm(text: string, term: string) {
   const lower = text.toLowerCase();
   const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1731,17 +1834,9 @@ function includesDomainTerm(text: string, term: string) {
 }
 
 function hasTechnicalRequirementMismatch(job: Job, profile: CvProfile) {
-  const jobText = [
-    job.title,
-    job.company,
-    job.location,
-    job.snippet,
-    job.fullDescription,
-  ]
-    .join(" ")
-    .toLowerCase();
+  const jobText = getJobSearchableText(job);
 
-  const technicalTerms = [
+  const domainRequirementTerms = [
     "technische produkte",
     "handelsunternehmen",
     "audio",
@@ -1774,165 +1869,38 @@ function hasTechnicalRequirementMismatch(job: Job, profile: CvProfile) {
     "handwerk",
   ];
 
-  const matchedTechnicalTerms = technicalTerms.filter((term) =>
+  const matchedDomainTerms = domainRequirementTerms.filter((term) =>
     includesDomainTerm(jobText, term)
   );
 
-  if (matchedTechnicalTerms.length === 0) return false;
+  if (matchedDomainTerms.length === 0) return false;
 
-  const profileText = getProfileSearchText(profile);
-  const profileHasMatchingTechnicalSkill = matchedTechnicalTerms.some((term) =>
-    includesDomainTerm(profileText, term)
+  const avoidTerms = getProfileAvoidTerms(profile);
+  const hasExplicitAvoidedDomain = matchedDomainTerms.some((term) =>
+    findNormalizedMatches(term, avoidTerms).length > 0
   );
 
-  return !profileHasMatchingTechnicalSkill;
-}
+  if (hasExplicitAvoidedDomain) return true;
 
-function hasInsuranceAlignedSignal(job: Job) {
-  const text = [
-    job.title,
-    job.company,
-    job.location,
-    job.snippet,
-    job.fullDescription,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  const alignedTerms = [
-    "versicherung",
-    "versicherungs",
-    "sachbearbeiter",
-    "kundenberater",
-    "kundenservice",
-    "backoffice",
-    "verkaufssupport",
-    "schaden",
-    "underwriting assistant",
-    "broker",
-    "krankenkasse",
-    "policen",
-    "offerten",
-    "mutationen",
-    "vertragsmanagement",
-  ];
-
-  return includesAny(text, alignedTerms);
-}
-
-function hasInsuranceReference(job: Job) {
-  const text = [
-    job.title,
-    job.company,
-    job.snippet,
-    job.fullDescription,
-  ]
-    .join(" ")
-    .toLowerCase();
-  const company = job.company.toLowerCase();
-
-  const insuranceReferenceTerms = [
-    "versicherung",
-    "versicherungs",
-    "krankenversicherung",
-    "krankenkasse",
-    "broker",
-    "policen",
-    "offerten",
-    "mutationen",
-    "schaden",
-    "underwriting",
-  ];
-
-  const insuranceCompanyTerms = [
-    "axa",
-    "allianz",
-    "generali",
-    "zurich",
-    "mobiliar",
-    "helvetia",
-    "baloise",
-    "swiss life",
-    "swica",
-    "helsana",
-    "css",
-    "visana",
-    "sanitas",
-    "vaudoise",
-    "sympany",
-    "concordia",
-  ];
-
-  return (
-    includesAny(text, insuranceReferenceTerms) ||
-    includesAny(company, insuranceCompanyTerms)
+  return matchedDomainTerms.some(
+    (term) => !hasProfileSupportForTerm(profile, term)
   );
 }
 
-function hasNonInsuranceSectorSignal(job: Job) {
-  if (hasInsuranceReference(job)) return false;
-
-  const text = [
-    job.title,
-    job.company,
-    job.location,
-    job.snippet,
-    job.fullDescription,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  const nonInsuranceSectorTerms = [
-    "technische produkte",
-    "handelsunternehmen",
-    "audio",
-    "video",
-    "medientechnik",
-    "av-technik",
-    "av technik",
-    "av professional",
-    "elektro",
-    "elektrotechnik",
-    "gebaeudetechnik",
-    "montage",
-    "netzwerk",
-    "it support",
-    "hardware",
-    "software engineer",
-    "programmierer",
-    "mechanik",
-    "produktion",
-    "logistik",
-    "gastronomie",
-    "pflege",
-    "medizin",
-    "bau",
-    "detailhandel",
-    "handwerk",
-    "retail",
-    "lager",
-    "industrie",
-    "automobil",
-    "hotel",
-    "restaurant",
-  ];
-
-  return includesAny(text, nonInsuranceSectorTerms);
+function hasProfileAvoidedSignal(job: Job, profile: CvProfile) {
+  const jobText = getJobSearchableText(job);
+  return getProfileAvoidTerms(profile).some(
+    (term) =>
+      normalizeForKeywordMatch(term).length > 3 &&
+      includesDomainTerm(jobText, normalizeForKeywordMatch(term))
+  );
 }
 
-function isGenericJobWithoutProfileAnchor(job: Job) {
-  if (hasInsuranceReference(job)) return false;
+function isGenericJobWithoutProfileAnchor(job: Job, profile: CvProfile) {
+  if (hasProfileAlignedSignal(job, profile)) return false;
 
   const title = job.title.toLowerCase();
-  const text = [
-    job.title,
-    job.company,
-    job.location,
-    job.snippet,
-    job.fullDescription,
-  ]
-    .join(" ")
-    .toLowerCase();
+  const text = getJobSearchableText(job);
 
   const genericTerms = [
     "administration",
@@ -1952,58 +1920,38 @@ function isGenericJobWithoutProfileAnchor(job: Job) {
   return includesAny(title, genericTerms) || includesAny(text, genericTerms);
 }
 
-function hasPerfectMatchSignals(job: Job) {
+function hasPerfectMatchSignals(job: Job, profile: CvProfile) {
   const title = job.title.toLowerCase();
   const riskText = (job.riskFlags || []).join(" ").toLowerCase();
   const requirementMatchScore = job.requirementMatchScore || 0;
   const hasDetailedText =
     job.sourceName !== "jobs.ch search preview" &&
     cleanText(job.fullDescription).length >= 180;
-
-  const strongTitleTerms = [
-    "versicherung",
-    "versicherungs",
-    "innendienst",
-    "sachbearbeiter",
-    "kundenberater",
-    "kundenservice",
-    "backoffice",
-    "verkaufssupport",
-    "schaden",
-    "underwriting",
-    "broker",
-    "krankenkasse",
-    "policen",
-    "vertragsmanagement",
-  ];
+  const strongTitleTerms = getProfileRoleScoringTerms(profile);
 
   if (!hasDetailedText) return false;
-  if (!hasInsuranceReference(job)) return false;
-  if (!includesAny(title, strongTitleTerms)) return false;
+  if (!hasProfileAlignedSignal(job, profile)) return false;
+  if (
+    strongTitleTerms.length > 0 &&
+    findNormalizedMatches(title, strongTitleTerms).length === 0
+  ) {
+    return false;
+  }
   if (requirementMatchScore < 18) return false;
-  if (isGenericJobWithoutProfileAnchor(job)) return false;
+  if (isGenericJobWithoutProfileAnchor(job, profile)) return false;
 
   return !(
     riskText.includes("requisiti tecnici") ||
     riskText.includes("branchenanforderungen passen vermutlich nicht zum cv") ||
-    riskText.includes("branche passt vermutlich nicht") ||
+    riskText.includes("profile avoid") ||
     riskText.includes("aussendienst") ||
     riskText.includes("provision")
   );
 }
 
-function getRiskScoreCap(job: Job) {
+function getRiskScoreCap(job: Job, profile: CvProfile) {
   const riskText = (job.riskFlags || []).join(" ").toLowerCase();
-  const allText = [
-    job.title,
-    job.company,
-    job.location,
-    job.snippet,
-    job.fullDescription,
-    job.keyword,
-  ]
-    .join(" ")
-    .toLowerCase();
+  const allText = getJobSearchableText(job);
   let cap = 95;
 
   if (
@@ -2014,7 +1962,7 @@ function getRiskScoreCap(job: Job) {
     cap = Math.min(cap, 65);
   }
 
-  if (riskText.includes("branche passt vermutlich nicht")) {
+  if (riskText.includes("profile avoid")) {
     cap = Math.min(cap, 72);
   }
 
@@ -2039,18 +1987,15 @@ function getRiskScoreCap(job: Job) {
     cap = Math.min(cap, 85);
   }
 
-  if (!hasInsuranceReference(job)) {
+  if (!hasProfileAlignedSignal(job, profile)) {
     cap = Math.min(cap, 85);
   }
 
-  const hasGenericInnendienst =
-    allText.includes("innendienst") && !hasInsuranceAlignedSignal(job);
-
-  if (hasGenericInnendienst) {
+  if (isGenericJobWithoutProfileAnchor(job, profile)) {
     cap = Math.min(cap, 78);
   }
 
-  if (!hasPerfectMatchSignals(job)) {
+  if (!hasPerfectMatchSignals(job, profile)) {
     cap = Math.min(cap, 92);
   }
 
@@ -2170,12 +2115,8 @@ function getDistanceScoreFromLocation(locationValue = "") {
 
 function scoreJob(job: Job, profile: CvProfile) {
   const title = job.title.toLowerCase();
-  const company = job.company.toLowerCase();
-  const location = job.location.toLowerCase();
 
-  const snippet = (job.snippet || "").toLowerCase();
-  const fullDescription = (job.fullDescription || "").toLowerCase();
-  const allText = `${title} ${company} ${location} ${snippet} ${fullDescription}`;
+  const allText = getJobSearchableText(job);
 
   let score = 34;
 
@@ -2184,59 +2125,29 @@ function scoreJob(job: Job, profile: CvProfile) {
   let requirementMatchScore = 0;
   let distanceScore = 0;
 
-  const preferredTitleWords = [
-    "sachbearbeiter",
-    "innendienst",
-    "kundenberater",
-    "kundenservice",
-    "customer service",
-    "backoffice",
-    "underwriting assistant",
-    "verkaufssupport",
-    "schaden",
-    "versicherung",
-    "broker",
-    "krankenkasse",
-    "vertragsmanagement",
-    "policen",
-    "offerten",
-    "mutationen",
-  ];
-
-  const insuranceCompanies = [
-    "axa",
-    "allianz",
-    "generali",
-    "zurich",
-    "mobiliar",
-    "helvetia",
-    "baloise",
-    "swiss life",
-    "swica",
-    "helsana",
-    "css",
-    "visana",
-    "sanitas",
-    "vaudoise",
-    "sympany",
-    "concordia",
-  ];
+  const preferredTitleWords = getProfileRoleScoringTerms(profile);
+  const profileKeywordTerms = getProfileKeywordScoringTerms(profile);
+  const profileAvoidTerms = getProfileAvoidTerms(profile);
 
   const hardNegative = [
-    "aussendienst",
     "provision",
     "provisionsbasis",
     "kaltakquise",
     "hunter",
-    "praktikum",
-    "lehrstelle",
-    "lernende",
-    "temporär",
-    "temporary",
     "door to door",
     "fundraising",
     "call agent outbound",
   ];
+  const entryLevelNegative = isEntryLevelProfile(profile)
+    ? []
+    : [
+        "praktikum",
+        "lehrstelle",
+        "lernende",
+        "ausbildung",
+        "trainee",
+        "junior",
+      ];
 
   const seniorNegative = [
     "teamleiter",
@@ -2249,32 +2160,18 @@ function scoreJob(job: Job, profile: CvProfile) {
     "leiterin",
   ];
 
-  const weakPositiveTitleWords = [
-    "administration",
-    "client service",
-    "office manager",
-    "operations assistant",
-  ];
-
   for (const word of preferredTitleWords) {
-    if (title.includes(word)) {
+    const normalizedWord = normalizeForKeywordMatch(word);
+
+    if (normalizedWord.length <= 2) continue;
+
+    if (includesDomainTerm(title, normalizedWord)) {
       score += 5;
       requirementMatchScore += 4;
       matchedKeywords.push(word);
-    } else if (allText.includes(word)) {
+    } else if (includesDomainTerm(allText, normalizedWord)) {
       score += 2;
       requirementMatchScore += 2;
-      matchedKeywords.push(word);
-    }
-  }
-
-  for (const word of weakPositiveTitleWords) {
-    if (title.includes(word) && allText.includes("versicherung")) {
-      score += 3;
-      requirementMatchScore += 1;
-      matchedKeywords.push(word);
-    } else if (title.includes(word)) {
-      score += 1;
       matchedKeywords.push(word);
     }
   }
@@ -2299,34 +2196,28 @@ function scoreJob(job: Job, profile: CvProfile) {
     }
   }
 
-  for (const word of profile.strongKeywords) {
-    const w = word.toLowerCase();
+  for (const word of profileKeywordTerms) {
+    const w = normalizeForKeywordMatch(word);
 
     if (w.length <= 3) continue;
 
-    const isCoreKeyword = preferredTitleWords.some(
-      (coreWord) => w.includes(coreWord) || coreWord.includes(w)
-    );
+    const isCoreKeyword = preferredTitleWords.some((coreWord) => {
+      const normalizedCoreWord = normalizeForKeywordMatch(coreWord);
+      return (
+        normalizedCoreWord.length > 2 &&
+        (includesDomainTerm(w, normalizedCoreWord) ||
+          includesDomainTerm(normalizedCoreWord, w))
+      );
+    });
 
-    if (title.includes(w)) {
+    if (includesDomainTerm(title, w)) {
       score += isCoreKeyword ? 4 : 2;
       requirementMatchScore += isCoreKeyword ? 3 : 1;
       matchedKeywords.push(word);
-    } else if (allText.includes(w)) {
+    } else if (includesDomainTerm(allText, w)) {
       score += isCoreKeyword ? 2 : 1;
       requirementMatchScore += isCoreKeyword ? 1 : 0;
       matchedKeywords.push(word);
-    } else if (
-      [
-        "versicherung",
-        "innendienst",
-        "kundenberatung",
-        "administration",
-        "crm",
-        "office",
-      ].includes(w)
-    ) {
-      missingKeywords.push(word);
     }
   }
 
@@ -2343,27 +2234,24 @@ function scoreJob(job: Job, profile: CvProfile) {
     }
   }
 
-  if (includesAny(company, insuranceCompanies)) score += 6;
-
   distanceScore = getDistanceScoreFromLocation(job.location);
   score += Math.round(distanceScore / 10);
 
-  for (const word of profile.avoidKeywords) {
-    const w = word.toLowerCase();
+  for (const word of profileAvoidTerms) {
+    const w = normalizeForKeywordMatch(word);
 
-    if (w.length > 3 && allText.includes(w)) {
+    if (w.length > 3 && includesDomainTerm(allText, w)) {
       score -= 18;
       missingKeywords.push(`Avoid: ${word}`);
     }
   }
 
   for (const word of hardNegative) {
-    if (allText.includes(word)) {
+    if (includesDomainTerm(allText, word)) {
       score -= 25;
       missingKeywords.push(`Risk: ${word}`);
 
       if (
-        word.includes("aussendienst") ||
         word.includes("provision") ||
         word.includes("kaltakquise") ||
         word.includes("hunter") ||
@@ -2374,53 +2262,19 @@ function scoreJob(job: Job, profile: CvProfile) {
     }
   }
 
+  for (const word of entryLevelNegative) {
+    if (includesDomainTerm(allText, word)) {
+      score -= 18;
+      missingKeywords.push(`Entry-level: ${word}`);
+      addRiskFlag(job, "Entry-level role prüfen");
+    }
+  }
+
   job.extractedRequirementsCount = (job.requirements || []).length;
 
   const requirementsText = (job.requirements || []).join(" ");
-  const positiveRequirementTerms = [
-    "kaufmaennische ausbildung",
-    "kaufmännische ausbildung",
-    "efz",
-    "innendienst",
-    "kundenkontakt",
-    "kundenberatung",
-    "administration",
-    "offerten",
-    "antraege",
-    "anträge",
-    "policen",
-    "versicherungsbranche",
-    "crm",
-    "erp",
-    "ms office",
-    "deutsch",
-    "italienisch",
-    "franzoesisch",
-    "französisch",
-    "englisch",
-  ];
-  const negativeRequirementTerms = [
-    "technische produkte",
-    "handelsunternehmen",
-    "medientechnik",
-    "audio",
-    "video",
-    "netzwerk",
-    "elektro",
-    "elektrotechnik",
-    "av professional",
-    "montage",
-    "it support",
-    "programmierung",
-    "logistik",
-    "pflege",
-    "medizin",
-    "bau",
-    "gastronomie",
-    "detailhandel",
-    "retail",
-    "produktion",
-  ];
+  const positiveRequirementTerms = getProfileRequirementTerms(profile);
+  const negativeRequirementTerms = profileAvoidTerms;
   const matchedRequirementTerms = findNormalizedMatches(
     requirementsText,
     positiveRequirementTerms
@@ -2460,23 +2314,29 @@ function scoreJob(job: Job, profile: CvProfile) {
     );
   }
 
-  if (hasNonInsuranceSectorSignal(job)) {
+  if (hasProfileAvoidedSignal(job, profile)) {
     score -= 30;
     requirementMatchScore -= 22;
-    missingKeywords.push("Branche ausserhalb Versicherungsprofil");
-    addRiskFlag(job, "Branche passt vermutlich nicht zum Versicherungsprofil");
+    missingKeywords.push("Profile avoid signal");
+    addRiskFlag(job, "Profile avoid signal matched");
   }
 
-  if (isGenericJobWithoutProfileAnchor(job)) {
+  if (isGenericJobWithoutProfileAnchor(job, profile)) {
     score -= 10;
     requirementMatchScore -= 5;
-    missingKeywords.push("Zu generisch ohne Versicherungsbezug");
+    missingKeywords.push("Zu generisch ohne klaren Profilbezug");
   }
 
-  const hasLeadershipInCv =
-    profile.strongKeywords.join(" ").toLowerCase().includes("führung") ||
-    profile.profileSummary.toLowerCase().includes("führung") ||
-    profile.profileSummary.toLowerCase().includes("teamleiter");
+  const profileSearchText = getProfileSearchText(profile);
+  const hasLeadershipInCv = includesAny(profileSearchText, [
+    "führung",
+    "fuehrung",
+    "teamleiter",
+    "leiter",
+    "management",
+    "lead",
+    "head of",
+  ]);
 
   if (!hasLeadershipInCv) {
     for (const word of seniorNegative) {
@@ -2487,114 +2347,27 @@ function scoreJob(job: Job, profile: CvProfile) {
     }
   }
 
+  const profileRoleContextMatches = findNormalizedMatches(
+    allText,
+    preferredTitleWords
+  );
+  const profileKeywordContextMatches = findNormalizedMatches(
+    allText,
+    profileKeywordTerms
+  );
+
   if (
-    title.includes("versicherung") ||
-    allText.includes("versicherung") ||
-    allText.includes("versicherungs")
+    profileRoleContextMatches.length > 0 &&
+    profileKeywordContextMatches.length > 0
   ) {
-    score += 6;
-    requirementMatchScore += 5;
-  }
-
-  if (title.includes("innendienst")) {
-    score += 6;
-    requirementMatchScore += 4;
-  }
-  if (title.includes("sachbearbeiter")) {
-    score += 6;
-    requirementMatchScore += 4;
-  }
-  if (title.includes("kundenberater")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("underwriting")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("backoffice")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("verkaufssupport")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("schaden")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("broker")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("krankenkasse")) {
-    score += 5;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("policen")) {
-    score += 4;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("offerten")) {
-    score += 4;
-    requirementMatchScore += 2;
-  }
-  if (title.includes("mutationen")) {
-    score += 4;
-    requirementMatchScore += 2;
-  }
-  if (title.includes("vertragsmanagement")) {
-    score += 4;
-    requirementMatchScore += 3;
-  }
-  if (title.includes("administration") && allText.includes("versicherung")) {
-    score += 3;
-  }
-  if (title.includes("customer service") && allText.includes("versicherung")) {
-    score += 4;
-  }
-
-  const hasInsuranceContext =
-    includesAny(company, insuranceCompanies) ||
-    includesAny(allText, [
-      "versicherung",
-      "versicherungs",
-      "krankenkasse",
-      "broker",
-    ]);
-
-  const hasTargetRoleContext = includesAny(allText, [
-    "innendienst",
-    "sachbearbeiter",
-    "kundenberater",
-    "backoffice",
-    "policen",
-    "offerten",
-    "schaden",
-    "underwriting",
-  ]);
-
-  if (hasInsuranceContext && hasTargetRoleContext) {
     score += 5;
     requirementMatchScore += 4;
-    matchedKeywords.push("Strong insurance role fit");
+    matchedKeywords.push("Strong profile role fit");
   }
 
   if (job.keyword?.toLowerCase().includes("cv-direct")) score += 4;
   if (job.keyword?.toLowerCase().includes("cv-expanded")) score += 2;
   if (job.keyword?.toLowerCase().includes("fallback")) score -= 7;
-
-  const lowPriorityKeywordSignals = [
-    "office manager versicherung",
-    "operations assistant versicherung",
-    "client service versicherung",
-    "administration versicherung",
-  ];
-
-  if (includesAny(job.keyword || "", lowPriorityKeywordSignals)) {
-    score -= 10;
-  }
 
   const hasDetailedText =
     job.sourceName !== "jobs.ch search preview" &&
@@ -2623,7 +2396,7 @@ function scoreJob(job: Job, profile: CvProfile) {
   job.matchedKeywords = uniqueArray(matchedKeywords, 16);
   job.missingKeywords = uniqueArray(missingKeywords, 10);
 
-  const finalScore = Math.max(1, Math.min(score, getRiskScoreCap(job)));
+  const finalScore = Math.max(1, Math.min(score, getRiskScoreCap(job, profile)));
 
   if (finalScore >= 88) job.fitLabel = "Best Match";
   else if (finalScore >= 78) job.fitLabel = "Good Match";
