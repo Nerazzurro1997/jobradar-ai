@@ -13,6 +13,54 @@ type RankedJob = Job & {
 
 const SAVED_JOBS_MIN_SCORE = 70;
 
+const COMPANY_DUPLICATE_NOISE_WORDS = new Set([
+  "ag",
+  "sa",
+  "gmbh",
+  "ltd",
+  "llc",
+  "inc",
+  "co",
+  "company",
+  "group",
+  "holding",
+  "schweiz",
+  "switzerland",
+  "suisse",
+  "svizzera",
+  "versicherungen",
+  "versicherung",
+  "insurance",
+]);
+
+const TITLE_DUPLICATE_NOISE_WORDS = new Set([
+  "all",
+  "and",
+  "das",
+  "dem",
+  "den",
+  "der",
+  "des",
+  "d",
+  "die",
+  "fuer",
+  "fur",
+  "genders",
+  "in",
+  "m",
+  "mwd",
+  "oder",
+  "und",
+  "w",
+]);
+
+const LOCATION_DUPLICATE_NOISE_WORDS = new Set([
+  "schweiz",
+  "suisse",
+  "svizzera",
+  "switzerland",
+]);
+
 function toNumber(value: unknown, fallback = 0) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
 
@@ -40,6 +88,85 @@ function normalizeUrl(value: unknown) {
 
 function includesAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
+}
+
+function normalizeDuplicateText(value: unknown) {
+  return normalizeText(value)
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeCompanyName(value: unknown) {
+  const normalized = normalizeDuplicateText(value);
+  const words = normalized
+    .split(" ")
+    .filter((word) => word && !COMPANY_DUPLICATE_NOISE_WORDS.has(word));
+
+  return words.join(" ") || normalized.trim();
+}
+
+function normalizeJobTitleForDuplicate(value: unknown) {
+  const raw = typeof value === "string" ? value : "";
+  const withoutNoise = raw
+    .replace(
+      /\([^)]*(?:m\s*\/\s*w\s*\/\s*d|w\s*\/\s*m\s*\/\s*d|mwd|all genders|\d{1,3}\s*%)[^)]*\)/gi,
+      " "
+    )
+    .replace(/\b\d{1,3}\s*(?:[-\u2013\u2014]|bis|to)\s*\d{1,3}\s*%/gi, " ")
+    .replace(/\b\d{1,3}\s*%/g, " ")
+    .replace(/\b(?:m\s*\/\s*w\s*\/\s*d|w\s*\/\s*m\s*\/\s*d|mwd|all genders)\b/gi, " ");
+
+  return normalizeDuplicateText(withoutNoise)
+    .split(" ")
+    .filter((word) => word && !TITLE_DUPLICATE_NOISE_WORDS.has(word))
+    .join(" ");
+}
+
+function normalizeLocationForDuplicate(value: unknown) {
+  const normalized = normalizeDuplicateText(value)
+    .split(" ")
+    .filter((word) => word && !LOCATION_DUPLICATE_NOISE_WORDS.has(word))
+    .join(" ");
+
+  if (
+    normalized === "zurich" ||
+    normalized === "zuerich" ||
+    normalized === "stadt zurich" ||
+    normalized === "stadt zuerich"
+  ) {
+    return "zuerich";
+  }
+
+  return normalized;
+}
+
+function getTitleSimilarity(firstTitle: string, secondTitle: string) {
+  const firstTokens = new Set(firstTitle.split(" ").filter(Boolean));
+  const secondTokens = new Set(secondTitle.split(" ").filter(Boolean));
+
+  if (firstTokens.size === 0 || secondTokens.size === 0) return 0;
+
+  let shared = 0;
+
+  for (const token of firstTokens) {
+    if (secondTokens.has(token)) shared++;
+  }
+
+  return shared / Math.max(firstTokens.size, secondTokens.size);
+}
+
+function areDuplicateTitles(firstTitle: string, secondTitle: string) {
+  if (!firstTitle || !secondTitle) return false;
+  if (firstTitle === secondTitle) return true;
+
+  return getTitleSimilarity(firstTitle, secondTitle) >= 0.82;
 }
 
 function getScore(job: RankedJob) {
@@ -191,7 +318,20 @@ function getSavedAtScore(job: RankedJob) {
   return getDateTime(job.savedAt);
 }
 
+function getDuplicateJobKey(job: Job) {
+  const title = normalizeJobTitleForDuplicate(job.title);
+  const company = normalizeCompanyName(job.company);
+  const location = normalizeLocationForDuplicate(job.location);
+
+  return title && company && location
+    ? [title, company, location].join("|")
+    : "";
+}
+
 function getJobKey(job: Job) {
+  const duplicateKey = getDuplicateJobKey(job);
+  if (duplicateKey) return `duplicate:${duplicateKey}`;
+
   const url = normalizeUrl(job.url);
   if (url) return `url:${url}`;
 
@@ -203,9 +343,32 @@ function getJobKey(job: Job) {
   return fallbackKey ? `fallback:${fallbackKey}` : "";
 }
 
+function getFullDescriptionLength(job: Job) {
+  return typeof job.fullDescription === "string"
+    ? job.fullDescription.trim().length
+    : 0;
+}
+
+function shouldPreferJob(candidate: RankedJob, current: RankedJob) {
+  const scoreDiff = getScore(candidate) - getScore(current);
+  if (scoreDiff !== 0) return scoreDiff > 0;
+
+  const publishedDateDiff =
+    getPublishedDateScore(candidate) - getPublishedDateScore(current);
+  if (publishedDateDiff !== 0) return publishedDateDiff > 0;
+
+  return getFullDescriptionLength(candidate) > getFullDescriptionLength(current);
+}
+
 function mergeJob(existingJob: Job, incomingJob: Job) {
   const existingRankedJob = existingJob as RankedJob;
   const incomingRankedJob = incomingJob as RankedJob;
+  const preferredJob = shouldPreferJob(incomingRankedJob, existingRankedJob)
+    ? incomingJob
+    : existingJob;
+  const secondaryJob = preferredJob === incomingJob ? existingJob : incomingJob;
+  const preferredRankedJob = preferredJob as RankedJob;
+  const secondaryRankedJob = secondaryJob as RankedJob;
 
   const bestScore = Math.max(
     getScore(existingRankedJob),
@@ -222,7 +385,7 @@ function mergeJob(existingJob: Job, incomingJob: Job) {
     getRecencyScore(incomingRankedJob)
   );
 
-  const mergedLocation = incomingJob.location || existingJob.location;
+  const mergedLocation = preferredJob.location || secondaryJob.location;
   const mergedDistanceJob = {
     ...existingRankedJob,
     ...incomingRankedJob,
@@ -230,39 +393,39 @@ function mergeJob(existingJob: Job, incomingJob: Job) {
   } as RankedJob;
 
   return {
-    ...existingJob,
-    ...incomingJob,
+    ...secondaryJob,
+    ...preferredJob,
     id: existingJob.id ?? incomingJob.id,
-    url: incomingJob.url || existingJob.url,
-    title: incomingJob.title || existingJob.title,
-    company: incomingJob.company || existingJob.company,
+    url: preferredJob.url || secondaryJob.url,
+    title: preferredJob.title || secondaryJob.title,
+    company: preferredJob.company || secondaryJob.company,
     location: mergedLocation,
-    snippet: incomingJob.snippet || existingJob.snippet,
+    snippet: preferredJob.snippet || secondaryJob.snippet,
     fullDescription:
-      incomingJob.fullDescription || existingJob.fullDescription,
-    highlights: incomingJob.highlights?.length
-      ? incomingJob.highlights
-      : existingJob.highlights,
-    riskFlags: incomingJob.riskFlags?.length
-      ? incomingJob.riskFlags
-      : existingJob.riskFlags,
-    matchedKeywords: incomingJob.matchedKeywords?.length
-      ? incomingJob.matchedKeywords
-      : existingJob.matchedKeywords,
-    missingKeywords: incomingJob.missingKeywords?.length
-      ? incomingJob.missingKeywords
-      : existingJob.missingKeywords,
+      preferredJob.fullDescription || secondaryJob.fullDescription,
+    highlights: preferredJob.highlights?.length
+      ? preferredJob.highlights
+      : secondaryJob.highlights,
+    riskFlags: preferredJob.riskFlags?.length
+      ? preferredJob.riskFlags
+      : secondaryJob.riskFlags,
+    matchedKeywords: preferredJob.matchedKeywords?.length
+      ? preferredJob.matchedKeywords
+      : secondaryJob.matchedKeywords,
+    missingKeywords: preferredJob.missingKeywords?.length
+      ? preferredJob.missingKeywords
+      : secondaryJob.missingKeywords,
     score: bestScore,
     finalScore: bestScore,
     distanceScore: getDistanceScore(mergedDistanceJob),
     requirementMatchScore: bestRequirementMatchScore,
     recencyScore: bestRecencyScore,
     locationPriority:
-      incomingRankedJob.locationPriority ?? existingRankedJob.locationPriority,
+      preferredRankedJob.locationPriority ?? secondaryRankedJob.locationPriority,
     matchedLocation:
-      incomingRankedJob.matchedLocation ?? existingRankedJob.matchedLocation,
+      preferredRankedJob.matchedLocation ?? secondaryRankedJob.matchedLocation,
     publishedDate:
-      incomingRankedJob.publishedDate ?? existingRankedJob.publishedDate,
+      preferredRankedJob.publishedDate ?? secondaryRankedJob.publishedDate,
     savedAt: existingRankedJob.savedAt ?? incomingRankedJob.savedAt,
   };
 }
@@ -283,6 +446,34 @@ function logSortPreview(sortedJobs: Job[]) {
       };
     })
   );
+}
+
+function getUniqueJobMapKey(uniqueJobs: Map<string, Job>, job: Job) {
+  const key = getJobKey(job);
+
+  if (!key || uniqueJobs.has(key)) return key;
+
+  const jobTitle = normalizeJobTitleForDuplicate(job.title);
+  const jobCompany = normalizeCompanyName(job.company);
+  const jobLocation = normalizeLocationForDuplicate(job.location);
+
+  if (!jobTitle || !jobCompany || !jobLocation) return key;
+
+  for (const [existingKey, existingJob] of uniqueJobs) {
+    const existingCompany = normalizeCompanyName(existingJob.company);
+    const existingLocation = normalizeLocationForDuplicate(
+      existingJob.location
+    );
+
+    if (jobCompany !== existingCompany || jobLocation !== existingLocation) {
+      continue;
+    }
+
+    const existingTitle = normalizeJobTitleForDuplicate(existingJob.title);
+    if (areDuplicateTitles(jobTitle, existingTitle)) return existingKey;
+  }
+
+  return key;
 }
 
 export function sortJobsByScore(jobs: Job[]) {
@@ -328,7 +519,7 @@ export function getUniqueJobsByUrl(jobs: Job[]) {
   const jobsWithoutKey: Job[] = [];
 
   for (const job of jobs) {
-    const key = getJobKey(job);
+    const key = getUniqueJobMapKey(uniqueJobs, job);
 
     if (!key) {
       jobsWithoutKey.push(job);

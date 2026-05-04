@@ -2793,33 +2793,194 @@ function mergeSearchHits(target: SearchHit[], incoming: SearchHit[]) {
   }
 }
 
-function normalizeDuplicateValue(value = "") {
-  return normalizeForKeywordMatch(value)
-    .replace(/\b(m w d|w m d|mwd|all genders)\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+const companyDuplicateNoiseWords = new Set([
+  "ag",
+  "sa",
+  "gmbh",
+  "ltd",
+  "llc",
+  "inc",
+  "co",
+  "company",
+  "group",
+  "holding",
+  "schweiz",
+  "switzerland",
+  "suisse",
+  "svizzera",
+  "versicherungen",
+  "versicherung",
+  "insurance",
+]);
+
+const titleDuplicateNoiseWords = new Set([
+  "all",
+  "and",
+  "das",
+  "dem",
+  "den",
+  "der",
+  "des",
+  "d",
+  "die",
+  "fuer",
+  "fur",
+  "genders",
+  "in",
+  "m",
+  "mwd",
+  "oder",
+  "und",
+  "w",
+]);
+
+const locationDuplicateNoiseWords = new Set([
+  "schweiz",
+  "suisse",
+  "svizzera",
+  "switzerland",
+]);
+
+function normalizeCompanyName(value = "") {
+  const normalized = normalizeForKeywordMatch(value);
+  const words = normalized
+    .split(" ")
+    .filter((word) => word && !companyDuplicateNoiseWords.has(word));
+
+  return words.join(" ") || normalized;
 }
 
-function getDuplicateJobKey(job: Job) {
-  return [
-    normalizeDuplicateValue(job.title),
-    normalizeDuplicateValue(job.company),
-    normalizeDuplicateValue(job.location),
-  ].join("|");
+function normalizeJobTitleForDuplicate(value = "") {
+  const withoutNoise = cleanText(value)
+    .replace(
+      /\([^)]*(?:m\s*\/\s*w\s*\/\s*d|w\s*\/\s*m\s*\/\s*d|mwd|all genders|\d{1,3}\s*%)[^)]*\)/gi,
+      " "
+    )
+    .replace(/\b\d{1,3}\s*(?:[-\u2013\u2014]|bis|to)\s*\d{1,3}\s*%/gi, " ")
+    .replace(/\b\d{1,3}\s*%/g, " ")
+    .replace(/\b(?:m\s*\/\s*w\s*\/\s*d|w\s*\/\s*m\s*\/\s*d|mwd|all genders)\b/gi, " ");
+
+  return normalizeForKeywordMatch(withoutNoise)
+    .split(" ")
+    .filter((word) => word && !titleDuplicateNoiseWords.has(word))
+    .join(" ");
+}
+
+function normalizeLocationForDuplicate(value = "") {
+  const normalized = normalizeForKeywordMatch(value)
+    .split(" ")
+    .filter((word) => word && !locationDuplicateNoiseWords.has(word))
+    .join(" ");
+
+  if (
+    normalized === "zurich" ||
+    normalized === "zuerich" ||
+    normalized === "stadt zurich" ||
+    normalized === "stadt zuerich"
+  ) {
+    return "zuerich";
+  }
+
+  return normalized;
+}
+
+function getTitleSimilarity(firstTitle: string, secondTitle: string) {
+  const firstTokens = new Set(firstTitle.split(" ").filter(Boolean));
+  const secondTokens = new Set(secondTitle.split(" ").filter(Boolean));
+
+  if (firstTokens.size === 0 || secondTokens.size === 0) return 0;
+
+  let shared = 0;
+
+  for (const token of firstTokens) {
+    if (secondTokens.has(token)) shared++;
+  }
+
+  return shared / Math.max(firstTokens.size, secondTokens.size);
+}
+
+function areDuplicateTitles(firstTitle: string, secondTitle: string) {
+  if (!firstTitle || !secondTitle) return false;
+  if (firstTitle === secondTitle) return true;
+
+  return getTitleSimilarity(firstTitle, secondTitle) >= 0.82;
+}
+
+function findDuplicateJobIndex(jobs: Job[], job: Job) {
+  const jobUrl = normalizeUrl(job.url);
+  const jobTitle = normalizeJobTitleForDuplicate(job.title);
+  const jobCompany = normalizeCompanyName(job.company);
+  const jobLocation = normalizeLocationForDuplicate(job.location);
+
+  return jobs.findIndex((existingJob) => {
+    const existingUrl = normalizeUrl(existingJob.url);
+    if (jobUrl && existingUrl === jobUrl) return true;
+
+    const existingCompany = normalizeCompanyName(existingJob.company);
+    const existingLocation = normalizeLocationForDuplicate(
+      existingJob.location
+    );
+
+    if (
+      !jobCompany ||
+      !jobLocation ||
+      jobCompany !== existingCompany ||
+      jobLocation !== existingLocation
+    ) {
+      return false;
+    }
+
+    const existingTitle = normalizeJobTitleForDuplicate(existingJob.title);
+    return areDuplicateTitles(jobTitle, existingTitle);
+  });
 }
 
 function isDuplicateJob(jobs: Job[], job: Job) {
-  const jobUrl = normalizeUrl(job.url);
-  const duplicateKey = getDuplicateJobKey(job);
+  return findDuplicateJobIndex(jobs, job) !== -1;
+}
 
-  return jobs.some((existingJob) => {
-    const existingUrl = normalizeUrl(existingJob.url);
+function getJobPublishedTime(job: Job) {
+  return parsePublishedDate(job.publishedDate)?.getTime() || 0;
+}
 
-    return (
-      (jobUrl && existingUrl === jobUrl) ||
-      (duplicateKey && getDuplicateJobKey(existingJob) === duplicateKey)
-    );
-  });
+function getJobDescriptionLength(job: Job) {
+  return cleanText(job.fullDescription).length;
+}
+
+function shouldPreferDuplicateJob(candidate: Job, current: Job) {
+  const scoreDiff = (candidate.score || 0) - (current.score || 0);
+  if (scoreDiff !== 0) return scoreDiff > 0;
+
+  const publishedDateDiff =
+    getJobPublishedTime(candidate) - getJobPublishedTime(current);
+  if (publishedDateDiff !== 0) return publishedDateDiff > 0;
+
+  return getJobDescriptionLength(candidate) > getJobDescriptionLength(current);
+}
+
+function addOrReplaceDuplicateJob(jobs: Job[], job: Job) {
+  if (!isDuplicateJob(jobs, job)) {
+    jobs.push(job);
+    return false;
+  }
+
+  const duplicateIndex = findDuplicateJobIndex(jobs, job);
+
+  if (duplicateIndex === -1) {
+    jobs.push(job);
+    return false;
+  }
+
+  const currentJob = jobs[duplicateIndex];
+
+  if (shouldPreferDuplicateJob(job, currentJob)) {
+    jobs[duplicateIndex] = {
+      ...job,
+      id: currentJob.id || job.id,
+    };
+  }
+
+  return true;
 }
 
 function getLocationFromKeyword(keyword = "") {
@@ -2976,7 +3137,7 @@ function sortJobsForOutput(jobs: Job[]) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -3137,12 +3298,12 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      if (isDuplicateJob(jobs, job)) {
+      if (addOrReplaceDuplicateJob(jobs, job)) {
         skippedDuplicate++;
+        usedUrls.add(normalizeUrl(job.url));
         continue;
       }
 
-      jobs.push(job);
       usedUrls.add(normalizeUrl(job.url));
 
       if (jobs.length >= maxDetailJobsUsed) break;
@@ -3176,12 +3337,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        if (isDuplicateJob(jobs, fallbackJob)) {
+        if (addOrReplaceDuplicateJob(jobs, fallbackJob)) {
           skippedDuplicate++;
+          usedUrls.add(normalized);
           continue;
         }
 
-        jobs.push(fallbackJob);
         usedUrls.add(normalized);
         fallbackUsed++;
       }
