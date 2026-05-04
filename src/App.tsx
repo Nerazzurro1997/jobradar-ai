@@ -880,7 +880,9 @@ export default function App() {
         cvAnalysisFeedback={lastCvAnalysisFeedback}
         workspaceResetAt={workspaceResetAt}
         onSearch={handleSearchJobs}
-        onAnalyzeCv={() => handleAnalyzeCv()}
+        onAnalyzeCv={() => {
+          void handleAnalyzeCv().catch(() => undefined);
+        }}
         onClearCv={clearCvProfile}
         onToggleSaved={toggleSavedJobs}
         onToggleTop={toggleOnlyTop}

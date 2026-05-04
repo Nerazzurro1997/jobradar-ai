@@ -102,6 +102,67 @@ type FetchHtmlResult = {
   finalUrl: string;
 };
 
+type SearchDiscardReason =
+  | "duplicate"
+  | "missingTitle"
+  | "missingCompany"
+  | "scoreTooLow"
+  | "invalidUrl"
+  | "noDetail"
+  | "timeout";
+
+type SearchRunDebugStats = {
+  runId: string;
+  searchPagesAttempted: number;
+  totalLinksBeforeDedup: number;
+  linkDuplicates: number;
+  discardReasons: Record<SearchDiscardReason, number>;
+};
+
+function createRunId() {
+  return crypto.randomUUID().slice(0, 8);
+}
+
+function createSearchRunDebugStats(runId: string): SearchRunDebugStats {
+  return {
+    runId,
+    searchPagesAttempted: 0,
+    totalLinksBeforeDedup: 0,
+    linkDuplicates: 0,
+    discardReasons: {
+      duplicate: 0,
+      missingTitle: 0,
+      missingCompany: 0,
+      scoreTooLow: 0,
+      invalidUrl: 0,
+      noDetail: 0,
+      timeout: 0,
+    },
+  };
+}
+
+function incrementDiscardReason(
+  debugStats: SearchRunDebugStats,
+  reason: SearchDiscardReason
+) {
+  debugStats.discardReasons[reason]++;
+}
+
+function getFetchFailureReason(error: unknown) {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "timeout";
+  }
+
+  if (
+    error instanceof Error &&
+    /abort|timeout|timed out/i.test(`${error.name} ${error.message}`)
+  ) {
+    return "timeout";
+  }
+
+  return "fetch_error";
+}
+
 function cleanText(value: unknown = "") {
   return String(value ?? "")
     .replace(/\\u002F/g, "/")
@@ -2609,22 +2670,26 @@ function extractJobDetail(
 }
 
 function isUsefulDetailedJob(job: Job) {
+  return getDetailedJobRejectReason(job) === null;
+}
+
+function getDetailedJobRejectReason(job: Job): SearchDiscardReason | null {
   const title = job.title.toLowerCase();
   const company = job.company.toLowerCase();
   const descriptionLength = cleanText(job.fullDescription).length;
 
-  if (!job.url) return false;
+  if (!job.url) return "invalidUrl";
   if (title.includes("access denied") || title.includes("cloudflare")) {
-    return false;
+    return "noDetail";
   }
   if (title === "stellenanzeige auf jobs.ch" && descriptionLength < 80) {
-    return false;
+    return "missingTitle";
   }
   if (company === "firma auf jobs.ch" && descriptionLength < 120) {
-    return false;
+    return "missingCompany";
   }
 
-  return true;
+  return null;
 }
 
 function createFallbackJobFromHit(
@@ -2684,13 +2749,25 @@ async function collectLinks(
   maxRuntimeMs: number,
   targetLinks: number,
   knownUrlSet: Set<string>,
-  maxPagesOverride?: number
+  maxPagesOverride?: number,
+  debugStats?: SearchRunDebugStats
 ) {
   const foundLinks: SearchHit[] = [];
   const foundUrlSet = new Set<string>();
   let skippedKnown = 0;
   let searchPagesFetched = 0;
   let searchPagesFailed = 0;
+
+  const buildResult = () => ({
+    foundLinks,
+    skippedKnown,
+    searchPagesFetched,
+    searchPagesFailed,
+    searchPagesAttempted: debugStats?.searchPagesAttempted || 0,
+    totalLinksBeforeDedup: debugStats?.totalLinksBeforeDedup || 0,
+    totalLinksAfterDedup: foundLinks.length,
+    linkDuplicates: debugStats?.linkDuplicates || 0,
+  });
 
   const maxPages =
     maxPagesOverride ??
@@ -2708,12 +2785,7 @@ async function collectLinks(
         const query = queries[queryIndex];
 
         if (Date.now() - startedAt > maxRuntimeMs - 15000) {
-          return {
-            foundLinks,
-            skippedKnown,
-            searchPagesFetched,
-            searchPagesFailed,
-          };
+          return buildResult();
         }
 
         const base = `https://www.jobs.ch/de/stellenangebote/?term=${encodeURIComponent(
@@ -2722,13 +2794,33 @@ async function collectLinks(
 
         const urlsToTry = [`${base}&sort=date`, base];
 
-        for (const searchUrl of urlsToTry) {
+        for (let urlIndex = 0; urlIndex < urlsToTry.length; urlIndex++) {
+          const searchUrl = urlsToTry[urlIndex];
+          const searchVariant = urlIndex === 0 ? "sort=date" : "base";
+
+          if (debugStats) debugStats.searchPagesAttempted++;
+
           try {
             const result = await fetchHtmlWithRetry(searchUrl, 0, 5500);
             searchPagesFetched++;
 
             const keyword = `${query.source}: ${query.term} - ${loc}`;
             const hits = extractSearchHits(result.html, keyword, query);
+            if (debugStats) debugStats.totalLinksBeforeDedup += hits.length;
+
+            console.info("search-jobs search page", {
+              runId: debugStats?.runId,
+              page,
+              query: query.term,
+              querySource: query.source,
+              location: loc,
+              variant: searchVariant,
+              status: result.status,
+              ok: result.ok,
+              linksFound: hits.length,
+              fallback: urlIndex > 0,
+              timeout: false,
+            });
 
             for (const hit of hits) {
               const normalized = normalizeUrl(hit.url);
@@ -2746,11 +2838,35 @@ async function collectLinks(
                   keyword,
                   query,
                 });
+              } else if (debugStats) {
+                debugStats.linkDuplicates++;
               }
             }
 
             if (hits.length > 0) break;
-          } catch {
+          } catch (error) {
+            const failureReason = getFetchFailureReason(error);
+
+            if (debugStats) {
+              if (failureReason === "timeout") {
+                incrementDiscardReason(debugStats, "timeout");
+              }
+            }
+
+            console.warn("search-jobs search page failed", {
+              runId: debugStats?.runId,
+              page,
+              query: query.term,
+              querySource: query.source,
+              location: loc,
+              variant: searchVariant,
+              status: null,
+              linksFound: 0,
+              fallback: urlIndex > 0,
+              timeout: failureReason === "timeout",
+              reason: failureReason,
+            });
+
             searchPagesFailed++;
             continue;
           }
@@ -2768,23 +2884,13 @@ async function collectLinks(
           hasTriedAllQueries &&
           hasCompletedAtLeastOneFullPage
         ) {
-          return {
-            foundLinks,
-            skippedKnown,
-            searchPagesFetched,
-            searchPagesFailed,
-          };
+          return buildResult();
         }
       }
     }
   }
 
-  return {
-    foundLinks,
-    skippedKnown,
-    searchPagesFetched,
-    searchPagesFailed,
-  };
+  return buildResult();
 }
 
 function mergeSearchHits(target: SearchHit[], incoming: SearchHit[]) {
@@ -3147,8 +3253,11 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const startedAt = Date.now();
+  const runId = createRunId();
+  const debugStats = createSearchRunDebugStats(runId);
+
   try {
-    const startedAt = Date.now();
     const maxRuntimeMs = 65000;
 
     const body = await req.json();
@@ -3195,6 +3304,27 @@ Deno.serve(async (req: Request) => {
     const maxPagesUsed = veryLightMode ? 2 : lightMode ? 3 : 5;
     const balancedHitLimit = lightMode ? targetLinks : 110;
 
+    console.info("search-jobs run start", {
+      runId,
+      queryCount: searchQueries.length,
+      queries: searchQueries.map((query) => query.term),
+      querySources: searchQueries.reduce<Record<string, number>>(
+        (acc, query) => {
+          acc[query.source] = (acc[query.source] || 0) + 1;
+          return acc;
+        },
+        {}
+      ),
+      locations: orderedSearchLocations,
+      locationCount: orderedSearchLocations.length,
+      knownUrlsCount,
+      targetLinks,
+      maxPagesUsed,
+      maxDetailJobsUsed,
+      lightMode,
+      veryLightMode,
+    });
+
     let foundLinks: SearchHit[] = [];
     const collectedLinks = await collectLinks(
       searchQueries,
@@ -3203,18 +3333,39 @@ Deno.serve(async (req: Request) => {
       maxRuntimeMs,
       targetLinks,
       knownUrlSet,
-      maxPagesUsed
+      maxPagesUsed,
+      debugStats
     );
 
     foundLinks = collectedLinks.foundLinks;
     let skippedKnown = collectedLinks.skippedKnown;
     let searchPagesFetched = collectedLinks.searchPagesFetched;
     let searchPagesFailed = collectedLinks.searchPagesFailed;
+    const totalLinksBeforeDedup = collectedLinks.totalLinksBeforeDedup;
+    const totalLinksAfterDedup = collectedLinks.totalLinksAfterDedup;
+    const linkDuplicates = collectedLinks.linkDuplicates;
+
+    console.info("search-jobs links collected", {
+      runId,
+      searchPagesAttempted: collectedLinks.searchPagesAttempted,
+      searchPagesFetched,
+      searchPagesFailed,
+      totalLinksBeforeDedup,
+      totalLinksAfterDedup,
+      linkDuplicates,
+      skippedKnown,
+    });
 
     foundLinks = selectBalancedSearchHits(
       foundLinks,
       balancedHitLimit
     );
+
+    console.info("search-jobs links balanced", {
+      runId,
+      balancedHitLimit,
+      linksAfterBalancing: foundLinks.length,
+    });
 
     const jobs: Job[] = [];
     const usedUrls = new Set<string>();
@@ -3238,6 +3389,10 @@ Deno.serve(async (req: Request) => {
       if (jobs.length >= maxDetailJobsUsed) break;
 
       const normalizedItemUrl = normalizeUrl(item.url);
+
+      if (!normalizedItemUrl || !normalizedItemUrl.startsWith("http")) {
+        incrementDiscardReason(debugStats, "invalidUrl");
+      }
 
       if (knownUrlSet.has(normalizedItemUrl)) {
         skippedKnown++;
@@ -3266,10 +3421,13 @@ Deno.serve(async (req: Request) => {
           allowSectionParsing
         );
 
-        if (isUsefulDetailedJob(detailedJob)) {
+        const detailRejectReason = getDetailedJobRejectReason(detailedJob);
+
+        if (!detailRejectReason) {
           job = detailedJob;
           detailSuccess++;
         } else {
+          incrementDiscardReason(debugStats, detailRejectReason);
           detailFailed++;
           job = createFallbackJobFromHit(
             item,
@@ -3280,7 +3438,15 @@ Deno.serve(async (req: Request) => {
           );
           fallbackUsed++;
         }
-      } catch {
+      } catch (error) {
+        const failureReason = getFetchFailureReason(error);
+
+        if (failureReason === "timeout") {
+          incrementDiscardReason(debugStats, "timeout");
+        } else {
+          incrementDiscardReason(debugStats, "noDetail");
+        }
+
         detailFailed++;
         job = createFallbackJobFromHit(
           item,
@@ -3307,6 +3473,7 @@ Deno.serve(async (req: Request) => {
 
       if (addOrReplaceDuplicateJob(jobs, job)) {
         skippedDuplicate++;
+        incrementDiscardReason(debugStats, "duplicate");
         usedUrls.add(normalizedJobUrl);
         continue;
       }
@@ -3327,6 +3494,9 @@ Deno.serve(async (req: Request) => {
           usedUrls.has(normalized) ||
           oldUrls.has(normalized)
         ) {
+          if (usedUrls.has(normalized)) {
+            incrementDiscardReason(debugStats, "duplicate");
+          }
           continue;
         }
 
@@ -3346,6 +3516,7 @@ Deno.serve(async (req: Request) => {
 
         if (addOrReplaceDuplicateJob(jobs, fallbackJob)) {
           skippedDuplicate++;
+          incrementDiscardReason(debugStats, "duplicate");
           usedUrls.add(normalized);
           continue;
         }
@@ -3365,9 +3536,44 @@ Deno.serve(async (req: Request) => {
         ? highQualityJobs.slice(0, 25)
         : fallbackQualityJobs.slice(0, 25);
 
+    const finalScoreThreshold = highQualityJobs.length >= 10 ? 65 : 55;
+    const finalJobUrlSet = new Set(
+      finalJobs.map((job) => normalizeUrl(job.url))
+    );
+    const scoreTooLowCount = jobs.filter(
+      (job) =>
+        !finalJobUrlSet.has(normalizeUrl(job.url)) &&
+        (job.score || 0) < finalScoreThreshold
+    ).length;
+    debugStats.discardReasons.scoreTooLow += scoreTooLowCount;
+
     const locationStats = createLocationStats(foundLinks, finalJobs);
     const recencyStats = createRecencyStats(finalJobs);
     const mismatchStats = createMismatchStats(finalJobs);
+
+    console.info("search-jobs run summary", {
+      runId,
+      durationMs: Date.now() - startedAt,
+      queryCount: searchQueries.length,
+      queries: searchQueries.map((query) => query.term),
+      locations: orderedSearchLocations,
+      searchPagesAttempted: debugStats.searchPagesAttempted,
+      searchPagesFetched,
+      searchPagesFailed,
+      totalLinksBeforeDedup,
+      totalLinksAfterDedup,
+      linksAfterBalancing: foundLinks.length,
+      linkDuplicates,
+      skippedKnown,
+      detailPagesAttempted: detailAttempts,
+      detailPagesSucceeded: detailSuccess,
+      detailPagesFailed: detailFailed,
+      fallbackUsed,
+      jobsBeforeFinalFilter: jobs.length,
+      finalScoreThreshold,
+      finalJobsReturned: finalJobs.length,
+      discardReasons: debugStats.discardReasons,
+    });
 
     return new Response(
       JSON.stringify({
@@ -3419,6 +3625,12 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (error) {
+    console.error("search-jobs run failed", {
+      runId,
+      durationMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     return new Response(
       JSON.stringify({
         error: String(error),

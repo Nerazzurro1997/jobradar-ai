@@ -521,6 +521,23 @@ function extractJsonFromText(text = "") {
   }
 }
 
+function extractFirstBalancedJsonFromText(text = "") {
+  const cleaned = cleanJsonText(text);
+  const first = cleaned.indexOf("{");
+
+  if (first === -1) {
+    return null;
+  }
+
+  const candidate = extractBalancedJsonObject(cleaned, first);
+
+  if (!candidate) {
+    return null;
+  }
+
+  return extractJsonFromText(candidate);
+}
+
 function extractBalancedJsonObject(text: string, startIndex: number) {
   let depth = 0;
   let inString = false;
@@ -959,7 +976,10 @@ async function recoverIncompleteProfileWithOpenAI(
 ) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90_000);
+  const recoveryStartedAt = performance.now();
   let profileResponse: Response;
+
+  console.info("CV profile recovery start");
 
   try {
     profileResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -1024,15 +1044,21 @@ Filename: ${fileName}
     return null;
   } finally {
     clearTimeout(timeout);
+    logDuration("CV profile recovery request duration", recoveryStartedAt);
   }
 
   const parsedProfile = await parseOpenAiResponse(profileResponse);
 
   if (!parsedProfile.isJson || !profileResponse.ok) {
+    const recoveryOutputText = parsedProfile.isJson
+      ? extractOutputText(parsedProfile.data)
+      : parsedProfile.rawText;
+
     console.warn("CV profile recovery returned invalid response", {
       ok: profileResponse.ok,
       status: profileResponse.status,
       isJson: parsedProfile.isJson,
+      ...getRecoveryOutputMetadata(recoveryOutputText),
     });
     return null;
   }
@@ -1043,18 +1069,69 @@ Filename: ${fileName}
     typeof structuredProfile === "object" &&
     !Array.isArray(structuredProfile)
   ) {
-    return structuredProfile;
+    console.info("CV profile recovery parsed", {
+      parsed: true,
+      source: "structured_output",
+      ...getProfileDebugMetadata(structuredProfile),
+    });
+
+    const acceptedProfile =
+      getAcceptedRecoveryProfileCandidate(structuredProfile);
+
+    if (acceptedProfile) {
+      console.info(
+        acceptedProfile.type === "wrapped"
+          ? "CV profile recovery accepted wrapped profile"
+          : "CV profile recovery accepted direct profile",
+        {
+          source: "structured_output",
+          ...getProfileDebugMetadata(acceptedProfile.profile),
+        }
+      );
+      return acceptedProfile.profile;
+    }
   }
 
   const outputText = extractOutputText(parsedProfile.data);
   const parsedTextProfile =
-    tryParseJson(outputText) || extractJsonFromText(outputText);
+    tryParseJson(outputText) ||
+    extractJsonFromText(outputText) ||
+    extractFirstBalancedJsonFromText(outputText);
 
-  return parsedTextProfile &&
+  if (
+    parsedTextProfile &&
     typeof parsedTextProfile === "object" &&
     !Array.isArray(parsedTextProfile)
-    ? parsedTextProfile
-    : null;
+  ) {
+    console.info("CV profile recovery parsed", {
+      parsed: true,
+      source: "text_json",
+      ...getProfileDebugMetadata(parsedTextProfile),
+    });
+
+    const acceptedProfile =
+      getAcceptedRecoveryProfileCandidate(parsedTextProfile);
+
+    if (acceptedProfile) {
+      console.info(
+        acceptedProfile.type === "wrapped"
+          ? "CV profile recovery accepted wrapped profile"
+          : "CV profile recovery accepted direct profile",
+        {
+          source: "text_json",
+          ...getProfileDebugMetadata(acceptedProfile.profile),
+        }
+      );
+      return acceptedProfile.profile;
+    }
+  }
+
+  console.warn("CV profile recovery parse failed", {
+    parsed: false,
+    ...getRecoveryOutputMetadata(outputText),
+  });
+
+  return null;
 }
 
 function normalizeProfile(raw: any) {
@@ -1314,6 +1391,82 @@ function hasUsefulProfileSignals(profile: any) {
     safeArray(profile?.cvHighlights, 12).length > 0 ||
     Boolean(safeString(profile?.profileSummary))
   );
+}
+
+function getObjectKeys(value: any, limit = 40) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? Object.keys(value).slice(0, limit)
+    : [];
+}
+
+function getArrayLength(value: any) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function getProfileSignalLengths(profile: any) {
+  return {
+    searchTerms: getArrayLength(profile?.searchTerms),
+    strongKeywords: getArrayLength(profile?.strongKeywords),
+    skillTags: getArrayLength(profile?.skillTags),
+    cvHighlights: getArrayLength(profile?.cvHighlights),
+    matchingBestFitRoles: getArrayLength(profile?.matching?.bestFitRoles),
+    languageProfileLanguages: getArrayLength(
+      profile?.languageProfile?.languages
+    ),
+  };
+}
+
+function getProfileDebugMetadata(profile: any) {
+  return {
+    exists:
+      Boolean(profile) &&
+      typeof profile === "object" &&
+      !Array.isArray(profile),
+    topLevelKeys: getObjectKeys(profile),
+    signalLengths: getProfileSignalLengths(profile),
+  };
+}
+
+function getRecoveryOutputMetadata(outputText: string) {
+  const lowerOutput = outputText.toLowerCase();
+
+  return {
+    outputLength: outputText.length,
+    hasSearchTerms: lowerOutput.includes("searchterms"),
+    hasStrongKeywords: lowerOutput.includes("strongkeywords"),
+    hasSkillTags: lowerOutput.includes("skilltags"),
+    hasProfileSummary: lowerOutput.includes("profilesummary"),
+    hasMatching: lowerOutput.includes("matching"),
+    hasLanguageProfile: lowerOutput.includes("languageprofile"),
+  };
+}
+
+function getAcceptedRecoveryProfileCandidate(value: any) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const wrappedProfile =
+    value.profile && typeof value.profile === "object" && !Array.isArray(value.profile)
+      ? value.profile
+      : null;
+
+  const candidates = wrappedProfile
+    ? [
+        { profile: wrappedProfile, type: "wrapped" },
+        { profile: value, type: "direct" },
+      ]
+    : [{ profile: value, type: "direct" }];
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeProfile(candidate.profile);
+
+    if (hasUsefulProfileSignals(normalizedCandidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 function buildAnalyzeCvPrompt(fileName: string) {
@@ -1707,6 +1860,11 @@ Deno.serve(async (req) => {
         ? rawAnalysis.profile
         : null;
 
+    console.info("CV raw profile from primary", {
+      fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+      ...getProfileDebugMetadata(rawAnalysis?.profile),
+    });
+
     if (
       !rawProfileForNormalization
     ) {
@@ -1740,13 +1898,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    console.info("CV raw profile before normalization", {
+      fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+      source: usedProfileRecovery ? "recovery" : "primary",
+      ...getProfileDebugMetadata(rawProfileForNormalization),
+    });
+
     let profile = normalizeProfile(rawProfileForNormalization);
+    const hasUsefulSignalsAfterNormalization =
+      hasUsefulProfileSignals(profile);
 
     console.info("CV profile normalized", {
       fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+      ...getProfileDebugMetadata(profile),
+      hasUsefulProfileSignals: hasUsefulSignalsAfterNormalization,
     });
 
-    if (!hasUsefulProfileSignals(profile)) {
+    if (!hasUsefulSignalsAfterNormalization) {
       console.warn("CV profile extraction incomplete: no useful signals", {
         fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
       });
@@ -1771,9 +1939,13 @@ Deno.serve(async (req) => {
         if (recoveredRawProfile) {
           profile = normalizeProfile(recoveredRawProfile);
           usedProfileRecovery = true;
+          const hasUsefulSignalsAfterRecovery =
+            hasUsefulProfileSignals(profile);
 
           console.info("CV profile normalized from recovery", {
             fileHashPrefix: fileHash ? fileHash.slice(0, 12) : "",
+            ...getProfileDebugMetadata(profile),
+            hasUsefulProfileSignals: hasUsefulSignalsAfterRecovery,
           });
         }
       }
