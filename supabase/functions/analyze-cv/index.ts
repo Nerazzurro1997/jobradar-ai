@@ -127,6 +127,56 @@ function getBlockedNonCvReasonFromFileName(fileName: string): string | null {
   return null;
 }
 
+function getBlockedNonCvReasonFromValidation(validation: any): string | null {
+  const text = normalizeBlockedFileNameText(
+    [
+      safeString(validation?.documentType),
+      ...safeArray(validation?.nonCvSignals, 20),
+    ].join(" ")
+  );
+  const compactText = text.replace(/[^a-z0-9]+/g, "");
+  const blockedTerms = [
+    "arbeitsbestätigung",
+    "arbeitsbestaetigung",
+    "arbeitszeugnis",
+    "arbeitgeberbescheinigung",
+    "employment confirmation",
+    "employment certificate",
+    "work certificate",
+    "attestation de travail",
+    "certificat de travail",
+    "attestato di lavoro",
+    "certificato di lavoro",
+    "conferma di lavoro",
+    "attestato",
+    "certificato",
+    "certificate",
+    "diploma",
+    "rechnung",
+    "invoice",
+    "fattura",
+    "facture",
+    "vertrag",
+    "contract",
+    "contratto",
+    "contrat",
+    "police",
+    "polizza",
+    "versicherungspolice",
+  ];
+
+  for (const term of blockedTerms) {
+    const normalizedTerm = normalizeBlockedFileNameText(term);
+    const compactTerm = normalizedTerm.replace(/[^a-z0-9]+/g, "");
+
+    if (text.includes(normalizedTerm) || compactText.includes(compactTerm)) {
+      return `Document validation found non-CV signal: ${term}`;
+    }
+  }
+
+  return null;
+}
+
 function extractOutputText(data: any): string {
   if (typeof data?.output_text === "string" && data.output_text.trim()) {
     return data.output_text.trim();
@@ -204,7 +254,7 @@ function tryParseJson(text: string) {
   }
 }
 
-function hasPotentialProfileJson(text = "") {
+function hasPotentialAnalysisJson(text = "") {
   const cleaned = cleanJsonText(text).toLowerCase();
 
   if (!cleaned.includes("{")) {
@@ -212,6 +262,9 @@ function hasPotentialProfileJson(text = "") {
   }
 
   return [
+    "documentvalidation",
+    "shouldanalyze",
+    "profile",
     "searchterms",
     "strongkeywords",
     "avoidkeywords",
@@ -435,29 +488,35 @@ const compactProfileSchema = {
   ],
 };
 
-const cvValidationSchema = {
+const documentValidationSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
     shouldAnalyze: { type: "boolean" },
-    isCv: { type: "boolean" },
-    hasClearCvStructure: { type: "boolean" },
-    confidence: { type: "number" },
     documentType: { type: "string" },
+    confidence: { type: "number" },
     cvSignals: stringArraySchema,
     nonCvSignals: stringArraySchema,
     reason: { type: "string" },
   },
   required: [
     "shouldAnalyze",
-    "isCv",
-    "hasClearCvStructure",
-    "confidence",
     "documentType",
+    "confidence",
     "cvSignals",
     "nonCvSignals",
     "reason",
   ],
+};
+
+const cvAnalysisSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    documentValidation: documentValidationSchema,
+    profile: compactProfileSchema,
+  },
+  required: ["documentValidation", "profile"],
 };
 
 async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
@@ -480,16 +539,16 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
         text: {
           format: {
             type: "json_schema",
-            name: "cv_profile_compact_repair",
+            name: "cv_analysis_repair",
             strict: true,
-            schema: compactProfileSchema,
+            schema: cvAnalysisSchema,
           },
         },
         input: [
           {
             role: "system",
             content:
-              "You repair broken JSON. Return only valid JSON matching the schema. No markdown. No explanations.",
+              "You repair broken JSON. Return only valid JSON matching the combined CV validation and profile schema. No markdown. No explanations.",
           },
           {
             role: "user",
@@ -497,6 +556,7 @@ async function repairJsonWithOpenAI(apiKey: string, brokenText: string) {
 Repair this broken JSON into the requested schema.
 
 If information is missing, use empty arrays, empty strings, or null.
+If the documentValidation says the file is not a real CV, keep shouldAnalyze false and keep the profile empty according to the schema.
 
 Broken JSON:
 ${brokenText.slice(0, 10000)}
@@ -523,292 +583,6 @@ ${brokenText.slice(0, 10000)}
   }
 
   return tryParseJson(repairedText);
-}
-
-function hasBlockedDocumentTypeSignal(
-  fileName: string,
-  validation: {
-    documentType: string;
-    reason: string;
-    nonCvSignals: string[];
-  }
-) {
-  const text = [
-    fileName,
-    validation.documentType,
-    validation.reason,
-    ...validation.nonCvSignals,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return [
-    "arbeitsbestätigung",
-    "arbeitsbestaetigung",
-    "arbeitszeugnis",
-    "arbeitgeberbescheinigung",
-    "employment confirmation",
-    "employment certificate",
-    "work certificate",
-    "attestation de travail",
-    "certificat de travail",
-    "attestato di lavoro",
-    "certificato di lavoro",
-    "conferma di lavoro",
-  ].some((term) => text.includes(term));
-}
-
-function parseBooleanFieldFromText(text: string, fieldName: string) {
-  const match = text.match(
-    new RegExp(`"${fieldName}"\\s*:\\s*(true|false)`, "i")
-  );
-
-  return match ? match[1].toLowerCase() === "true" : null;
-}
-
-function parseNumberFieldFromText(text: string, fieldName: string) {
-  const match = text.match(
-    new RegExp(`"${fieldName}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, "i")
-  );
-
-  if (!match) return null;
-
-  const parsed = Number(match[1]);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseStringFieldFromText(text: string, fieldName: string) {
-  const match = text.match(new RegExp(`"${fieldName}"\\s*:\\s*"([^"]*)"`, "i"));
-  return match ? match[1].trim() : "";
-}
-
-function normalizeCvValidation(raw: any) {
-  if (!raw || typeof raw !== "object") return null;
-
-  const hasValidationShape =
-    typeof raw.shouldAnalyze === "boolean" ||
-    typeof raw.isCv === "boolean" ||
-    typeof raw.hasClearCvStructure === "boolean";
-
-  if (!hasValidationShape) return null;
-
-  const shouldAnalyze = Boolean(raw.shouldAnalyze);
-  const isCv = Boolean(raw.isCv);
-  const hasClearCvStructure = Boolean(raw.hasClearCvStructure);
-
-  return {
-    shouldAnalyze,
-    isCv,
-    hasClearCvStructure,
-    confidence: safeNumber(raw.confidence) ?? 0,
-    documentType: safeString(raw.documentType),
-    cvSignals: safeArray(raw.cvSignals, 12),
-    nonCvSignals: safeArray(raw.nonCvSignals, 12),
-    reason: safeString(raw.reason),
-  };
-}
-
-function findCvValidationObject(value: any, depth = 0): any | null {
-  if (!value || depth > 5) return null;
-
-  const normalized = normalizeCvValidation(value);
-  if (normalized) return normalized;
-
-  if (typeof value === "string") {
-    const parsed = tryParseJson(value);
-    return parsed ? findCvValidationObject(parsed, depth + 1) : null;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findCvValidationObject(item, depth + 1);
-      if (found) return found;
-    }
-
-    return null;
-  }
-
-  if (typeof value === "object") {
-    for (const item of Object.values(value)) {
-      const found = findCvValidationObject(item, depth + 1);
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
-
-function parseCvValidationFromText(text: string) {
-  const parsed = tryParseJson(text);
-  const parsedValidation = findCvValidationObject(parsed);
-
-  if (parsedValidation) return parsedValidation;
-
-  const shouldAnalyze = parseBooleanFieldFromText(text, "shouldAnalyze");
-  const isCv = parseBooleanFieldFromText(text, "isCv");
-  const hasClearCvStructure = parseBooleanFieldFromText(
-    text,
-    "hasClearCvStructure"
-  );
-
-  if (
-    shouldAnalyze === null &&
-    isCv === null &&
-    hasClearCvStructure === null
-  ) {
-    return null;
-  }
-
-  return {
-    shouldAnalyze: Boolean(shouldAnalyze),
-    isCv: Boolean(isCv ?? shouldAnalyze),
-    hasClearCvStructure: Boolean(hasClearCvStructure ?? shouldAnalyze),
-    confidence: parseNumberFieldFromText(text, "confidence") ?? 0,
-    documentType: parseStringFieldFromText(text, "documentType"),
-    cvSignals: [],
-    nonCvSignals: [],
-    reason: parseStringFieldFromText(text, "reason"),
-  };
-}
-
-function parseCvValidationFromOpenAiData(data: any) {
-  const directValidation = findCvValidationObject(data);
-  if (directValidation) return directValidation;
-
-  const validationText = extractOutputText(data);
-  return validationText ? parseCvValidationFromText(validationText) : null;
-}
-
-async function validateCvDocument(
-  apiKey: string,
-  fileName: string,
-  fileBase64: string
-) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45_000);
-
-  let validationResponse: Response;
-
-  try {
-    validationResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        temperature: 0,
-        max_output_tokens: 700,
-        text: {
-          format: {
-            type: "json_schema",
-            name: "cv_document_validation",
-            strict: true,
-            schema: cvValidationSchema,
-          },
-        },
-        input: [
-          {
-            role: "system",
-            content:
-              "Classify whether the uploaded PDF is a CV/resume/Lebenslauf. Be conservative: employment confirmations and work certificates are not CVs. Return only valid JSON matching the schema.",
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: `
-Validate this uploaded PDF before CV analysis.
-
-Use the filename, the first visible parts of the PDF content, and the document structure.
-Accept CV/resume documents in German, English, Italian, and French.
-
-Strong CV signals include:
-- German: Lebenslauf, CV, Bewerbung, Berufserfahrung, Ausbildung, Fähigkeiten, Kenntnisse, Sprachen
-- English: CV, resume, work experience, education, skills, employment history, languages
-- Italian: curriculum, CV, esperienze lavorative, formazione, competenze, lingue
-- French: CV, curriculum vitae, expérience professionnelle, formation, compétences, langues
-- Structured candidate profile with personal/contact info plus work experience and education/skills.
-
-Block documents that look like:
-- invoices, Rechnungen, fatture
-- contracts, Verträge, contratti
-- insurance offers, Versicherungsofferten, offerte assicurative
-- Arbeitsbestätigung, Arbeitszeugnis single document, Arbeitgeberbescheinigung
-- employment confirmation, employment certificate, work certificate
-- attestation de travail, certificat de travail
-- attestato di lavoro, certificato di lavoro, conferma di lavoro
-- letters, Briefe, lettere
-- job ads, Stelleninserate, annunci di lavoro
-- standalone certificates without a CV structure
-- reports, rapporti, generic business documents
-
-Decision rules:
-- A document is not a CV merely because it contains a person's name, employer, employment dates, a job title, or experience at one company.
-- A CV must have clear CV structure, usually multiple sections such as Berufserfahrung/work experience/esperienze lavorative/expérience professionnelle, Ausbildung/education/formazione, Fähigkeiten/skills/competenze/compétences, Sprachen/languages/lingue/langues, Profil/profile/profilo, or multiple roles/stations.
-- Set hasClearCvStructure true only when the document has clear CV/resume structure.
-- shouldAnalyze must be true only when the document is probably a CV/resume and has clear CV structure.
-- If uncertain but there are strong CV structure signals, set shouldAnalyze true.
-- If uncertain and it looks like an invoice, contract, offer, letter, job ad, certificate-only, report, or generic document, set shouldAnalyze false.
-- If confidence is below 0.75 and there is no clear CV structure, set shouldAnalyze false.
-- Do not rely only on the filename.
-- confidence must be between 0 and 1.
-
-Filename: ${fileName}
-`.trim(),
-              },
-              {
-                type: "input_file",
-                filename: fileName,
-                file_data: `data:application/pdf;base64,${fileBase64}`,
-              },
-            ],
-          },
-        ],
-      }),
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  const parsedValidation = await parseOpenAiResponse(validationResponse);
-
-  if (!parsedValidation.isJson) {
-    return {
-      ok: false,
-      error: "OpenAI returned non-JSON CV validation response",
-      details: parsedValidation.rawText.slice(0, 1200),
-    };
-  }
-
-  const validationData = parsedValidation.data;
-
-  if (!validationResponse.ok) {
-    return {
-      ok: false,
-      error: validationData?.error?.message || "OpenAI CV validation failed",
-      details: validationData?.error || validationData,
-    };
-  }
-
-  const validationText = extractOutputText(validationData);
-  const validation = parseCvValidationFromOpenAiData(validationData);
-
-  if (!validation || typeof validation !== "object") {
-    return {
-      ok: false,
-      error: "Could not parse CV validation response",
-      details: validationText || JSON.stringify(validationData).slice(0, 1500),
-    };
-  }
-
-  return {
-    ok: true,
-    validation,
-  };
 }
 
 function normalizeProfile(raw: any) {
@@ -1102,61 +876,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const cvValidationResult = await validateCvDocument(
-      apiKey,
-      fileName,
-      fileBase64
-    );
-
-    if (!cvValidationResult.ok) {
-      return jsonResponse(
-        {
-          success: false,
-          error: cvValidationResult.error,
-          details: cvValidationResult.details,
-        },
-        200
-      );
-    }
-
-    const cvValidation = cvValidationResult.validation;
-
-    if (!cvValidation) {
-      return jsonResponse(
-        {
-          success: false,
-          error: "Could not validate whether the uploaded file is a CV",
-        },
-        200
-      );
-    }
-
-    const hasLowConfidenceWithoutClearCvStructure =
-      cvValidation.confidence < 0.75 && !cvValidation.hasClearCvStructure;
-    const hasBlockedDocumentType =
-      hasBlockedDocumentTypeSignal(fileName, cvValidation) &&
-      !cvValidation.hasClearCvStructure;
-
-    if (
-      !cvValidation.shouldAnalyze ||
-      hasLowConfidenceWithoutClearCvStructure ||
-      hasBlockedDocumentType
-    ) {
-      return jsonResponse(
-        {
-          success: false,
-          errorCode: "NOT_A_CV",
-          error:
-            "The uploaded file does not look like a CV or resume. Please upload your CV.",
-          documentType: cvValidation.documentType || "not_cv",
-          reason:
-            cvValidation.reason ||
-            "The document does not have clear CV or resume structure.",
-        },
-        200
-      );
-    }
-
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);
 
@@ -1177,16 +896,16 @@ Deno.serve(async (req) => {
           text: {
             format: {
               type: "json_schema",
-              name: "cv_profile_compact",
+              name: "cv_validation_and_profile",
               strict: true,
-              schema: compactProfileSchema,
+              schema: cvAnalysisSchema,
             },
           },
           input: [
             {
               role: "system",
               content:
-                "Return only valid compact JSON matching the schema. No markdown. No explanations. Do not invent facts. Use empty arrays, empty strings, or null when the CV does not support a field.",
+                "Return only valid JSON matching the combined documentValidation and profile schema. No markdown. No explanations. Validate the document first, then extract the profile only when it is clearly a real CV/resume/Lebenslauf. Be conservative: when in doubt set documentValidation.shouldAnalyze to false. Do not invent facts. Use empty arrays, empty strings, or null when the CV does not support a field.",
             },
             {
               role: "user",
@@ -1194,7 +913,56 @@ Deno.serve(async (req) => {
                 {
                   type: "input_text",
                   text: `
-Analyze the uploaded CV for Swiss job matching.
+First validate the uploaded PDF. Then, only if it is clearly a real CV/resume/Lebenslauf, analyze it for Swiss job matching.
+
+Return exactly:
+{
+  "documentValidation": {
+    "shouldAnalyze": boolean,
+    "documentType": string,
+    "confidence": number,
+    "cvSignals": string[],
+    "nonCvSignals": string[],
+    "reason": string
+  },
+  "profile": { ...compact CV profile... }
+}
+
+Document validation:
+- Use the filename, the visible PDF content, and the document structure.
+- Accept CV/resume documents in German, English, Italian, and French.
+- Strong CV signals include:
+  - German: Lebenslauf, CV, Bewerbung, Berufserfahrung, Ausbildung, FÃ¤higkeiten, Kenntnisse, Sprachen
+  - English: CV, resume, work experience, education, skills, employment history, languages
+  - Italian: curriculum, CV, esperienze lavorative, formazione, competenze, lingue
+  - French: CV, curriculum vitae, expÃ©rience professionnelle, formation, compÃ©tences, langues
+  - Structured candidate profile with personal/contact info plus work experience and education/skills.
+- Block documents that look like:
+  - invoices, Rechnungen, fatture
+  - contracts, VertrÃ¤ge, contratti
+  - insurance offers, Versicherungsofferten, offerte assicurative
+  - ArbeitsbestÃ¤tigung, Arbeitszeugnis single document, Arbeitgeberbescheinigung
+  - employment confirmation, employment certificate, work certificate
+  - attestation de travail, certificat de travail
+  - attestato di lavoro, certificato di lavoro, conferma di lavoro
+  - letters, Briefe, lettere, cover letters, application letters without a full CV structure
+  - job ads, Stelleninserate, annunci di lavoro
+  - standalone certificates, diplomas, attestati, diplomi, references, or training records without a CV structure
+  - insurance policies, polizze, police, generic business documents, reports
+- A document is not a CV merely because it contains a person's name, employer, employment dates, job title, or experience at one company.
+- A real CV must have clear CV structure, usually multiple sections such as Berufserfahrung/work experience/esperienze lavorative/expÃ©rience professionnelle, Ausbildung/education/formazione, FÃ¤higkeiten/skills/competenze/compÃ©tences, Sprachen/languages/lingue/langues, Profil/profile/profilo, or multiple roles/stations.
+- documentValidation.documentType must classify the document, e.g. "cv", "arbeitsbestaetigung", "employment_certificate", "certificate", "diploma", "cover_letter", "contract", "invoice", "insurance_policy", "job_ad", or "generic_document".
+- documentValidation.confidence must be between 0 and 1.
+- documentValidation.cvSignals must contain only concrete CV structure signals found in the document.
+- documentValidation.nonCvSignals must contain concrete non-CV signals such as Arbeitsbestaetigung, employment certificate, diploma, certificate-only, cover letter, contract, invoice, insurance policy, or job ad.
+- documentValidation.shouldAnalyze must be true only when the document is clearly a CV/resume, has typical CV structure, and confidence is at least 0.75.
+- If uncertain, prefer documentValidation.shouldAnalyze false.
+- If shouldAnalyze is false, explain the reason clearly and keep profile empty according to the schema. Do not extract a candidate profile from non-CV documents.
+- Do not rely only on the filename.
+
+Filename: ${fileName}
+
+Profile extraction rules, used only when documentValidation.shouldAnalyze is true:
 
 Primary matching domains:
 - Insurance, health insurance, broker support, policy administration
@@ -1318,33 +1086,77 @@ Summaries:
       );
     }
 
-    let rawProfile = tryParseJson(outputText);
+    let rawAnalysis = tryParseJson(outputText);
 
-    if (!rawProfile) {
-      if (hasPotentialProfileJson(outputText)) {
+    if (!rawAnalysis) {
+      if (hasPotentialAnalysisJson(outputText)) {
         console.error("Initial JSON parse failed. Trying repair.");
         console.error("Broken output:", outputText.slice(0, 2000));
 
-        rawProfile = await repairJsonWithOpenAI(apiKey, outputText);
+        rawAnalysis = await repairJsonWithOpenAI(apiKey, outputText);
       } else {
         console.error(
-          "Initial JSON parse failed. Skipping repair because no profile JSON signal was found."
+          "Initial JSON parse failed. Skipping repair because no CV analysis JSON signal was found."
         );
       }
     }
 
-    if (!rawProfile) {
+    if (!rawAnalysis) {
       return jsonResponse(
         {
           success: false,
-          error: "Could not parse or repair CV profile JSON",
+          error: "Could not parse or repair CV analysis JSON",
           details: outputText.slice(0, 1500),
         },
         200
       );
     }
 
-    const profile = normalizeProfile(rawProfile);
+    const documentValidation = rawAnalysis?.documentValidation;
+
+    if (
+      !documentValidation ||
+      typeof documentValidation.shouldAnalyze !== "boolean"
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "Could not validate whether the uploaded file is a CV",
+        },
+        200
+      );
+    }
+
+    const validationConfidence = safeNumber(documentValidation.confidence);
+    const hasLowValidationConfidence =
+      validationConfidence === null || validationConfidence < 0.75;
+    const blockedValidationReason =
+      getBlockedNonCvReasonFromValidation(documentValidation);
+
+    if (
+      !documentValidation.shouldAnalyze ||
+      hasLowValidationConfidence ||
+      blockedValidationReason
+    ) {
+      return jsonResponse(
+        {
+          success: false,
+          errorCode: "NOT_A_CV",
+          error:
+            "The uploaded file does not look like a CV or resume. Please upload your CV.",
+          documentType: "not_cv",
+          reason:
+            blockedValidationReason ||
+            safeString(documentValidation.reason) ||
+            (hasLowValidationConfidence
+              ? "The document validation confidence is below the threshold for a clear CV."
+              : "The document does not have clear CV or resume structure."),
+        },
+        200
+      );
+    }
+
+    const profile = normalizeProfile(rawAnalysis.profile);
 
     return jsonResponse({
       success: true,
