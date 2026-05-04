@@ -11,6 +11,12 @@ import {
   sortJobsByScore,
 } from "../utils/jobs";
 
+export type CvAnalysisFeedback = {
+  durationMs: number;
+  cacheHit: boolean;
+  completedAt: number;
+};
+
 function safeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -475,6 +481,8 @@ export function useJobs() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [stats, setStats] = useState<SearchStats>({});
+  const [lastCvAnalysisFeedback, setLastCvAnalysisFeedback] =
+    useState<CvAnalysisFeedback | null>(null);
 
   const resetVersionRef = useRef(0);
   const searchRequestIdRef = useRef(0);
@@ -494,11 +502,13 @@ export function useJobs() {
     setStats({});
     setSearchLoading(false);
     setProfileLoading(false);
+    setLastCvAnalysisFeedback(null);
   }, []);
 
   async function analyzeCv(file: File): Promise<CvProfile> {
     const resetVersion = resetVersionRef.current;
     const profileRequestId = profileRequestIdRef.current + 1;
+    const startedAt = performance.now();
 
     profileRequestIdRef.current = profileRequestId;
     setProfileLoading(true);
@@ -525,6 +535,12 @@ export function useJobs() {
         const recoveredProfile = recoverProfileFromApiFailure(data);
 
         if (recoveredProfile && hasUsableProfileSignals(recoveredProfile)) {
+          setLastCvAnalysisFeedback({
+            durationMs: Math.round(performance.now() - startedAt),
+            cacheHit: false,
+            completedAt: Date.now(),
+          });
+
           return recoveredProfile;
         }
 
@@ -534,6 +550,12 @@ export function useJobs() {
 
         throw new Error(String(message));
       }
+
+      setLastCvAnalysisFeedback({
+        durationMs: Math.round(performance.now() - startedAt),
+        cacheHit: Boolean(data?.meta?.cacheHit),
+        completedAt: Date.now(),
+      });
 
       return data.profile;
     } finally {
@@ -716,5 +738,6 @@ export function useJobs() {
     analyzeJob,
     analyzeCv,
     resetJobs,
+    lastCvAnalysisFeedback,
   };
 }

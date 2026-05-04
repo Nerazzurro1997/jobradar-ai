@@ -30,6 +30,15 @@ type AnalyzeCvOptions = {
   showAlert?: boolean;
 };
 
+type ToastType = "success" | "error" | "warning";
+
+type ToastMessage = {
+  id: number;
+  type: ToastType;
+  title: string;
+  message?: string;
+};
+
 const APP_SHELL_STYLE: CSSProperties = {
   display: "flex",
   width: "100%",
@@ -266,6 +275,148 @@ function getErrorMessage(error: unknown, fallback = "Something went wrong") {
   return fallback;
 }
 
+function getFriendlyErrorMessage(error: unknown, fallback = "Something went wrong. Try again.") {
+  const message = getErrorMessage(error, fallback);
+  const lower = message.toLowerCase();
+
+  if (
+    lower.includes("non sembra essere un cv") ||
+    lower.includes("not_a_cv") ||
+    lower.includes("does not look like a cv")
+  ) {
+    return "This file doesn't look like a CV. Please upload your resume.";
+  }
+
+  if (lower.includes("json") || lower.includes("parse")) {
+    return "We couldn't read the AI response correctly. Try again.";
+  }
+
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("network") ||
+    lower.includes("timeout")
+  ) {
+    return "Network connection issue. Check your connection and try again.";
+  }
+
+  return message || fallback;
+}
+
+function formatDuration(durationMs: number) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return "";
+
+  const seconds = Math.max(1, Math.round(durationMs / 1000));
+  return `${seconds}s`;
+}
+
+function getToastStyle(type: ToastType): CSSProperties {
+  const colors = {
+    success: {
+      border: "rgba(34,197,94,0.35)",
+      background: "rgba(5,46,22,0.94)",
+      accent: "#22c55e",
+    },
+    error: {
+      border: "rgba(248,113,113,0.36)",
+      background: "rgba(69,10,10,0.95)",
+      accent: "#f87171",
+    },
+    warning: {
+      border: "rgba(250,204,21,0.36)",
+      background: "rgba(66,32,6,0.95)",
+      accent: "#facc15",
+    },
+  }[type];
+
+  return {
+    width: "min(420px, calc(100vw - 32px))",
+    padding: "14px 16px",
+    borderRadius: 18,
+    color: "#f8fafc",
+    background: colors.background,
+    border: `1px solid ${colors.border}`,
+    boxShadow: "0 22px 62px rgba(0,0,0,0.38)",
+    backdropFilter: "blur(18px)",
+    borderLeft: `4px solid ${colors.accent}`,
+  };
+}
+
+function ToastStack({
+  toasts,
+  onDismiss,
+}: {
+  toasts: ToastMessage[];
+  onDismiss: (id: number) => void;
+}) {
+  if (toasts.length === 0) return null;
+
+  return (
+    <div
+      aria-live="polite"
+      aria-atomic="true"
+      style={{
+        position: "fixed",
+        top: 18,
+        right: 18,
+        zIndex: 10000,
+        display: "grid",
+        gap: 10,
+        pointerEvents: "none",
+      }}
+    >
+      {toasts.map((toast) => (
+        <div key={toast.id} style={getToastStyle(toast.type)}>
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              justifyContent: "space-between",
+              alignItems: "start",
+            }}
+          >
+            <div>
+              <strong style={{ display: "block", fontSize: 14.5 }}>
+                {toast.title}
+              </strong>
+
+              {toast.message && (
+                <p
+                  style={{
+                    margin: "5px 0 0",
+                    color: "#cbd5e1",
+                    fontSize: 13,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {toast.message}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              aria-label="Dismiss notification"
+              onClick={() => onDismiss(toast.id)}
+              style={{
+                pointerEvents: "auto",
+                width: 28,
+                height: 28,
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.16)",
+                background: "rgba(15,23,42,0.42)",
+                color: "#e2e8f0",
+                cursor: "pointer",
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [initialCvCache] = useState<StoredCvProfile | null>(() =>
     readStoredCvProfile()
@@ -284,6 +435,7 @@ export default function App() {
   const [showSavedJobs, setShowSavedJobs] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [workspaceResetAt, setWorkspaceResetAt] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const {
     jobs,
@@ -295,7 +447,41 @@ export default function App() {
     analyzeJob: analyzeJobFromHook,
     analyzeCv: analyzeCvFromHook,
     resetJobs: resetJobsFromHook,
+    lastCvAnalysisFeedback,
   } = useJobs();
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
+
+  const showToast = useCallback(
+    (type: ToastType, title: string, message?: string) => {
+      const id = Date.now() + Math.random();
+
+      setToasts((current) =>
+        [...current, { id, type, title, message }].slice(-4)
+      );
+
+      window.setTimeout(() => dismissToast(id), 5200);
+    },
+    [dismissToast]
+  );
+
+  useEffect(() => {
+    if (!lastCvAnalysisFeedback || !cvProfile) return;
+
+    const durationText = formatDuration(lastCvAnalysisFeedback.durationMs);
+
+    showToast(
+      "success",
+      lastCvAnalysisFeedback.cacheHit
+        ? "Profile loaded from cache"
+        : "CV analysis complete",
+      lastCvAnalysisFeedback.cacheHit
+        ? `Loaded from cache in ${durationText}.`
+        : `CV analyzed in ${durationText}.`
+    );
+  }, [cvProfile, lastCvAnalysisFeedback, showToast]);
 
   const refreshSavedJobs = useCallback((persistSorted = false): Job[] => {
     const nextSavedJobs = loadSavedJobs();
@@ -374,7 +560,11 @@ export default function App() {
           removeStoredCvProfile();
           setCvProfile(null);
           setCvProfileFileMeta(null);
-          window.alert(getNonCvUploadMessage());
+          showToast(
+            "warning",
+            "This file doesn't look like a CV",
+            "Please upload your resume as a PDF."
+          );
           return null;
         }
 
@@ -385,7 +575,7 @@ export default function App() {
 
         return nextFile;
       });
-    }, []);
+    }, [showToast]);
 
   const setCvProfileAndPersist: Dispatch<SetStateAction<CvProfile | null>> =
     useCallback(
@@ -467,9 +657,14 @@ export default function App() {
       setShowSavedJobs(false);
       setHoveredId(null);
       setWorkspaceResetAt(new Date().toISOString());
+      showToast(
+        "success",
+        "Workspace cleared",
+        "Your CV, profile and local job results were reset."
+      );
     } catch (error) {
       console.error("Failed to clear saved data", error);
-      window.alert("Could not clear saved data. Please try again.");
+      showToast("error", "Could not clear workspace", "Please try again.");
     } finally {
       setClearConfirmOpen(false);
     }
@@ -490,7 +685,11 @@ export default function App() {
 
     if (!file) {
       if (showAlert) {
-        window.alert("Upload your CV first");
+        showToast(
+          "warning",
+          "Upload your CV first",
+          "Choose a PDF resume before starting analysis."
+        );
       }
 
       throw new Error("No CV file selected");
@@ -518,12 +717,13 @@ export default function App() {
       console.error("CV analysis failed", error);
 
       if (showAlert) {
-        window.alert(
-          "CV analysis failed.\n\n" +
-            getErrorMessage(error, "Please check your CV and try again.").slice(
-              0,
-              900
-            )
+        showToast(
+          "error",
+          "CV analysis failed",
+          getFriendlyErrorMessage(
+            error,
+            "Please check your CV and try again."
+          ).slice(0, 240)
         );
       }
 
@@ -566,7 +766,11 @@ export default function App() {
 
   async function handleSearchJobs() {
     if (!cvFile) {
-      window.alert("Upload your CV first");
+      showToast(
+        "warning",
+        "Upload your CV first",
+        "Choose a PDF resume before searching jobs."
+      );
       return;
     }
 
@@ -588,38 +792,65 @@ export default function App() {
       if (refreshedSavedJobs.length > 0) {
         setWorkspaceResetAt(null);
         setShowSavedJobs(true);
+        showToast(
+          "success",
+          "Search complete",
+          `${refreshedSavedJobs.length} ranked jobs are ready.`
+        );
         return;
       }
 
       if (incomingJobs.length > 0) {
         setWorkspaceResetAt(null);
         setShowSavedJobs(false);
+        showToast(
+          "success",
+          "Search complete",
+          `${incomingJobs.length} ranked jobs are ready.`
+        );
         return;
       }
 
-      window.alert("No new jobs found.");
+      showToast(
+        "warning",
+        "No new jobs found",
+        "Try again later or adjust your CV/search profile."
+      );
     } catch (error) {
       console.error("Job search failed", error);
 
-      window.alert(
-        "Job search failed.\n\n" +
-          getErrorMessage(error, "Check your CV and try again.").slice(0, 900)
+      showToast(
+        "error",
+        "Job search failed",
+        getFriendlyErrorMessage(error, "Check your CV and try again.").slice(
+          0,
+          240
+        )
       );
     }
   }
 
   async function handleAnalyzeJob(job: Job) {
     if (!cvFile) {
-      window.alert("Upload your CV first");
+      showToast(
+        "warning",
+        "Upload your CV first",
+        "Choose a PDF resume before analyzing a job."
+      );
       return;
     }
 
     try {
       const profileToUse = await getProfileForFile(cvFile);
       await analyzeJobFromHook(job, cvFile, profileToUse);
+      showToast("success", "Job analysis ready", "The job card was updated.");
     } catch (error) {
       console.error("Job analysis failed", error);
-      window.alert("Job analysis failed");
+      showToast(
+        "error",
+        "Job analysis failed",
+        getFriendlyErrorMessage(error, "Try again.").slice(0, 240)
+      );
     }
   }
 
@@ -646,6 +877,7 @@ export default function App() {
         stats={stats}
         searchLoading={searchLoading}
         profileLoading={profileLoading}
+        cvAnalysisFeedback={lastCvAnalysisFeedback}
         workspaceResetAt={workspaceResetAt}
         onSearch={handleSearchJobs}
         onAnalyzeCv={() => handleAnalyzeCv()}
@@ -658,6 +890,8 @@ export default function App() {
         setCvFile={setCvFileAndSyncProfile}
         setCvProfile={setCvProfileAndPersist}
       />
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
       <ConfirmDialog
         open={clearConfirmOpen}

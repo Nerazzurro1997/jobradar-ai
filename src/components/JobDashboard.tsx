@@ -4,6 +4,12 @@ import type { Job, CvProfile } from "../types";
 import { getJobDisplayScore, prepareJobsForDisplay } from "../utils/jobs";
 import { JobCard } from "./JobCard";
 
+type CvAnalysisFeedback = {
+  durationMs: number;
+  cacheHit: boolean;
+  completedAt: number;
+};
+
 type Stats = {
   foundLinks?: number;
   scanned?: number;
@@ -80,6 +86,7 @@ type Props = {
   stats: Stats;
   searchLoading: boolean;
   profileLoading: boolean;
+  cvAnalysisFeedback: CvAnalysisFeedback | null;
   workspaceResetAt: string | null;
 
   onSearch: () => void;
@@ -174,6 +181,13 @@ function writeNumberToStorage(key: string, value: number) {
   } catch (error) {
     console.error(`Failed to store ${key}`, error);
   }
+}
+
+function formatDuration(durationMs: number) {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return "";
+
+  const seconds = Math.max(1, Math.round(durationMs / 1000));
+  return `${seconds}s`;
 }
 
 function readStringSetFromStorage(key: string) {
@@ -1320,6 +1334,7 @@ export function JobDashboard({
   stats,
   searchLoading,
   profileLoading,
+  cvAnalysisFeedback,
   workspaceResetAt,
   onSearch,
   onAnalyzeCv,
@@ -1341,6 +1356,8 @@ export function JobDashboard({
   const [savedFilterMode, setSavedFilterMode] =
     useState<SavedFilterMode>("all");
   const [minimumScore, setMinimumScore] = useState<ScoreFilterMode>(70);
+  const [profileLoadingStep, setProfileLoadingStep] =
+    useState("Reading CV...");
   const [lastSearchAt, setLastSearchAt] = useState(() =>
     readNumberFromStorage(LAST_SEARCH_UI_KEY)
   );
@@ -1456,6 +1473,28 @@ export function JobDashboard({
       removeStoredSearchUiState();
     }
   }, [workspaceResetAt]);
+
+  useEffect(() => {
+    if (!profileLoading) {
+      setProfileLoadingStep("Reading CV...");
+      return;
+    }
+
+    setProfileLoadingStep("Reading CV...");
+
+    const understandingTimer = window.setTimeout(() => {
+      setProfileLoadingStep("Understanding your profile...");
+    }, 7000);
+
+    const finalizingTimer = window.setTimeout(() => {
+      setProfileLoadingStep("Finalizing profile...");
+    }, 24000);
+
+    return () => {
+      window.clearTimeout(understandingTimer);
+      window.clearTimeout(finalizingTimer);
+    };
+  }, [profileLoading]);
 
   useEffect(() => {
     if (!cvFile) {
@@ -1720,14 +1759,52 @@ export function JobDashboard({
             <div
               className="loading"
               style={{
-                padding: 12,
-                borderRadius: 14,
+                padding: 13,
+                borderRadius: 15,
                 background: "rgba(250,204,21,0.08)",
                 border: "1px solid rgba(250,204,21,0.25)",
                 marginBottom: 12,
               }}
             >
-              AI is analyzing your CV...
+              <strong style={{ color: "#facc15" }}>{profileLoadingStep}</strong>
+
+              <div
+                style={{
+                  height: 6,
+                  marginTop: 10,
+                  borderRadius: 999,
+                  overflow: "hidden",
+                  background: "rgba(250,204,21,0.12)",
+                }}
+              >
+                <div
+                  style={{
+                    width:
+                      profileLoadingStep === "Reading CV..."
+                        ? "34%"
+                        : profileLoadingStep === "Understanding your profile..."
+                        ? "68%"
+                        : "88%",
+                    height: "100%",
+                    borderRadius: 999,
+                    background:
+                      "linear-gradient(90deg, #facc15, #38bdf8, #22c55e)",
+                    transition: "width 500ms ease",
+                  }}
+                />
+              </div>
+
+              <p
+                style={{
+                  margin: "9px 0 0",
+                  color: "#fde68a",
+                  fontSize: 12.5,
+                  lineHeight: 1.45,
+                }}
+              >
+                This can take a little longer on the first analysis. Cached CVs
+                load much faster.
+              </p>
             </div>
           )}
 
@@ -1741,7 +1818,58 @@ export function JobDashboard({
                 marginBottom: isSavedView ? 0 : 14,
               }}
             >
-              <strong style={{ color: "#22c55e" }}>Profile ready</strong>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 9,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <strong style={{ color: "#22c55e" }}>Profile ready</strong>
+
+                {cvAnalysisFeedback && (
+                  <>
+                    <span
+                      style={{
+                        padding: "5px 9px",
+                        borderRadius: 999,
+                        color: cvAnalysisFeedback.cacheHit
+                          ? "#bfdbfe"
+                          : "#bbf7d0",
+                        background: cvAnalysisFeedback.cacheHit
+                          ? "rgba(59,130,246,0.16)"
+                          : "rgba(34,197,94,0.16)",
+                        border: cvAnalysisFeedback.cacheHit
+                          ? "1px solid rgba(96,165,250,0.28)"
+                          : "1px solid rgba(34,197,94,0.28)",
+                        fontSize: 11,
+                        fontWeight: 900,
+                      }}
+                    >
+                      {cvAnalysisFeedback.cacheHit
+                        ? "⚡ Fast (cached)"
+                        : "Full analysis"}
+                    </span>
+
+                    <span
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {cvAnalysisFeedback.cacheHit
+                        ? `Loaded from cache in ${formatDuration(
+                            cvAnalysisFeedback.durationMs
+                          )}`
+                        : `CV analyzed in ${formatDuration(
+                            cvAnalysisFeedback.durationMs
+                          )}`}
+                    </span>
+                  </>
+                )}
+              </div>
 
               <p
                 style={{
