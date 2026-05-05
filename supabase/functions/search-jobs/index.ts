@@ -69,6 +69,8 @@ type Job = {
   recencyScore?: number;
   requirementMatchScore?: number;
   distanceScore?: number;
+  distanceKm?: number | null;
+  distanceSource?: "geocoded" | "remote" | "fallback";
   ageDays?: number | null;
   requirements?: string[];
   responsibilities?: string[];
@@ -102,6 +104,11 @@ type FetchHtmlResult = {
   finalUrl: string;
 };
 
+type Coordinates = {
+  lat: number;
+  lon: number;
+};
+
 type SearchDiscardReason =
   | "duplicate"
   | "missingTitle"
@@ -117,6 +124,21 @@ type SearchRunDebugStats = {
   totalLinksBeforeDedup: number;
   linkDuplicates: number;
   discardReasons: Record<SearchDiscardReason, number>;
+};
+
+const geocodeCache = new Map<string, Coordinates | null>();
+const geocodeInFlightCache = new Map<string, Promise<Coordinates | null>>();
+
+type SearchWave = {
+  id: number;
+  name: string;
+  queries: SearchQuery[];
+  locations: string[];
+  maxPages: number;
+  targetLinks: number;
+  candidateLimit: number;
+  detailLimit: number;
+  allowFallbackJobs: boolean;
 };
 
 function createRunId() {
@@ -1406,6 +1428,80 @@ function toSkillBasedJobSearchQuery(term: string): string | null {
   return words.length > 1 ? query : null;
 }
 
+function isUsefulSkillSearchModifier(term: string) {
+  const cleaned = cleanText(term);
+  const normalized = normalizeForKeywordMatch(cleaned);
+
+  if (!cleaned || normalized.length < 3) return false;
+  if (isWeakSearchTerm(cleaned)) return false;
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+
+  if (words.length > 4) return false;
+
+  const genericSkillModifiers = [
+    "team",
+    "office",
+    "ms office",
+    "microsoft office",
+    "service",
+    "support",
+    "kommunikation",
+    "communication",
+    "organisation",
+    "organization",
+    "beratung",
+    "consulting",
+  ];
+
+  return !genericSkillModifiers.includes(normalized);
+}
+
+function getRoleSkillSearchQueries(profile: CvProfile, directTerms: string[]) {
+  const roleTerms = uniqueArray(
+    directTerms.filter((term) => !isLowPriorityQuery(term)),
+    6
+  );
+  const skillTerms = uniqueArray(
+    getProfileSkillQuerySignals(profile).filter(isUsefulSkillSearchModifier),
+    10
+  );
+  const combinedTerms: string[] = [];
+
+  for (const role of roleTerms.slice(0, 4)) {
+    const normalizedRole = normalizeForKeywordMatch(role);
+
+    if (!normalizedRole) continue;
+
+    for (const skill of skillTerms.slice(0, 6)) {
+      const normalizedSkill = normalizeForKeywordMatch(skill);
+
+      if (!normalizedSkill) continue;
+      if (
+        normalizedRole.includes(normalizedSkill) ||
+        normalizedSkill.includes(normalizedRole)
+      ) {
+        continue;
+      }
+
+      const totalWords = [
+        ...normalizedRole.split(/\s+/),
+        ...normalizedSkill.split(/\s+/),
+      ].filter(Boolean).length;
+
+      if (totalWords > 5) continue;
+
+      combinedTerms.push(`${role} ${skill}`);
+
+      if (combinedTerms.length >= 6) {
+        return uniqueArray(combinedTerms, 6);
+      }
+    }
+  }
+
+  return uniqueArray(combinedTerms, 6);
+}
+
 function getProfileSkillQuerySignals(profile: CvProfile) {
   const skillsValue = profile.skills;
 
@@ -1487,18 +1583,18 @@ function getSearchQueries(
   profile: CvProfile,
   knownUrlSet: Set<string>
 ): SearchQuery[] {
-  const maxQueries = 16;
+  const maxQueries = 20;
 
   const directTerms = uniqueArray(
     getProfileRoleQuerySignals(profile)
       .map(toJobSearchQuery)
       .filter((term): term is string => Boolean(term)),
-    16
+    24
   );
 
   const coreDirectQueries = directTerms
     .filter((term) => !isLowPriorityQuery(term))
-    .slice(0, 4)
+    .slice(0, 8)
     .map((term) => ({
       term,
       source: "cv-direct" as const,
@@ -1518,20 +1614,40 @@ function getSearchQueries(
     12
   );
 
+  const roleSkillSeeds = getRoleSkillSearchQueries(profile, directTerms).filter(
+    (term) =>
+      !directTerms.some(
+        (directTerm) => directTerm.toLowerCase() === term.toLowerCase()
+      ) &&
+      !expandedRoleSeeds.some(
+        (expandedTerm) => expandedTerm.toLowerCase() === term.toLowerCase()
+      )
+  );
+
+  const roleSkillQueries = roleSkillSeeds.map((term) => ({
+    term,
+    source: "cv-expanded" as const,
+    weight: 0.95,
+  }));
+
   const expandedQueries = expandedRoleSeeds.map((term) => ({
     term,
     source: "cv-expanded" as const,
     weight: 1.05,
   }));
 
-  const primaryQueries = [...coreDirectQueries, ...expandedQueries];
+  const primaryQueries = [
+    ...coreDirectQueries,
+    ...roleSkillQueries,
+    ...expandedQueries,
+  ];
   const shouldUseFallbackQueries =
-    knownUrlSet.size > 20 || primaryQueries.length < 6;
+    knownUrlSet.size > 20 || primaryQueries.length <= 8;
 
   const lowPriorityDirectQueries = shouldUseFallbackQueries
     ? directTerms
         .filter((term) => isLowPriorityQuery(term))
-        .slice(0, 1)
+        .slice(0, 2)
         .map((term) => ({
           term,
           source: "fallback" as const,
@@ -1547,7 +1663,7 @@ function getSearchQueries(
               (query) => query.term.toLowerCase() === term.toLowerCase()
             )
         )
-        .slice(0, 2)
+        .slice(0, 3)
         .map((term) => ({
           term,
           source: "fallback" as const,
@@ -1600,6 +1716,126 @@ function getSearchLocations(profile: CvProfile) {
     schwyzLocations: ["Schwyz"],
     zugLocations: ["Zug"],
   };
+}
+
+function uniqueQueries(queries: SearchQuery[], limit: number) {
+  const seen = new Set<string>();
+  const result: SearchQuery[] = [];
+
+  for (const query of queries) {
+    const key = normalizeForKeywordMatch(query.term);
+
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    result.push(query);
+
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
+function getWaveOnePriorityTerms(profile: CvProfile) {
+  return uniqueArray(
+    [
+      ...profile.searchTerms,
+      ...safeArray(profile.search?.searchTerms, 30),
+      ...safeArray(profile.matching?.bestFitRoles, 30),
+    ],
+    40
+  )
+    .map(normalizeForKeywordMatch)
+    .filter(Boolean);
+}
+
+function queryMatchesPriorityTerms(query: SearchQuery, priorityTerms: string[]) {
+  const queryTerm = normalizeForKeywordMatch(query.term);
+
+  if (!queryTerm) return false;
+
+  return priorityTerms.some(
+    (term) =>
+      queryTerm === term ||
+      queryTerm.includes(term) ||
+      term.includes(queryTerm)
+  );
+}
+
+function createSearchWaves(
+  profile: CvProfile,
+  queries: SearchQuery[],
+  locations: string[]
+): SearchWave[] {
+  const nonFallbackQueries = queries.filter((query) => query.source !== "fallback");
+  const fallbackQueries = queries.filter((query) => query.source === "fallback");
+  const waveOnePriorityTerms = getWaveOnePriorityTerms(profile);
+  const waveOneQueries = uniqueQueries(
+    [
+      ...nonFallbackQueries.filter((query) =>
+        queryMatchesPriorityTerms(query, waveOnePriorityTerms)
+      ),
+      ...nonFallbackQueries.filter((query) => query.source === "cv-direct"),
+      ...nonFallbackQueries,
+    ],
+    5
+  );
+
+  const waveTwoQueries = uniqueQueries(nonFallbackQueries, 10);
+  const waveThreeQueries = uniqueQueries(queries, queries.length);
+  const waveFourQueries = uniqueQueries(fallbackQueries, fallbackQueries.length);
+  const topLocations = locations.slice(0, 3);
+  const broadLocations = locations.slice(
+    0,
+    Math.max(3, Math.min(locations.length, 7))
+  );
+
+  return [
+    {
+      id: 1,
+      name: "wave-1-best-fit",
+      queries: waveOneQueries,
+      locations: topLocations,
+      maxPages: 4,
+      targetLinks: 36,
+      candidateLimit: 24,
+      detailLimit: 18,
+      allowFallbackJobs: false,
+    },
+    {
+      id: 2,
+      name: "wave-2-good-new",
+      queries: waveTwoQueries,
+      locations: broadLocations,
+      maxPages: 3,
+      targetLinks: 48,
+      candidateLimit: 28,
+      detailLimit: 16,
+      allowFallbackJobs: true,
+    },
+    {
+      id: 3,
+      name: "wave-3-medium-wide",
+      queries: waveThreeQueries,
+      locations,
+      maxPages: 2,
+      targetLinks: 52,
+      candidateLimit: 26,
+      detailLimit: 12,
+      allowFallbackJobs: true,
+    },
+    {
+      id: 4,
+      name: "wave-4-cv-fallback",
+      queries: waveFourQueries,
+      locations,
+      maxPages: 2,
+      targetLinks: 24,
+      candidateLimit: 14,
+      detailLimit: 8,
+      allowFallbackJobs: true,
+    },
+  ].filter((wave) => wave.queries.length > 0 && wave.locations.length > 0);
 }
 
 function parsePublishedDate(value?: string) {
@@ -1777,6 +2013,86 @@ function getJobSearchableText(job: Job) {
     .toLowerCase();
 }
 
+function getSearchHitSearchableText(hit: SearchHit) {
+  return [
+    hit.title,
+    hit.company,
+    hit.location,
+    hit.snippet,
+    hit.keyword,
+    hit.query?.term,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function estimateSearchHitQuality(hit: SearchHit, profile: CvProfile) {
+  const text = getSearchHitSearchableText(hit);
+  const title = (hit.title || "").toLowerCase();
+  const location =
+    hit.location || getLocationFromKeyword(hit.keyword || "") || "";
+  const roleMatches = findNormalizedMatches(
+    text,
+    getProfileRoleScoringTerms(profile)
+  );
+  const titleRoleMatches = findNormalizedMatches(
+    title,
+    getProfileRoleScoringTerms(profile)
+  );
+  const keywordMatches = findNormalizedMatches(
+    text,
+    getProfileKeywordScoringTerms(profile)
+  );
+  const avoidMatches = findNormalizedMatches(text, getProfileAvoidTerms(profile));
+
+  let score = hit.query.weight * 20;
+
+  if (hit.query.source === "cv-direct") score += 12;
+  if (hit.query.source === "cv-expanded") score += 6;
+  if (hit.query.source === "fallback") score -= 8;
+
+  score += titleRoleMatches.length * 14;
+  score += roleMatches.length * 8;
+  score += Math.min(keywordMatches.length * 3, 18);
+  score += Math.round(getLocationFallbackScore(profile.locations, location) / 12);
+  score -= avoidMatches.length * 18;
+
+  if (hit.publishedDate) score += 3;
+  if (hit.title) score += 2;
+  if (hit.company) score += 1;
+  if (hit.snippet && cleanText(hit.snippet).length > 80) score += 2;
+
+  return score;
+}
+
+function selectWaveCandidates(
+  hits: SearchHit[],
+  profile: CvProfile,
+  limit: number
+) {
+  return [...hits]
+    .map((hit, index) => ({
+      hit,
+      index,
+      quality: estimateSearchHitQuality(hit, profile),
+    }))
+    .sort((a, b) => {
+      const qualityDiff = b.quality - a.quality;
+
+      if (Math.abs(qualityDiff) > 0.01) return qualityDiff;
+
+      return (
+        b.hit.query.weight - a.hit.query.weight ||
+        a.hit.query.source.localeCompare(b.hit.query.source) ||
+        cleanText(a.hit.title).localeCompare(cleanText(b.hit.title)) ||
+        a.hit.url.localeCompare(b.hit.url) ||
+        a.index - b.index
+      );
+    })
+    .slice(0, limit)
+    .map((item) => item.hit);
+}
+
 function hasProfileSupportForTerm(profile: CvProfile, term: string) {
   const profileText = getProfileSearchText(profile);
   const normalizedTerm = normalizeForKeywordMatch(term);
@@ -1833,9 +2149,18 @@ function includesDomainTerm(text: string, term: string) {
   return lower.includes(term);
 }
 
-function hasTechnicalRequirementMismatch(job: Job, profile: CvProfile) {
-  const jobText = getJobSearchableText(job);
+function getJobRequirementMismatchText(job: Job) {
+  return [
+    job.title,
+    ...(job.requirements || []),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
 
+function getTechnicalRequirementMismatchSeverity(job: Job, profile: CvProfile) {
+  const jobText = getJobSearchableText(job);
+  const requirementText = getJobRequirementMismatchText(job);
   const domainRequirementTerms = [
     "technische produkte",
     "handelsunternehmen",
@@ -1873,18 +2198,28 @@ function hasTechnicalRequirementMismatch(job: Job, profile: CvProfile) {
     includesDomainTerm(jobText, term)
   );
 
-  if (matchedDomainTerms.length === 0) return false;
+  if (matchedDomainTerms.length === 0) return "none";
 
   const avoidTerms = getProfileAvoidTerms(profile);
   const hasExplicitAvoidedDomain = matchedDomainTerms.some((term) =>
     findNormalizedMatches(term, avoidTerms).length > 0
   );
 
-  if (hasExplicitAvoidedDomain) return true;
+  if (hasExplicitAvoidedDomain) return "hard";
 
-  return matchedDomainTerms.some(
+  const unsupportedRequirementTerms = matchedDomainTerms.filter(
+    (term) =>
+      includesDomainTerm(requirementText, term) &&
+      !hasProfileSupportForTerm(profile, term)
+  );
+
+  if (unsupportedRequirementTerms.length > 0) return "hard";
+
+  const unsupportedContextTerms = matchedDomainTerms.some(
     (term) => !hasProfileSupportForTerm(profile, term)
   );
+
+  return unsupportedContextTerms ? "soft" : "none";
 }
 
 function hasProfileAvoidedSignal(job: Job, profile: CvProfile) {
@@ -2002,118 +2337,437 @@ function getRiskScoreCap(job: Job, profile: CvProfile) {
   return cap;
 }
 
-function getDistanceScoreFromLocation(locationValue = "") {
-  const location = cleanText(locationValue).toLowerCase();
+function hasNormalizedLocationTerm(location: string, term: string) {
+  const normalizedTerm = normalizeForKeywordMatch(term);
 
-  if (!location) return 40;
+  if (!location || !normalizedTerm) return false;
+
+  return ` ${location} `.includes(` ${normalizedTerm} `);
+}
+
+function isRemoteLocation(location: string) {
+  return [
+    "remote",
+    "remoto",
+    "homeoffice",
+    "home office",
+    "work from home",
+    "hybrid",
+    "hybride",
+    "teletravail",
+    "telelavoro",
+  ].some((term) => hasNormalizedLocationTerm(location, term));
+}
+
+function getLocationCountry(location: string) {
+  const countryTerms: Record<string, string[]> = {
+    switzerland: [
+      "switzerland",
+      "schweiz",
+      "suisse",
+      "svizzera",
+      "ch",
+      "zurich",
+      "zuerich",
+      "geneva",
+      "geneve",
+      "basel",
+      "bern",
+      "lausanne",
+      "luzern",
+      "lugano",
+      "winterthur",
+      "st gallen",
+      "zug",
+      "schwyz",
+    ],
+    italy: [
+      "italy",
+      "italia",
+      "italien",
+      "italie",
+      "milano",
+      "milan",
+      "roma",
+      "rome",
+      "torino",
+      "turin",
+      "napoli",
+      "bologna",
+      "firenze",
+      "venezia",
+    ],
+    germany: [
+      "germany",
+      "deutschland",
+      "allemagne",
+      "germania",
+      "berlin",
+      "munich",
+      "muenchen",
+      "hamburg",
+      "frankfurt",
+      "koln",
+      "koeln",
+      "stuttgart",
+    ],
+    france: [
+      "france",
+      "frankreich",
+      "francia",
+      "paris",
+      "lyon",
+      "marseille",
+      "toulouse",
+    ],
+    austria: [
+      "austria",
+      "oesterreich",
+      "osterreich",
+      "autriche",
+      "vienna",
+      "wien",
+      "salzburg",
+    ],
+  };
+
+  for (const [country, terms] of Object.entries(countryTerms)) {
+    if (terms.some((term) => hasNormalizedLocationTerm(location, term))) {
+      return country;
+    }
+  }
+
+  return null;
+}
+
+function getLocationArea(location: string) {
+  const areaTerms: Record<string, string[]> = {
+    "ch-zh": [
+      "zh",
+      "zurich",
+      "zuerich",
+      "horgen",
+      "thalwil",
+      "waedenswil",
+      "richterswil",
+      "winterthur",
+      "uster",
+      "dietikon",
+      "duebendorf",
+      "kloten",
+      "buelach",
+      "regensdorf",
+      "schlieren",
+      "wetzikon",
+      "wallisellen",
+    ],
+    "ch-zg": ["zg", "zug"],
+    "ch-sz": ["sz", "schwyz", "pfaeffikon", "pfaffikon"],
+    "ch-be": ["be", "bern", "berne"],
+    "ch-bs": ["bs", "basel"],
+    "ch-ge": ["ge", "geneva", "geneve"],
+    "ch-ti": ["ti", "ticino", "tessin", "lugano", "bellinzona"],
+    "ch-vd": ["vd", "vaud", "lausanne"],
+    "it-lombardy": ["milano", "milan", "lombardia", "lombardy"],
+    "it-lazio": ["roma", "rome", "lazio"],
+    "it-piedmont": ["torino", "turin", "piemonte", "piedmont"],
+    "de-bavaria": ["munich", "muenchen", "bayern", "bavaria"],
+    "de-berlin": ["berlin"],
+    "fr-ile-de-france": ["paris", "ile de france"],
+  };
+
+  for (const [area, terms] of Object.entries(areaTerms)) {
+    if (terms.some((term) => hasNormalizedLocationTerm(location, term))) {
+      return area;
+    }
+  }
+
+  return null;
+}
+
+function isGenericCountryLocation(location: string) {
+  return [
+    "switzerland",
+    "schweiz",
+    "suisse",
+    "svizzera",
+    "italy",
+    "italia",
+    "italien",
+    "italie",
+    "germany",
+    "deutschland",
+    "france",
+    "austria",
+  ].some((term) => hasNormalizedLocationTerm(location, term));
+}
+
+function locationsMatchExactly(profileLocation: string, jobLocation: string) {
+  if (!profileLocation || !jobLocation) return false;
+  if (profileLocation === jobLocation) return true;
+  if (
+    isGenericCountryLocation(profileLocation) ||
+    isGenericCountryLocation(jobLocation)
+  ) {
+    return false;
+  }
+
+  return (
+    hasNormalizedLocationTerm(jobLocation, profileLocation) ||
+    hasNormalizedLocationTerm(profileLocation, jobLocation)
+  );
+}
+
+function getLocationFallbackScore(profileLocations: string[] = [], jobLocation = "") {
+  const normalizedJobLocation = normalizeForKeywordMatch(jobLocation);
+  const normalizedProfileLocations = safeArray(profileLocations, 20)
+    .map(normalizeForKeywordMatch)
+    .filter(Boolean);
+
+  if (!normalizedJobLocation) return 55;
+
+  const jobIsRemote = isRemoteLocation(normalizedJobLocation);
+
+  if (normalizedProfileLocations.length === 0) {
+    if (jobIsRemote) return 90;
+    if (getLocationCountry(normalizedJobLocation)) return 68;
+    return 60;
+  }
 
   if (
-    /\bau\b/.test(location) ||
-    location.includes("au zh") ||
-    location.includes("au, zh") ||
-    location.includes("au zürich") ||
-    location.includes("au zurich") ||
-    location.includes("au zuerich")
+    normalizedProfileLocations.some(
+      (profileLocation) => isRemoteLocation(profileLocation) && jobIsRemote
+    )
   ) {
     return 100;
   }
 
-  if (location.includes("wädenswil") || location.includes("waedenswil")) {
-    return 96;
+  if (
+    normalizedProfileLocations.some((profileLocation) =>
+      locationsMatchExactly(profileLocation, normalizedJobLocation)
+    )
+  ) {
+    return 100;
   }
 
-  if (location.includes("horgen")) {
-    return 96;
-  }
-
-  if (location.includes("richterswil")) {
-    return 92;
-  }
-
-  if (location.includes("thalwil")) {
-    return 90;
-  }
+  const jobArea = getLocationArea(normalizedJobLocation);
 
   if (
-    location.includes("pfäffikon") ||
-    location.includes("pfaeffikon") ||
-    location.includes("pfäffikon sz") ||
-    location.includes("pfaeffikon sz")
+    jobArea &&
+    normalizedProfileLocations.some(
+      (profileLocation) => getLocationArea(profileLocation) === jobArea
+    )
   ) {
     return 86;
   }
 
-  if (
-    location.includes("rapperswil-jona") ||
-    location.includes("rapperswil")
-  ) {
-    return 84;
-  }
-
-  if (location.includes("meilen")) {
-    return 82;
-  }
-
-  if (location.includes("adliswil")) {
-    return 78;
-  }
+  const jobCountry = getLocationCountry(normalizedJobLocation);
 
   if (
-    location === "zürich" ||
-    location === "zurich" ||
-    location === "zuerich" ||
-    location.includes("stadt zürich") ||
-    location.includes("stadt zurich") ||
-    location.includes("stadt zuerich")
+    jobCountry &&
+    normalizedProfileLocations.some(
+      (profileLocation) => getLocationCountry(profileLocation) === jobCountry
+    )
   ) {
-    return 76;
+    return jobIsRemote ? 88 : 72;
   }
 
-  if (location.includes("zug")) {
-    return 70;
-  }
+  if (jobIsRemote) return 82;
 
-  if (location.includes("schwyz")) {
-    return 66;
-  }
-
-  if (location.includes("winterthur")) {
-    return 45;
-  }
-
-  const otherZurichCantonSignals = [
-    "zh",
-    "kanton zürich",
-    "kanton zurich",
-    "uster",
-    "dietikon",
-    "dübendorf",
-    "duebendorf",
-    "kloten",
-    "bülach",
-    "buelach",
-    "regensdorf",
-    "schlieren",
-    "wetzikon",
-    "zollikon",
-    "küsnacht",
-    "kuesnacht",
-    "affoltern",
-    "opfikon",
-    "glattbrugg",
-    "wallisellen",
-    "volketswil",
-    "hinwil",
-  ];
-
-  if (includesAny(location, otherZurichCantonSignals)) {
-    return 55;
-  }
-
-  return 40;
+  return 58;
 }
 
-function scoreJob(job: Job, profile: CvProfile) {
+function getGeocodeCacheKey(location = "") {
+  return normalizeForKeywordMatch(location);
+}
+
+async function getCoordinatesFromLocation(
+  location: string
+): Promise<Coordinates | null> {
+  const cleanedLocation = cleanText(location);
+  const cacheKey = getGeocodeCacheKey(cleanedLocation);
+
+  if (!cacheKey) return null;
+  if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey) || null;
+  if (geocodeInFlightCache.has(cacheKey)) {
+    return await geocodeInFlightCache.get(cacheKey)!;
+  }
+
+  const geocodePromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(
+          cleanedLocation
+        )}&format=json&limit=1`,
+        {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "JobRadarAI/1.0",
+          },
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        console.warn("search-jobs geocoding failed", {
+          locationKey: cacheKey,
+          status: response.status,
+        });
+        geocodeCache.set(cacheKey, null);
+        return null;
+      }
+
+      const results = await response.json();
+      const firstResult = Array.isArray(results) ? results[0] : null;
+      const lat = Number(firstResult?.lat);
+      const lon = Number(firstResult?.lon);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        geocodeCache.set(cacheKey, null);
+        return null;
+      }
+
+      const coordinates = { lat, lon };
+      geocodeCache.set(cacheKey, coordinates);
+      return coordinates;
+    } catch (error) {
+      console.warn("search-jobs geocoding unavailable", {
+        locationKey: cacheKey,
+        reason: getFetchFailureReason(error),
+      });
+      geocodeCache.set(cacheKey, null);
+      return null;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  })();
+
+  geocodeInFlightCache.set(cacheKey, geocodePromise);
+
+  try {
+    return await geocodePromise;
+  } finally {
+    geocodeInFlightCache.delete(cacheKey);
+  }
+}
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const earthRadiusKm = 6371;
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+}
+
+function getDistanceScore(distanceKm: number | null, isRemote: boolean) {
+  if (isRemote) return 85;
+  if (distanceKm === null || !Number.isFinite(distanceKm)) return 60;
+  if (distanceKm < 5) return 100;
+  if (distanceKm < 10) return 90;
+  if (distanceKm < 20) return 80;
+  if (distanceKm < 40) return 65;
+  if (distanceKm < 80) return 50;
+  return 30;
+}
+
+function getPrimaryProfileLocation(profile: CvProfile) {
+  return (
+    safeArray(profile.locations, 20).find((location) => {
+      const normalizedLocation = normalizeForKeywordMatch(location);
+      return normalizedLocation && !isRemoteLocation(normalizedLocation);
+    }) || ""
+  );
+}
+
+function getJobLocationForDistance(job: Job, fallbackLocation = "") {
+  return (
+    cleanText(job.location) ||
+    cleanText(fallbackLocation) ||
+    getLocationFromKeyword(job.keyword || "")
+  );
+}
+
+async function getDistanceScoreForJob(
+  profile: CvProfile,
+  jobLocation: string
+) {
+  const normalizedJobLocation = normalizeForKeywordMatch(jobLocation);
+  const jobIsRemote = isRemoteLocation(normalizedJobLocation);
+
+  if (jobIsRemote) {
+    return {
+      score: getDistanceScore(null, true),
+      distanceKm: null,
+      source: "remote" as const,
+    };
+  }
+
+  const profileLocation = getPrimaryProfileLocation(profile);
+
+  if (!profileLocation || !normalizedJobLocation) {
+    return {
+      score: getDistanceScore(null, false),
+      distanceKm: null,
+      source: "fallback" as const,
+    };
+  }
+
+  const [profileCoordinates, jobCoordinates] = await Promise.all([
+    getCoordinatesFromLocation(profileLocation),
+    getCoordinatesFromLocation(jobLocation),
+  ]);
+
+  if (!profileCoordinates || !jobCoordinates) {
+    return {
+      score: getDistanceScore(null, false),
+      distanceKm: null,
+      source: "fallback" as const,
+    };
+  }
+
+  const distanceKm = getDistanceKm(
+    profileCoordinates.lat,
+    profileCoordinates.lon,
+    jobCoordinates.lat,
+    jobCoordinates.lon
+  );
+
+  return {
+    score: getDistanceScore(distanceKm, false),
+    distanceKm,
+    source: "geocoded" as const,
+  };
+}
+
+async function applyDistanceAwareScore(
+  job: Job,
+  profile: CvProfile,
+  fallbackLocation = ""
+) {
+  const jobLocation = getJobLocationForDistance(job, fallbackLocation);
+  const distance = await getDistanceScoreForJob(profile, jobLocation);
+
+  job.distanceScore = distance.score;
+  job.distanceKm =
+    distance.distanceKm === null ? null : Math.round(distance.distanceKm);
+  job.distanceSource = distance.source;
+  job.score = scoreJob(job, profile, distance.score);
+
+  return job;
+}
+
+function scoreJob(job: Job, profile: CvProfile, distanceScoreValue = 60) {
   const title = job.title.toLowerCase();
 
   const allText = getJobSearchableText(job);
@@ -2234,8 +2888,8 @@ function scoreJob(job: Job, profile: CvProfile) {
     }
   }
 
-  distanceScore = getDistanceScoreFromLocation(job.location);
-  score += Math.round(distanceScore / 10);
+  distanceScore = distanceScoreValue;
+  score += Math.round(distanceScore / 8);
 
   for (const word of profileAvoidTerms) {
     const w = normalizeForKeywordMatch(word);
@@ -2304,7 +2958,12 @@ function scoreJob(job: Job, profile: CvProfile) {
     job.requirementMismatchFlags = [];
   }
 
-  if (hasTechnicalRequirementMismatch(job, profile)) {
+  const technicalMismatchSeverity = getTechnicalRequirementMismatchSeverity(
+    job,
+    profile
+  );
+
+  if (technicalMismatchSeverity === "hard") {
     score -= 35;
     requirementMatchScore -= 35;
     missingKeywords.push("Branche/Fachanforderung ausserhalb CV");
@@ -2312,6 +2971,11 @@ function scoreJob(job: Job, profile: CvProfile) {
       job,
       "Requisiti tecnici oder Branchenanforderungen passen vermutlich nicht zum CV"
     );
+  } else if (technicalMismatchSeverity === "soft") {
+    score -= 12;
+    requirementMatchScore -= 8;
+    missingKeywords.push("Possibile Branchenkontext ausserhalb CV");
+    addRiskFlag(job, "Branch signal not clearly supported by CV");
   }
 
   if (hasProfileAvoidedSignal(job, profile)) {
@@ -2512,8 +3176,6 @@ function extractJobDetail(
     sourceName: "jobs.ch",
   };
 
-  job.score = scoreJob(job, profile);
-
   return job;
 }
 
@@ -2585,8 +3247,6 @@ function createFallbackJobFromHit(
     sourceName: "jobs.ch search preview",
   };
 
-  job.score = scoreJob(job, profile);
-
   return job;
 }
 
@@ -2598,23 +3258,27 @@ async function collectLinks(
   targetLinks: number,
   knownUrlSet: Set<string>,
   maxPagesOverride?: number,
-  debugStats?: SearchRunDebugStats
+  debugStats?: SearchRunDebugStats,
+  visitedSearchPageKeys?: Set<string>
 ) {
   const foundLinks: SearchHit[] = [];
   const foundUrlSet = new Set<string>();
   let skippedKnown = 0;
   let searchPagesFetched = 0;
   let searchPagesFailed = 0;
+  let searchPagesAttempted = 0;
+  let totalLinksBeforeDedup = 0;
+  let linkDuplicates = 0;
 
   const buildResult = () => ({
     foundLinks,
     skippedKnown,
     searchPagesFetched,
     searchPagesFailed,
-    searchPagesAttempted: debugStats?.searchPagesAttempted || 0,
-    totalLinksBeforeDedup: debugStats?.totalLinksBeforeDedup || 0,
+    searchPagesAttempted,
+    totalLinksBeforeDedup,
     totalLinksAfterDedup: foundLinks.length,
-    linkDuplicates: debugStats?.linkDuplicates || 0,
+    linkDuplicates,
   });
 
   const maxPages =
@@ -2645,7 +3309,15 @@ async function collectLinks(
         for (let urlIndex = 0; urlIndex < urlsToTry.length; urlIndex++) {
           const searchUrl = urlsToTry[urlIndex];
           const searchVariant = urlIndex === 0 ? "sort=date" : "base";
+          const searchPageKey = `${query.source}:${query.term}|${loc}|${page}|${searchVariant}`;
 
+          if (visitedSearchPageKeys?.has(searchPageKey)) {
+            continue;
+          }
+
+          visitedSearchPageKeys?.add(searchPageKey);
+
+          searchPagesAttempted++;
           if (debugStats) debugStats.searchPagesAttempted++;
 
           try {
@@ -2654,6 +3326,7 @@ async function collectLinks(
 
             const keyword = `${query.source}: ${query.term} - ${loc}`;
             const hits = extractSearchHits(result.html, keyword, query);
+            totalLinksBeforeDedup += hits.length;
             if (debugStats) debugStats.totalLinksBeforeDedup += hits.length;
 
             console.info("search-jobs search page", {
@@ -2686,8 +3359,9 @@ async function collectLinks(
                   keyword,
                   query,
                 });
-              } else if (debugStats) {
-                debugStats.linkDuplicates++;
+              } else {
+                linkDuplicates++;
+                if (debugStats) debugStats.linkDuplicates++;
               }
             }
 
@@ -3096,6 +3770,76 @@ function sortJobsForOutput(jobs: Job[]) {
   });
 }
 
+function hasValidDetailForRelaxedThreshold(job: Job) {
+  return (
+    job.sourceName !== "jobs.ch search preview" &&
+    (cleanText(job.fullDescription).length >= 180 ||
+      (job.requirements || []).length > 0 ||
+      (job.responsibilities || []).length > 0)
+  );
+}
+
+function hasStrongFinalNegative(job: Job) {
+  const riskText = (job.riskFlags || []).join(" ").toLowerCase();
+  const missingText = (job.missingKeywords || []).join(" ").toLowerCase();
+
+  return includesAny(`${riskText} ${missingText}`, [
+    "risk:",
+    "avoid:",
+    "profile avoid",
+    "requirement mismatch",
+    "requisiti principali non in linea",
+    "requisiti tecnici",
+    "branchenanforderungen passen",
+    "aussendienst",
+    "provision",
+    "kaltakquise",
+    "hunter",
+    "door to door",
+  ]);
+}
+
+function isFallbackQualityJob(job: Job, profile: CvProfile) {
+  const score = job.score || 0;
+
+  if (score < 50) return false;
+  if (hasStrongFinalNegative(job)) return false;
+
+  if (score >= 55) {
+    if (job.sourceName === "jobs.ch search preview") {
+      return hasProfileAlignedSignal(job, profile);
+    }
+
+    return true;
+  }
+
+  return (
+    hasValidDetailForRelaxedThreshold(job) &&
+    hasProfileAlignedSignal(job, profile)
+  );
+}
+
+function getFinalJobsForOutput(jobs: Job[], profile: CvProfile) {
+  const highQualityJobs = jobs.filter((job) => (job.score || 0) >= 65);
+  const fallbackQualityJobs = jobs.filter((job) =>
+    isFallbackQualityJob(job, profile)
+  );
+  const relaxedThresholdUsed = fallbackQualityJobs.some(
+    (job) => (job.score || 0) < 55
+  );
+
+  return {
+    highQualityJobs,
+    fallbackQualityJobs,
+    finalJobs:
+      highQualityJobs.length >= 10
+        ? highQualityJobs.slice(0, 25)
+        : fallbackQualityJobs.slice(0, 25),
+    finalScoreThreshold:
+      highQualityJobs.length >= 10 ? 65 : relaxedThresholdUsed ? 50 : 55,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -3131,7 +3875,7 @@ Deno.serve(async (req: Request) => {
       profile = await createProfileFromCv(fileName, fileBase64);
     }
 
-    const searchQueries = getSearchQueries(profile, knownUrlSet);
+    const searchQueries = getSearchQueries(profile, new Set<string>());
     const {
       localLocations,
       zurichLocations,
@@ -3145,12 +3889,21 @@ Deno.serve(async (req: Request) => {
       ...zugLocations,
     ];
     const knownUrlsCount = knownUrlSet.size;
-    const veryLightMode = knownUrlsCount > 40;
-    const lightMode = knownUrlsCount > 20;
-    const targetLinks = veryLightMode ? 40 : lightMode ? 60 : 120;
-    const maxDetailJobsUsed = veryLightMode ? 20 : lightMode ? 25 : 30;
-    const maxPagesUsed = veryLightMode ? 2 : lightMode ? 3 : 5;
-    const balancedHitLimit = lightMode ? targetLinks : 110;
+    const veryLightMode = false;
+    const lightMode = false;
+    const targetLinks = 120;
+    const targetFinalJobs = 25;
+    const maxDetailJobsUsed = 30;
+    const maxDetailAttemptsUsed = 45;
+    const searchWaves = createSearchWaves(
+      profile,
+      searchQueries,
+      orderedSearchLocations
+    );
+    const maxPagesUsed = Math.max(
+      0,
+      ...searchWaves.map((wave) => wave.maxPages)
+    );
 
     console.info("search-jobs run start", {
       runId,
@@ -3171,54 +3924,32 @@ Deno.serve(async (req: Request) => {
       maxDetailJobsUsed,
       lightMode,
       veryLightMode,
+      waves: searchWaves.map((wave) => ({
+        id: wave.id,
+        name: wave.name,
+        queryCount: wave.queries.length,
+        queries: wave.queries.map((query) => query.term),
+        locationCount: wave.locations.length,
+        locations: wave.locations,
+        maxPages: wave.maxPages,
+        targetLinks: wave.targetLinks,
+        detailLimit: wave.detailLimit,
+        allowFallbackJobs: wave.allowFallbackJobs,
+      })),
     });
 
     let foundLinks: SearchHit[] = [];
-    const collectedLinks = await collectLinks(
-      searchQueries,
-      orderedSearchLocations,
-      startedAt,
-      maxRuntimeMs,
-      targetLinks,
-      knownUrlSet,
-      maxPagesUsed,
-      debugStats
-    );
-
-    foundLinks = collectedLinks.foundLinks;
-    let skippedKnown = collectedLinks.skippedKnown;
-    let searchPagesFetched = collectedLinks.searchPagesFetched;
-    let searchPagesFailed = collectedLinks.searchPagesFailed;
-    const totalLinksBeforeDedup = collectedLinks.totalLinksBeforeDedup;
-    const totalLinksAfterDedup = collectedLinks.totalLinksAfterDedup;
-    const linkDuplicates = collectedLinks.linkDuplicates;
-
-    console.info("search-jobs links collected", {
-      runId,
-      searchPagesAttempted: collectedLinks.searchPagesAttempted,
-      searchPagesFetched,
-      searchPagesFailed,
-      totalLinksBeforeDedup,
-      totalLinksAfterDedup,
-      linkDuplicates,
-      skippedKnown,
-    });
-
-    foundLinks = selectBalancedSearchHits(
-      foundLinks,
-      balancedHitLimit
-    );
-
-    console.info("search-jobs links balanced", {
-      runId,
-      balancedHitLimit,
-      linksAfterBalancing: foundLinks.length,
-    });
-
+    const visitedSearchPageKeys = new Set<string>();
     const jobs: Job[] = [];
     const usedUrls = new Set<string>();
     const oldUrls = new Set<string>();
+    let skippedKnown = 0;
     let skippedDuplicate = 0;
+    let searchPagesFetched = 0;
+    let searchPagesFailed = 0;
+    let totalLinksBeforeDedup = 0;
+    let totalLinksAfterDedup = 0;
+    let linkDuplicates = 0;
     let detailAttempts = 0;
     let detailSuccess = 0;
     let detailFailed = 0;
@@ -3230,161 +3961,277 @@ Deno.serve(async (req: Request) => {
       sectionParsingUsed: 0,
     };
 
-    const detailLimit = lightMode ? maxDetailJobsUsed : 45;
-
-    for (const item of foundLinks.slice(0, detailLimit)) {
-      if (Date.now() - startedAt > maxRuntimeMs - 3500) break;
+    for (const wave of searchWaves) {
+      if (Date.now() - startedAt > maxRuntimeMs - 5000) break;
       if (jobs.length >= maxDetailJobsUsed) break;
+      if (detailAttempts >= maxDetailAttemptsUsed) break;
 
-      const normalizedItemUrl = normalizeUrl(item.url);
+      const waveKnownUrlSet = new Set(knownUrlSet);
+      for (const url of usedUrls) waveKnownUrlSet.add(url);
+      for (const url of oldUrls) waveKnownUrlSet.add(url);
+      for (const hit of foundLinks) waveKnownUrlSet.add(normalizeUrl(hit.url));
 
-      if (!normalizedItemUrl || !normalizedItemUrl.startsWith("http")) {
-        incrementDiscardReason(debugStats, "invalidUrl");
-      }
+      const collectedLinks = await collectLinks(
+        wave.queries,
+        wave.locations,
+        startedAt,
+        maxRuntimeMs,
+        wave.targetLinks,
+        waveKnownUrlSet,
+        wave.maxPages,
+        debugStats,
+        visitedSearchPageKeys
+      );
 
-      if (knownUrlSet.has(normalizedItemUrl)) {
-        skippedKnown++;
-        continue;
-      }
+      skippedKnown += collectedLinks.skippedKnown;
+      searchPagesFetched += collectedLinks.searchPagesFetched;
+      searchPagesFailed += collectedLinks.searchPagesFailed;
+      totalLinksBeforeDedup += collectedLinks.totalLinksBeforeDedup;
+      linkDuplicates += collectedLinks.linkDuplicates;
+      mergeSearchHits(foundLinks, collectedLinks.foundLinks);
+      totalLinksAfterDedup = foundLinks.length;
 
-      if (usedUrls.has(normalizedItemUrl)) {
-        skippedDuplicate++;
-        continue;
-      }
+      const balancedWaveLinks = selectBalancedSearchHits(
+        collectedLinks.foundLinks,
+        wave.candidateLimit
+      );
+      const waveCandidates = selectWaveCandidates(
+        balancedWaveLinks,
+        profile,
+        wave.candidateLimit
+      );
 
-      let job: Job | null = null;
-      detailAttempts++;
-      const allowSectionParsing = detailAttempts <= 20;
+      console.info("search-jobs wave collected", {
+        runId,
+        wave: wave.name,
+        waveId: wave.id,
+        queries: wave.queries.map((query) => query.term),
+        locations: wave.locations,
+        searchPagesAttempted: collectedLinks.searchPagesAttempted,
+        searchPagesFetched: collectedLinks.searchPagesFetched,
+        searchPagesFailed: collectedLinks.searchPagesFailed,
+        linksBeforeDedup: collectedLinks.totalLinksBeforeDedup,
+        linksAfterDedup: collectedLinks.totalLinksAfterDedup,
+        candidatesSelected: waveCandidates.length,
+        skippedKnown: collectedLinks.skippedKnown,
+      });
 
-      try {
-        const detailResult = await fetchHtmlWithRetry(item.url, 0, 3000);
-        const detailedJob = extractJobDetail(
-          detailResult.html,
-          item.url,
-          jobs.length + 1,
-          item.keyword,
-          profile,
-          item,
-          sectionStats,
-          allowSectionParsing
-        );
+      const waveDetailLimit = Math.min(
+        wave.detailLimit,
+        maxDetailAttemptsUsed - detailAttempts
+      );
+      let waveDetailAttempts = 0;
+      let waveJobsAddedBefore = jobs.length;
 
-        const detailRejectReason = getDetailedJobRejectReason(detailedJob);
+      for (const item of waveCandidates.slice(0, waveDetailLimit)) {
+        if (Date.now() - startedAt > maxRuntimeMs - 3500) break;
+        if (jobs.length >= maxDetailJobsUsed) break;
+        if (detailAttempts >= maxDetailAttemptsUsed) break;
 
-        if (!detailRejectReason) {
-          job = detailedJob;
-          detailSuccess++;
-        } else {
-          incrementDiscardReason(debugStats, detailRejectReason);
-          detailFailed++;
-          job = createFallbackJobFromHit(
-            item,
+        const normalizedItemUrl = normalizeUrl(item.url);
+
+        if (!normalizedItemUrl || !normalizedItemUrl.startsWith("http")) {
+          incrementDiscardReason(debugStats, "invalidUrl");
+        }
+
+        if (knownUrlSet.has(normalizedItemUrl)) {
+          skippedKnown++;
+          continue;
+        }
+
+        if (usedUrls.has(normalizedItemUrl)) {
+          skippedDuplicate++;
+          continue;
+        }
+
+        let job: Job | null = null;
+        detailAttempts++;
+        waveDetailAttempts++;
+        const allowSectionParsing = detailAttempts <= 20;
+
+        try {
+          const detailResult = await fetchHtmlWithRetry(item.url, 0, 3000);
+          const detailedJob = extractJobDetail(
+            detailResult.html,
+            item.url,
             jobs.length + 1,
+            item.keyword,
             profile,
+            item,
             sectionStats,
             allowSectionParsing
           );
-          fallbackUsed++;
-        }
-      } catch (error) {
-        const failureReason = getFetchFailureReason(error);
 
-        if (failureReason === "timeout") {
-          incrementDiscardReason(debugStats, "timeout");
-        } else {
-          incrementDiscardReason(debugStats, "noDetail");
-        }
+          const detailRejectReason = getDetailedJobRejectReason(detailedJob);
 
-        detailFailed++;
-        job = createFallbackJobFromHit(
-          item,
-          jobs.length + 1,
-          profile,
-          sectionStats,
-          allowSectionParsing
-        );
-        fallbackUsed++;
-      }
+          if (!detailRejectReason) {
+            job = await applyDistanceAwareScore(
+              detailedJob,
+              profile,
+              getLocationFromKeyword(item.keyword)
+            );
+            detailSuccess++;
+          } else {
+            incrementDiscardReason(debugStats, detailRejectReason);
+            detailFailed++;
 
-      if (isTooOldJob(job)) {
-        skippedOld++;
-        oldUrls.add(normalizedItemUrl);
-        continue;
-      }
-
-      const normalizedJobUrl = normalizeUrl(job.url);
-
-      if (knownUrlSet.has(normalizedJobUrl)) {
-        skippedKnown++;
-        continue;
-      }
-
-      if (addOrReplaceDuplicateJob(jobs, job)) {
-        skippedDuplicate++;
-        incrementDiscardReason(debugStats, "duplicate");
-        usedUrls.add(normalizedJobUrl);
-        continue;
-      }
-
-      usedUrls.add(normalizedJobUrl);
-
-      if (jobs.length >= maxDetailJobsUsed) break;
-    }
-
-    if (jobs.length < 15) {
-      for (const item of foundLinks) {
-        if (jobs.length >= Math.min(maxDetailJobsUsed, 25)) break;
-
-        const normalized = normalizeUrl(item.url);
-
-        if (
-          knownUrlSet.has(normalized) ||
-          usedUrls.has(normalized) ||
-          oldUrls.has(normalized)
-        ) {
-          if (usedUrls.has(normalized)) {
-            incrementDiscardReason(debugStats, "duplicate");
+            if (wave.allowFallbackJobs) {
+              job = await applyDistanceAwareScore(
+                createFallbackJobFromHit(
+                  item,
+                  jobs.length + 1,
+                  profile,
+                  sectionStats,
+                  allowSectionParsing
+                ),
+                profile,
+                getLocationFromKeyword(item.keyword)
+              );
+              fallbackUsed++;
+            }
           }
-          continue;
+        } catch (error) {
+          const failureReason = getFetchFailureReason(error);
+
+          if (failureReason === "timeout") {
+            incrementDiscardReason(debugStats, "timeout");
+          } else {
+            incrementDiscardReason(debugStats, "noDetail");
+          }
+
+          detailFailed++;
+
+          if (wave.allowFallbackJobs) {
+            job = await applyDistanceAwareScore(
+              createFallbackJobFromHit(
+                item,
+                jobs.length + 1,
+                profile,
+                sectionStats,
+                allowSectionParsing
+              ),
+              profile,
+              getLocationFromKeyword(item.keyword)
+            );
+            fallbackUsed++;
+          }
         }
 
-        const fallbackJob = createFallbackJobFromHit(
-          item,
-          jobs.length + 1,
-          profile,
-          sectionStats,
-          false
-        );
+        if (!job) continue;
 
-        if (isTooOldJob(fallbackJob)) {
+        if (isTooOldJob(job)) {
           skippedOld++;
-          oldUrls.add(normalized);
+          oldUrls.add(normalizedItemUrl);
           continue;
         }
 
-        if (addOrReplaceDuplicateJob(jobs, fallbackJob)) {
+        const normalizedJobUrl = normalizeUrl(job.url);
+
+        if (knownUrlSet.has(normalizedJobUrl)) {
+          skippedKnown++;
+          continue;
+        }
+
+        if (addOrReplaceDuplicateJob(jobs, job)) {
           skippedDuplicate++;
           incrementDiscardReason(debugStats, "duplicate");
-          usedUrls.add(normalized);
+          usedUrls.add(normalizedJobUrl);
           continue;
         }
 
-        usedUrls.add(normalized);
-        fallbackUsed++;
+        usedUrls.add(normalizedJobUrl);
+      }
+
+      const finalizableJobsBeforePreviewFallback =
+        getFinalJobsForOutput(jobs, profile).finalJobs.length;
+
+      if (
+        wave.allowFallbackJobs &&
+        finalizableJobsBeforePreviewFallback < 15
+      ) {
+        for (const item of waveCandidates) {
+          if (jobs.length >= maxDetailJobsUsed) break;
+          if (
+            getFinalJobsForOutput(jobs, profile).finalJobs.length >=
+            Math.min(maxDetailJobsUsed, targetFinalJobs)
+          ) {
+            break;
+          }
+
+          const normalized = normalizeUrl(item.url);
+
+          if (
+            knownUrlSet.has(normalized) ||
+            usedUrls.has(normalized) ||
+            oldUrls.has(normalized)
+          ) {
+            if (usedUrls.has(normalized)) {
+              incrementDiscardReason(debugStats, "duplicate");
+            }
+            continue;
+          }
+
+          const fallbackJob = await applyDistanceAwareScore(
+            createFallbackJobFromHit(
+              item,
+              jobs.length + 1,
+              profile,
+              sectionStats,
+              false
+            ),
+            profile,
+            getLocationFromKeyword(item.keyword)
+          );
+
+          if (isTooOldJob(fallbackJob)) {
+            skippedOld++;
+            oldUrls.add(normalized);
+            continue;
+          }
+
+          if (addOrReplaceDuplicateJob(jobs, fallbackJob)) {
+            skippedDuplicate++;
+            incrementDiscardReason(debugStats, "duplicate");
+            usedUrls.add(normalized);
+            continue;
+          }
+
+          usedUrls.add(normalized);
+          fallbackUsed++;
+        }
+      }
+
+      sortJobsForOutput(jobs);
+      const waveFinalState = getFinalJobsForOutput(jobs, profile);
+
+      console.info("search-jobs wave summary", {
+        runId,
+        wave: wave.name,
+        waveId: wave.id,
+        detailAttempts: waveDetailAttempts,
+        jobsAdded: jobs.length - waveJobsAddedBefore,
+        jobsTotal: jobs.length,
+        highQualityJobs: waveFinalState.highQualityJobs.length,
+        finalJobsAvailable: waveFinalState.finalJobs.length,
+        fallbackUsed,
+      });
+
+      const hasEnoughHighQuality =
+        waveFinalState.highQualityJobs.length >= targetFinalJobs;
+      const hasEnoughProgressiveResults =
+        wave.id >= 2 && waveFinalState.finalJobs.length >= targetFinalJobs;
+
+      if (hasEnoughHighQuality || hasEnoughProgressiveResults) {
+        break;
       }
     }
 
     sortJobsForOutput(jobs);
 
-    const highQualityJobs = jobs.filter((job) => (job.score || 0) >= 65);
-    const fallbackQualityJobs = jobs.filter((job) => (job.score || 0) >= 55);
-
-    const finalJobs =
-      highQualityJobs.length >= 10
-        ? highQualityJobs.slice(0, 25)
-        : fallbackQualityJobs.slice(0, 25);
-
-    const finalScoreThreshold = highQualityJobs.length >= 10 ? 65 : 55;
+    const { finalJobs, finalScoreThreshold } = getFinalJobsForOutput(
+      jobs,
+      profile
+    );
     const finalJobUrlSet = new Set(
       finalJobs.map((job) => normalizeUrl(job.url))
     );
