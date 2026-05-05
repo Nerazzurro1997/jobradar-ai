@@ -141,6 +141,11 @@ type SearchWave = {
   allowFallbackJobs: boolean;
 };
 
+type JobWaveMetadata = {
+  id: number;
+  name: string;
+};
+
 function createRunId() {
   return crypto.randomUUID().slice(0, 8);
 }
@@ -1988,15 +1993,99 @@ function getProfileRequirementTerms(profile: CvProfile) {
   );
 }
 
-function getProfileAvoidTerms(profile: CvProfile) {
+function getProfilePositiveSignalTerms(profile: CvProfile) {
   return uniqueArray(
     [
-      ...profile.avoidKeywords,
-      ...safeArray(profile.search?.avoidRoles, 50),
-      ...safeArray(profile.matching?.weakFitRoles, 50),
-      ...safeArray(profile.matching?.dealBreakers, 50),
+      ...profile.searchTerms,
+      ...profile.strongKeywords,
+      ...safeArray(profile.skillTags, 80),
+      ...safeArray(profile.cvHighlights, 60),
+      ...safeArray(profile.search?.searchTerms, 80),
+      ...safeArray(profile.search?.strongKeywords, 80),
+      ...safeArray(profile.search?.preferredRoles, 80),
+      ...safeArray(profile.matching?.bestFitRoles, 80),
+      ...safeArray(profile.matching?.acceptableRoles, 80),
+      ...safeArray(profile.languageProfile?.languages, 40),
+      ...safeArray(profile.languageProfile?.languageKeywords, 40),
+      ...flattenProfileSkills(profile),
+    ],
+    180
+  ).filter((term) => normalizeForKeywordMatch(term).length > 2);
+}
+
+function profileTermConflictsWithPositiveSignals(
+  term: string,
+  positiveTerms: string[]
+) {
+  const normalizedTerm = normalizeForKeywordMatch(term);
+
+  if (normalizedTerm.length <= 2) return true;
+
+  return positiveTerms.some((positiveTerm) => {
+    const normalizedPositive = normalizeForKeywordMatch(positiveTerm);
+
+    if (normalizedPositive.length <= 2) return false;
+    if (normalizedTerm === normalizedPositive) return true;
+
+    return (
+      includesDomainTerm(normalizedPositive, normalizedTerm) ||
+      includesDomainTerm(normalizedTerm, normalizedPositive)
+    );
+  });
+}
+
+function isClearlyNegativeProfileAvoidTerm(term: string) {
+  const normalized = normalizeForKeywordMatch(term);
+
+  if (!normalized) return false;
+
+  return includesAny(normalized, [
+    "avoid",
+    "avoidance",
+    "weak fit",
+    "weak role",
+    "deal breaker",
+    "dealbreaker",
+    "not suitable",
+    "not preferred",
+    "do not",
+    "no ",
+    "without ",
+    "keine",
+    "kein",
+    "nicht",
+    "vermeiden",
+    "ungeeignet",
+    "nicht passend",
+    "passt nicht",
+    "da evitare",
+    "evitare",
+    "non ",
+    "senza ",
+    "pas ",
+    "sans ",
+  ]);
+}
+
+function getProfileAvoidTerms(profile: CvProfile) {
+  const positiveTerms = getProfilePositiveSignalTerms(profile);
+  const explicitAvoidTerms = [
+    ...profile.avoidKeywords,
+    ...safeArray(profile.search?.avoidRoles, 50),
+  ];
+  const weakAvoidTerms = [
+    ...safeArray(profile.matching?.weakFitRoles, 50),
+    ...safeArray(profile.matching?.dealBreakers, 50),
+  ].filter(isClearlyNegativeProfileAvoidTerm);
+
+  return uniqueArray(
+    [
+      ...explicitAvoidTerms,
+      ...weakAvoidTerms,
     ],
     90
+  ).filter(
+    (term) => !profileTermConflictsWithPositiveSignals(term, positiveTerms)
   );
 }
 
@@ -3840,6 +3929,97 @@ function getFinalJobsForOutput(jobs: Job[], profile: CvProfile) {
   };
 }
 
+function createReasonCounts(values: string[], limit = 10) {
+  return Object.entries(
+    values.reduce<Record<string, number>>((acc, value) => {
+      const key = cleanText(value).slice(0, 120);
+
+      if (!key) return acc;
+
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([reason, count]) => ({ reason, count }));
+}
+
+function createSmallKeywordSample(values: string[] = [], limit = 3) {
+  return values
+    .map((value) => cleanText(value).slice(0, 80))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function createScoreTooLowDiagnostics(
+  jobs: Job[],
+  profile: CvProfile,
+  jobWaveMetadata: WeakMap<Job, JobWaveMetadata>
+) {
+  const scores = jobs.map((job) => job.score || 0);
+  const averageScore =
+    scores.length > 0
+      ? Math.round(
+          (scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10
+        ) / 10
+      : null;
+
+  return {
+    total: jobs.length,
+    minScore: scores.length > 0 ? Math.min(...scores) : null,
+    maxScore: scores.length > 0 ? Math.max(...scores) : null,
+    averageScore,
+    scoreBands: {
+      score50To54: jobs.filter(
+        (job) => (job.score || 0) >= 50 && (job.score || 0) < 55
+      ).length,
+      score45To49: jobs.filter(
+        (job) => (job.score || 0) >= 45 && (job.score || 0) < 50
+      ).length,
+      scoreBelow45: jobs.filter((job) => (job.score || 0) < 45).length,
+    },
+    previewOnlyCount: jobs.filter(
+      (job) => job.sourceName === "jobs.ch search preview"
+    ).length,
+    validDetailCount: jobs.filter(hasValidDetailForRelaxedThreshold).length,
+    profileAnchorCount: jobs.filter((job) => hasProfileAlignedSignal(job, profile))
+      .length,
+    hardNegativeCount: jobs.filter(hasStrongFinalNegative).length,
+    topMissingKeywordReasons: createReasonCounts(
+      jobs.flatMap((job) => (job.missingKeywords || []).slice(0, 10))
+    ),
+    topMatchedKeywordReasons: createReasonCounts(
+      jobs.flatMap((job) => (job.matchedKeywords || []).slice(0, 10))
+    ),
+    sampleJobs: jobs.slice(0, 8).map((job) => {
+      const waveMetadata = jobWaveMetadata.get(job);
+
+      return {
+        title: cleanText(job.title).slice(0, 120),
+        company: cleanText(job.company).slice(0, 100),
+        score: job.score || 0,
+        sourceName: job.sourceName || "",
+        query: cleanText(job.keyword).slice(0, 160),
+        location: cleanText(job.location).slice(0, 100),
+        distanceScore: job.distanceScore ?? null,
+        distanceKm: job.distanceKm ?? null,
+        requirementMatchScore: job.requirementMatchScore ?? null,
+        matchedKeywordsCount: (job.matchedKeywords || []).length,
+        missingKeywordsCount: (job.missingKeywords || []).length,
+        firstMissingKeywords: createSmallKeywordSample(job.missingKeywords, 3),
+        firstMatchedKeywords: createSmallKeywordSample(job.matchedKeywords, 3),
+        hasValidDetail: hasValidDetailForRelaxedThreshold(job),
+        isPreview: job.sourceName === "jobs.ch search preview",
+        hasProfileAnchor: hasProfileAlignedSignal(job, profile),
+        hasHardNegative: hasStrongFinalNegative(job),
+        waveId: waveMetadata?.id ?? null,
+        waveName: waveMetadata?.name ?? null,
+      };
+    }),
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -3941,6 +4121,7 @@ Deno.serve(async (req: Request) => {
     let foundLinks: SearchHit[] = [];
     const visitedSearchPageKeys = new Set<string>();
     const jobs: Job[] = [];
+    const jobWaveMetadata = new WeakMap<Job, JobWaveMetadata>();
     const usedUrls = new Set<string>();
     const oldUrls = new Set<string>();
     let skippedKnown = 0;
@@ -4119,6 +4300,8 @@ Deno.serve(async (req: Request) => {
 
         if (!job) continue;
 
+        jobWaveMetadata.set(job, { id: wave.id, name: wave.name });
+
         if (isTooOldJob(job)) {
           skippedOld++;
           oldUrls.add(normalizedItemUrl);
@@ -4183,6 +4366,8 @@ Deno.serve(async (req: Request) => {
             getLocationFromKeyword(item.keyword)
           );
 
+          jobWaveMetadata.set(fallbackJob, { id: wave.id, name: wave.name });
+
           if (isTooOldJob(fallbackJob)) {
             skippedOld++;
             oldUrls.add(normalized);
@@ -4235,12 +4420,33 @@ Deno.serve(async (req: Request) => {
     const finalJobUrlSet = new Set(
       finalJobs.map((job) => normalizeUrl(job.url))
     );
-    const scoreTooLowCount = jobs.filter(
+    const scoreTooLowJobs = jobs.filter(
       (job) =>
         !finalJobUrlSet.has(normalizeUrl(job.url)) &&
         (job.score || 0) < finalScoreThreshold
-    ).length;
+    );
+    const scoreTooLowCount = scoreTooLowJobs.length;
     debugStats.discardReasons.scoreTooLow += scoreTooLowCount;
+
+    if (scoreTooLowJobs.length > 0) {
+      try {
+        console.info("search-jobs score-too-low diagnostics", {
+          runId,
+          finalScoreThreshold,
+          ...createScoreTooLowDiagnostics(
+            scoreTooLowJobs,
+            profile,
+            jobWaveMetadata
+          ),
+        });
+      } catch (error) {
+        console.warn("search-jobs score-too-low diagnostics failed", {
+          runId,
+          totalScoreTooLow: scoreTooLowJobs.length,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     const locationStats = createLocationStats(foundLinks, finalJobs);
     const recencyStats = createRecencyStats(finalJobs);
