@@ -1024,6 +1024,120 @@ function getUsefulTitleFromText(text = "") {
   return cleaned;
 }
 
+function stripPreviewDatePrefix(text = "") {
+  return cleanText(text)
+    .replace(
+      /^(?:neu\s*)?(?:vor\s+\d+\s+(?:tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?)|heute|gestern)\.?\s*/i,
+      ""
+    )
+    .replace(/^\d{1,2}\.\d{1,2}\.\d{4}\.?\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getPreviewPublishedDateText(hit: SearchHit) {
+  const explicitDate = cleanText(hit.publishedDate);
+
+  if (explicitDate) return explicitDate;
+
+  const previewText = cleanText([hit.title, hit.snippet].join(" "));
+  const relativeMatch = previewText.match(
+    /\b(?:heute|gestern|vor\s+\d+\s+(?:tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?))\b/i
+  );
+
+  if (relativeMatch) return relativeMatch[0];
+
+  const dateMatch = previewText.match(/\b\d{1,2}\.\d{1,2}\.\d{4}\b/);
+
+  return dateMatch ? dateMatch[0] : "";
+}
+
+function getPreviewTitleCandidates(hit: SearchHit) {
+  const snippetCandidates = cleanText(hit.snippet)
+    .split(/\s+(?:\||â€¢|Â·|·|-|–|—)\s+|(?<=\.)\s+/)
+    .map(stripPreviewDatePrefix)
+    .filter(Boolean)
+    .slice(0, 8);
+
+  return uniqueArray(
+    [
+      stripPreviewDatePrefix(hit.title),
+      ...snippetCandidates,
+    ],
+    10
+  );
+}
+
+function isNoisyPreviewTitle(title = "") {
+  const cleaned = cleanText(title);
+  const normalized = normalizeForKeywordMatch(cleaned);
+
+  if (!cleaned || cleaned.length < 4 || cleaned.length > 160) return true;
+
+  return (
+    /^(?:vor\s+\d+|heute|gestern)\b/i.test(cleaned) ||
+    [
+      "stellenanzeige auf jobs ch",
+      "firma auf jobs ch",
+      "jobs ch",
+      "job",
+      "stellenangebot",
+      "stellenangebote",
+    ].includes(normalized)
+  );
+}
+
+function isGenericPreviewQueryTitle(title: string, hit: SearchHit) {
+  const normalizedTitle = normalizeForKeywordMatch(title);
+  const normalizedQuery = normalizeForKeywordMatch(hit.query?.term || "");
+  const normalizedDerived = normalizeForKeywordMatch(
+    deriveTitleFromKeyword(hit.keyword)
+  );
+
+  if (!normalizedTitle) return true;
+
+  return (
+    normalizedTitle === normalizedQuery ||
+    normalizedTitle === normalizedDerived
+  );
+}
+
+function getCleanPreviewTitle(hit: SearchHit) {
+  let genericCandidate = "";
+
+  for (const candidate of getPreviewTitleCandidates(hit)) {
+    const title = getUsefulTitleFromText(stripPreviewDatePrefix(candidate));
+
+    if (!title || isNoisyPreviewTitle(title)) continue;
+
+    if (isGenericPreviewQueryTitle(title, hit)) {
+      if (!genericCandidate) genericCandidate = title;
+      continue;
+    }
+
+    return title;
+  }
+
+  return genericCandidate;
+}
+
+function shouldCreateFallbackPreviewJob(
+  hit: SearchHit,
+  title: string,
+  company: string,
+  snippet: string
+) {
+  const hasUsefulSnippet = cleanText(snippet).length >= 80;
+  const hasDefaultCompany = !cleanText(hit.company) || company === "Firma auf jobs.ch";
+  const hasGenericTitle = isGenericPreviewQueryTitle(title, hit);
+
+  if (!title || isNoisyPreviewTitle(title)) return false;
+  if (hasGenericTitle) return false;
+  if (hasDefaultCompany && !hasUsefulSnippet) return false;
+
+  return Boolean(title || !hasDefaultCompany || hasUsefulSnippet);
+}
+
 function deriveTitleFromKeyword(keyword = "") {
   const afterColon = keyword.includes(":")
     ? keyword.split(":").slice(1).join(":")
@@ -1866,7 +1980,9 @@ function parsePublishedDate(value?: string) {
   }
 
   const lower = cleaned.toLowerCase();
-  const relativeMatch = lower.match(/vor\s+(\d+)\s+tag/);
+  const relativeMatch = lower.match(
+    /vor\s+(\d+)\s+(tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?)/
+  );
 
   if (lower.includes("heute")) return new Date();
   if (lower.includes("gestern")) {
@@ -1874,8 +1990,16 @@ function parsePublishedDate(value?: string) {
   }
 
   if (relativeMatch) {
+    const amount = Number(relativeMatch[1]);
+    const unit = relativeMatch[2];
+    const multiplier = unit.startsWith("woche")
+      ? 7
+      : unit.startsWith("monat")
+      ? 30
+      : 1;
+
     return new Date(
-      Date.now() - Number(relativeMatch[1]) * 24 * 60 * 60 * 1000
+      Date.now() - amount * multiplier * 24 * 60 * 60 * 1000
     );
   }
 
@@ -3139,7 +3263,9 @@ function scoreJob(job: Job, profile: CvProfile, distanceScoreValue = 60) {
   job.ageDays = recency.ageDays;
 
   if (recency.ageDays === null) {
-    missingKeywords.push("Datum nicht erkannt");
+    if (job.sourceName !== "jobs.ch search preview") {
+      missingKeywords.push("Datum nicht erkannt");
+    }
   } else if (recency.ageDays > 60) {
     missingKeywords.push(`Alt: ${recency.ageDays} Tage`);
   } else if (recency.ageDays <= 14) {
@@ -3297,12 +3423,18 @@ function createFallbackJobFromHit(
   profile: CvProfile,
   sectionStats?: SectionParsingStats,
   allowSectionParsing = true
-): Job {
-  const title = hit.title || deriveTitleFromKeyword(hit.keyword);
-  const company = hit.company || "Firma auf jobs.ch";
+): Job | null {
+  const title = getCleanPreviewTitle(hit);
+  const company = getUsefulTitleFromText(hit.company) || "Firma auf jobs.ch";
   const location = hit.location || deriveLocationFromKeyword(hit.keyword, profile);
+  const snippet = cleanText(hit.snippet);
+
+  if (!shouldCreateFallbackPreviewJob(hit, title, company, snippet)) {
+    return null;
+  }
+
   const fullDescription = (
-    hit.snippet ||
+    snippet ||
     `Gefunden auf jobs.ch über die Suche: ${hit.keyword}. Detailseite konnte nicht zuverlässig gelesen werden.`
   ).slice(0, 2500);
 
@@ -3331,7 +3463,7 @@ function createFallbackJobFromHit(
     extractedRequirementsCount: sections.requirements.length,
     requirementMismatchFlags: [],
     keyword: hit.keyword,
-    publishedDate: hit.publishedDate,
+    publishedDate: getPreviewPublishedDateText(hit),
     source: "jobs.ch",
     sourceName: "jobs.ch search preview",
   };
@@ -4257,18 +4389,24 @@ Deno.serve(async (req: Request) => {
             detailFailed++;
 
             if (wave.allowFallbackJobs) {
-              job = await applyDistanceAwareScore(
-                createFallbackJobFromHit(
-                  item,
-                  jobs.length + 1,
-                  profile,
-                  sectionStats,
-                  allowSectionParsing
-                ),
+              const fallbackPreview = createFallbackJobFromHit(
+                item,
+                jobs.length + 1,
                 profile,
-                getLocationFromKeyword(item.keyword)
+                sectionStats,
+                allowSectionParsing
               );
-              fallbackUsed++;
+
+              if (fallbackPreview) {
+                job = await applyDistanceAwareScore(
+                  fallbackPreview,
+                  profile,
+                  getLocationFromKeyword(item.keyword)
+                );
+                fallbackUsed++;
+              } else {
+                incrementDiscardReason(debugStats, "missingTitle");
+              }
             }
           }
         } catch (error) {
@@ -4283,18 +4421,24 @@ Deno.serve(async (req: Request) => {
           detailFailed++;
 
           if (wave.allowFallbackJobs) {
-            job = await applyDistanceAwareScore(
-              createFallbackJobFromHit(
-                item,
-                jobs.length + 1,
-                profile,
-                sectionStats,
-                allowSectionParsing
-              ),
+            const fallbackPreview = createFallbackJobFromHit(
+              item,
+              jobs.length + 1,
               profile,
-              getLocationFromKeyword(item.keyword)
+              sectionStats,
+              allowSectionParsing
             );
-            fallbackUsed++;
+
+            if (fallbackPreview) {
+              job = await applyDistanceAwareScore(
+                fallbackPreview,
+                profile,
+                getLocationFromKeyword(item.keyword)
+              );
+              fallbackUsed++;
+            } else {
+              incrementDiscardReason(debugStats, "missingTitle");
+            }
           }
         }
 
@@ -4354,14 +4498,21 @@ Deno.serve(async (req: Request) => {
             continue;
           }
 
+          const fallbackPreview = createFallbackJobFromHit(
+            item,
+            jobs.length + 1,
+            profile,
+            sectionStats,
+            false
+          );
+
+          if (!fallbackPreview) {
+            incrementDiscardReason(debugStats, "missingTitle");
+            continue;
+          }
+
           const fallbackJob = await applyDistanceAwareScore(
-            createFallbackJobFromHit(
-              item,
-              jobs.length + 1,
-              profile,
-              sectionStats,
-              false
-            ),
+            fallbackPreview,
             profile,
             getLocationFromKeyword(item.keyword)
           );
