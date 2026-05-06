@@ -146,6 +146,415 @@ type JobWaveMetadata = {
   name: string;
 };
 
+type FitCatalog = Record<string, string[]>;
+
+type FitTextSource = {
+  name: string;
+  weight: number;
+  values: string[];
+};
+
+type FitScoreEntry = {
+  score: number;
+  evidence: string[];
+  sources: string[];
+};
+
+type CvFitModel = {
+  targetDomains: string[];
+  acceptableDomains: string[];
+  avoidDomains: string[];
+  coreTasks: string[];
+  adjacentTasks: string[];
+  genericTasks: string[];
+  avoidTasks: string[];
+  missingFilterInformation: string[];
+  clearTargetDomains: boolean;
+  clearTargetTasks: boolean;
+  domainScores: Record<string, FitScoreEntry>;
+  taskScores: Record<string, FitScoreEntry>;
+};
+
+type JobFitDiagnostics = {
+  domainAlignmentScore: number;
+  domainAlignmentType: string;
+  matchingDomains: string[];
+  adjacentDomains: string[];
+  mismatchingDomains: string[];
+  taskAlignmentScore: number;
+  taskImportanceScore: number;
+  coreTaskOverlap: string[];
+  adjacentTaskOverlap: string[];
+  genericTaskOverlap: string[];
+  avoidTaskOverlap: string[];
+  genericLeakageRisk: number;
+  taskSpecificityScore: number;
+  taskDepthScore: number;
+  genericTaskShare: number;
+};
+
+const fitDomainCatalog: FitCatalog = {
+  administration: [
+    "administration",
+    "administrative",
+    "admin",
+    "back office",
+    "office",
+    "data entry",
+    "sachbearbeiter",
+  ],
+  banking: [
+    "bank",
+    "banking",
+    "banca",
+    "bancario",
+    "wealth",
+    "payments",
+    "credit",
+    "konto",
+    "cards",
+  ],
+  customer_support: [
+    "customer support",
+    "customer care",
+    "client service",
+    "kundenservice",
+    "call center",
+    "service desk",
+    "helpdesk",
+  ],
+  data_analytics: [
+    "data",
+    "analytics",
+    "analyst",
+    "business intelligence",
+    "sql",
+    "reporting",
+    "machine learning",
+  ],
+  finance: [
+    "finance",
+    "financial",
+    "accounting",
+    "controlling",
+    "audit",
+    "treasury",
+    "invoice",
+  ],
+  healthcare: [
+    "healthcare",
+    "medical",
+    "clinic",
+    "hospital",
+    "patient",
+    "nurse",
+    "nursing",
+    "pflege",
+    "clinical",
+    "pharma",
+  ],
+  hr: [
+    "hr",
+    "human resources",
+    "recruiting",
+    "talent",
+    "people",
+    "payroll",
+  ],
+  insurance: [
+    "insurance",
+    "assurance",
+    "assicur",
+    "claims",
+    "sinistri",
+    "policy",
+    "poliz",
+    "underwriting",
+    "broker",
+  ],
+  it: [
+    "it",
+    "software",
+    "developer",
+    "engineer",
+    "cloud",
+    "devops",
+    "frontend",
+    "backend",
+    "typescript",
+    "python",
+    "technical support",
+  ],
+  legal: [
+    "legal",
+    "law",
+    "contract",
+    "compliance",
+    "regulatory",
+  ],
+  logistics: [
+    "logistics",
+    "warehouse",
+    "supply chain",
+    "transport",
+    "procurement",
+    "magazzino",
+  ],
+  marketing: [
+    "marketing",
+    "seo",
+    "content",
+    "brand",
+    "campaign",
+    "social media",
+    "growth",
+  ],
+  retail: [
+    "retail",
+    "store",
+    "shop",
+    "sales assistant",
+    "merchandising",
+    "stock",
+    "cash desk",
+  ],
+  sales: [
+    "sales",
+    "commercial",
+    "business development",
+    "account manager",
+    "outbound",
+    "field sales",
+    "sdr",
+    "commission",
+  ],
+};
+
+const adjacentDomainGroups = [
+  ["banking", "finance", "insurance"],
+  ["it", "data_analytics"],
+  ["sales", "marketing", "retail"],
+  ["administration", "customer_support", "hr"],
+  ["logistics", "retail"],
+  ["healthcare", "insurance"],
+  ["legal", "finance", "insurance"],
+];
+
+const fitTaskCatalog: FitCatalog = {
+  customer_support: [
+    "customer support",
+    "customer care",
+    "client service",
+    "kundenservice",
+    "helpdesk",
+    "service desk",
+    "inbound",
+  ],
+  sales: [
+    "sales",
+    "commercial",
+    "account manager",
+    "business development",
+  ],
+  outbound_acquisition: [
+    "outbound",
+    "cold calling",
+    "lead generation",
+    "field sales",
+    "commission",
+    "sdr",
+    "hunter",
+  ],
+  administration: [
+    "administration",
+    "admin",
+    "back office",
+    "office",
+    "data entry",
+    "sachbearbeiter",
+  ],
+  policy_administration: [
+    "policy administration",
+    "policy",
+    "poliz",
+    "underwriting",
+    "insurance contract",
+  ],
+  claims_handling: [
+    "claims",
+    "claim",
+    "sinistri",
+    "schaden",
+    "gestione sinistri",
+  ],
+  software_development: [
+    "software development",
+    "developer",
+    "backend",
+    "frontend",
+    "full stack",
+    "api",
+    "typescript",
+    "python",
+  ],
+  it_support: [
+    "it support",
+    "technical support",
+    "helpdesk",
+    "service desk",
+    "hardware",
+    "password reset",
+  ],
+  data_analysis: [
+    "data analysis",
+    "analytics",
+    "analyst",
+    "reporting",
+    "sql",
+    "dashboard",
+  ],
+  marketing: [
+    "marketing",
+    "campaign",
+    "brand",
+    "seo",
+    "growth",
+    "social media",
+  ],
+  content_creation: [
+    "content",
+    "copywriting",
+    "editorial",
+    "newsletter",
+    "creative",
+  ],
+  healthcare_care: [
+    "healthcare",
+    "medical",
+    "patient",
+    "patient care",
+    "nurse",
+    "nursing",
+    "pflege",
+    "clinical",
+  ],
+  case_management: [
+    "case management",
+    "case manager",
+    "care coordination",
+    "triage",
+    "coordinamento casi",
+  ],
+  retail_sales: [
+    "retail",
+    "store",
+    "shop floor",
+    "sales assistant",
+    "merchandising",
+    "cash desk",
+    "stock",
+  ],
+  logistics_coordination: [
+    "logistics",
+    "warehouse",
+    "supply chain",
+    "transport",
+    "procurement",
+  ],
+  finance_operations: [
+    "finance operations",
+    "accounting",
+    "invoice",
+    "reconciliation",
+    "payments",
+  ],
+  hr_coordination: [
+    "hr",
+    "human resources",
+    "recruiting",
+    "payroll",
+    "people admin",
+  ],
+  compliance: [
+    "compliance",
+    "regulatory",
+    "audit",
+    "risk",
+  ],
+  project_management: [
+    "project management",
+    "project manager",
+    "planning",
+    "stakeholder",
+    "delivery",
+  ],
+  document_review: [
+    "document review",
+    "documentation",
+    "documentazione",
+    "medical records",
+    "records",
+  ],
+  crm_usage: [
+    "crm",
+    "ticketing",
+    "case management system",
+    "pipeline",
+  ],
+  office_tools: [
+    "office",
+    "excel",
+    "word",
+    "powerpoint",
+    "spreadsheet",
+  ],
+  language_use: [
+    "italian",
+    "german",
+    "french",
+    "english",
+    "language",
+    "lingue",
+  ],
+  communication: [
+    "communication",
+    "comunicazione",
+    "stakeholder",
+    "team",
+    "coordination",
+    "collaboration",
+  ],
+};
+
+const adjacentTaskGroups = [
+  ["customer_support", "case_management", "crm_usage", "communication"],
+  ["administration", "document_review", "crm_usage", "office_tools"],
+  [
+    "policy_administration",
+    "claims_handling",
+    "case_management",
+    "compliance",
+    "document_review",
+  ],
+  ["sales", "outbound_acquisition", "retail_sales", "marketing", "crm_usage"],
+  ["software_development", "it_support", "data_analysis", "project_management"],
+  ["marketing", "content_creation", "sales"],
+  ["healthcare_care", "case_management", "document_review"],
+  ["finance_operations", "compliance", "administration", "document_review"],
+  ["hr_coordination", "administration", "communication", "project_management"],
+  ["logistics_coordination", "administration", "project_management"],
+];
+
+const genericTaskGroups = new Set([
+  "administration",
+  "customer_support",
+  "crm_usage",
+  "office_tools",
+  "language_use",
+  "communication",
+  "document_review",
+]);
+
 function createRunId() {
   return crypto.randomUUID().slice(0, 8);
 }
@@ -398,6 +807,477 @@ function findNormalizedMatches(text: string, terms: string[]) {
       normalizedTerm && normalizedText.includes(` ${normalizedTerm} `)
     );
   });
+}
+
+function fitMatchedTerms(text: string, terms: string[]) {
+  const normalizedText = ` ${normalizeForKeywordMatch(text)} `;
+
+  return uniqueArray(
+    terms.filter((term) => {
+      const normalizedTerm = normalizeForKeywordMatch(term);
+      return Boolean(
+        normalizedTerm && normalizedText.includes(` ${normalizedTerm} `)
+      );
+    }),
+    8
+  );
+}
+
+function addFitScores(
+  scores: Record<string, FitScoreEntry>,
+  catalog: FitCatalog,
+  source: FitTextSource
+) {
+  for (const value of source.values) {
+    const text = cleanText(value);
+
+    if (!text) continue;
+
+    for (const [name, terms] of Object.entries(catalog)) {
+      const matches = fitMatchedTerms(text, terms);
+
+      if (matches.length === 0) continue;
+
+      const entry = scores[name] || { score: 0, evidence: [], sources: [] };
+      entry.score = Math.round((entry.score + source.weight * Math.min(matches.length, 3)) * 1000) / 1000;
+      entry.evidence = uniqueArray([...entry.evidence, ...matches], 8);
+      entry.sources = uniqueArray([...entry.sources, source.name], 8);
+      scores[name] = entry;
+    }
+  }
+}
+
+function scoreFitCatalog(
+  catalog: FitCatalog,
+  sources: FitTextSource[]
+): Record<string, FitScoreEntry> {
+  const scores: Record<string, FitScoreEntry> = {};
+
+  for (const source of sources) {
+    addFitScores(scores, catalog, source);
+  }
+
+  return scores;
+}
+
+function rankedFitNames(
+  scores: Record<string, FitScoreEntry>,
+  minScore: number
+) {
+  return Object.entries(scores)
+    .filter(([, entry]) => entry.score >= minScore)
+    .sort((a, b) => b[1].score - a[1].score || a[0].localeCompare(b[0]))
+    .map(([name]) => name);
+}
+
+function primaryFitNames(
+  scores: Record<string, FitScoreEntry>,
+  names: string[],
+  genericNames = new Set<string>()
+) {
+  if (names.length === 0) return [];
+
+  const candidates = names.filter((name) => !genericNames.has(name));
+  const usable = candidates.length > 0 ? candidates : names;
+  const maxScore = Math.max(...usable.map((name) => scores[name]?.score || 0));
+  const threshold = Math.max(maxScore * 0.72, maxScore - 1.5);
+
+  return usable.filter((name) => (scores[name]?.score || 0) >= threshold);
+}
+
+function fitIntersection(first: string[], second: string[]) {
+  const secondSet = new Set(second);
+  return first.filter((item) => secondSet.has(item));
+}
+
+function fitDifference(first: string[], second: string[]) {
+  const secondSet = new Set(second);
+  return first.filter((item) => !secondSet.has(item));
+}
+
+function hasFitAdjacency(value: string, targets: string[], groups: string[][]) {
+  if (targets.length === 0) return false;
+
+  return groups.some((group) => {
+    if (!group.includes(value)) return false;
+    return targets.some((target) => group.includes(target));
+  });
+}
+
+function profileFitSources(profile: CvProfile): {
+  target: FitTextSource[];
+  acceptable: FitTextSource[];
+  avoid: FitTextSource[];
+} {
+  const identity = profile.deepProfile?.identity || {};
+  const experience = profile.deepProfile?.experience || {};
+
+  return {
+    target: [
+      { name: "search_terms", weight: 2.2, values: profile.searchTerms },
+      { name: "strong_keywords", weight: 1.8, values: profile.strongKeywords },
+      { name: "skill_tags", weight: 1.4, values: safeArray(profile.skillTags, 80) },
+      { name: "highlights", weight: 1.2, values: safeArray(profile.cvHighlights, 80) },
+      { name: "preferred_roles", weight: 2.0, values: safeArray(profile.search?.preferredRoles, 40) },
+      { name: "best_fit_roles", weight: 2.4, values: safeArray(profile.matching?.bestFitRoles, 40) },
+      { name: "profile_summary", weight: 0.8, values: [profile.profileSummary] },
+      { name: "target_role", weight: 2.0, values: [cleanText(identity.targetRole)] },
+      { name: "current_role", weight: 1.5, values: [cleanText(identity.currentRole)] },
+      { name: "experience_roles", weight: 1.3, values: safeArray(experience.roles, 40) },
+      { name: "skills", weight: 1.5, values: flattenProfileSkills(profile) },
+    ],
+    acceptable: [
+      { name: "acceptable_roles", weight: 1.7, values: safeArray(profile.matching?.acceptableRoles, 40) },
+      { name: "selling_points", weight: 1.0, values: safeArray(profile.matching?.sellingPoints, 40) },
+      { name: "application_positioning", weight: 1.0, values: safeArray(profile.matching?.applicationPositioning, 40) },
+    ],
+    avoid: [
+      { name: "avoid_keywords", weight: 2.4, values: profile.avoidKeywords },
+      { name: "avoid_roles", weight: 2.2, values: safeArray(profile.search?.avoidRoles, 40) },
+      { name: "weak_fit_roles", weight: 1.6, values: safeArray(profile.matching?.weakFitRoles, 40) },
+      { name: "deal_breakers", weight: 2.6, values: safeArray(profile.matching?.dealBreakers, 40) },
+    ],
+  };
+}
+
+function buildCvFitModel(profile: CvProfile): CvFitModel {
+  const sources = profileFitSources(profile);
+  const domainScores = scoreFitCatalog(fitDomainCatalog, sources.target);
+  const taskScores = scoreFitCatalog(fitTaskCatalog, sources.target);
+  const acceptableDomainScores = scoreFitCatalog(
+    fitDomainCatalog,
+    sources.acceptable
+  );
+  const acceptableTaskScores = scoreFitCatalog(fitTaskCatalog, sources.acceptable);
+  const avoidDomainScores = scoreFitCatalog(fitDomainCatalog, sources.avoid);
+  const avoidTaskScores = scoreFitCatalog(fitTaskCatalog, sources.avoid);
+
+  const avoidDomains = rankedFitNames(avoidDomainScores, 0.9);
+  const avoidTasks = rankedFitNames(avoidTaskScores, 0.9);
+  const targetDomains = fitDifference(
+    rankedFitNames(domainScores, 1.2),
+    avoidDomains
+  );
+  const targetTasks = fitDifference(
+    rankedFitNames(taskScores, 1.2),
+    avoidTasks
+  );
+  const acceptableDomains = fitDifference(
+    fitDifference(rankedFitNames(acceptableDomainScores, 1.0), targetDomains),
+    avoidDomains
+  );
+  const acceptableTasks = fitDifference(
+    fitDifference(rankedFitNames(acceptableTaskScores, 1.0), targetTasks),
+    avoidTasks
+  );
+  const primaryTasks = primaryFitNames(taskScores, targetTasks, genericTaskGroups);
+  const nonGenericCoreTasks = primaryTasks.filter(
+    (task) => !genericTaskGroups.has(task) || (taskScores[task]?.score || 0) >= 2.0
+  );
+  const coreTasks =
+    nonGenericCoreTasks.length > 0
+      ? nonGenericCoreTasks
+      : targetTasks.filter((task) => !genericTaskGroups.has(task)).slice(0, 4);
+  const adjacentTasks = uniqueArray(
+    [
+      ...acceptableTasks,
+      ...targetTasks.filter(
+        (task) => !coreTasks.includes(task) && !genericTaskGroups.has(task)
+      ),
+    ],
+    12
+  );
+  const genericTasks = uniqueArray(
+    [...targetTasks, ...acceptableTasks].filter(
+      (task) =>
+        genericTaskGroups.has(task) &&
+        !coreTasks.includes(task) &&
+        !avoidTasks.includes(task)
+    ),
+    12
+  );
+  const missingFilterInformation = [
+    targetDomains.length === 0 ? "target_domains" : "",
+    coreTasks.length === 0 ? "core_tasks" : "",
+    profile.locations.length === 0 ? "locations" : "",
+    getLanguageSignals(profile).length === 0 ? "language_requirements" : "",
+  ].filter(Boolean);
+
+  return {
+    targetDomains,
+    acceptableDomains,
+    avoidDomains,
+    coreTasks,
+    adjacentTasks,
+    genericTasks,
+    avoidTasks,
+    missingFilterInformation,
+    clearTargetDomains:
+      targetDomains.length > 0 &&
+      Math.max(...targetDomains.map((domain) => domainScores[domain]?.score || 0)) >= 1.8,
+    clearTargetTasks:
+      targetTasks.length > 0 &&
+      Math.max(...targetTasks.map((task) => taskScores[task]?.score || 0)) >= 1.8,
+    domainScores,
+    taskScores,
+  };
+}
+
+function jobFitSources(job: Job): FitTextSource[] {
+  return [
+    { name: "title", weight: 2.2, values: [job.title] },
+    { name: "company", weight: 0.3, values: [job.company] },
+    {
+      name: "description",
+      weight: 1.4,
+      values: [job.snippet || "", job.fullDescription || "", job.previewSummary || ""],
+    },
+    {
+      name: "requirements",
+      weight: 1.5,
+      values: [...(job.requirements || []), ...(job.responsibilities || [])],
+    },
+    {
+      name: "keywords",
+      weight: 1.3,
+      values: [
+        ...(job.matchedKeywords || []),
+        ...(job.missingKeywords || []),
+        job.keyword || "",
+        job.location || "",
+      ],
+    },
+  ];
+}
+
+function taskSpecificityScore(scores: Record<string, FitScoreEntry>, tasks: string[]) {
+  const totalScore = tasks.reduce((sum, task) => sum + (scores[task]?.score || 0), 0);
+
+  if (totalScore <= 0) return 0;
+
+  const specificScore = tasks
+    .filter((task) => !genericTaskGroups.has(task))
+    .reduce((sum, task) => sum + (scores[task]?.score || 0), 0);
+
+  return Math.round((specificScore / totalScore) * 1000) / 1000;
+}
+
+function taskDepthScore(scores: Record<string, FitScoreEntry>, tasks: string[]) {
+  if (tasks.length === 0) return 0;
+
+  const sources = new Set<string>();
+  let evidenceCount = 0;
+
+  for (const task of tasks) {
+    const entry = scores[task];
+    if (!entry) continue;
+    entry.sources.forEach((source) => sources.add(source));
+    evidenceCount += entry.evidence.length;
+  }
+
+  const sourceDepth = Math.min(sources.size / 3, 1);
+  const evidenceDepth = Math.min(evidenceCount / Math.max(tasks.length * 3, 1), 1);
+
+  return Math.round((sourceDepth * 0.6 + evidenceDepth * 0.4) * 1000) / 1000;
+}
+
+function taskEvidenceStrength(
+  scores: Record<string, FitScoreEntry>,
+  tasks: string[]
+) {
+  if (tasks.length === 0) return 0;
+
+  const totalScore = tasks.reduce((sum, task) => sum + (scores[task]?.score || 0), 0);
+  return Math.round(Math.min(totalScore / Math.max(tasks.length * 4, 1), 1) * 1000) / 1000;
+}
+
+function genericLeakageRiskFromImportance(input: {
+  coreOverlap: string[];
+  adjacentOverlap: string[];
+  genericOverlap: string[];
+  avoidOverlap: string[];
+  clearTargetTasks: boolean;
+  taskSpecificity: number;
+  detectedTaskCount: number;
+}) {
+  if (input.avoidOverlap.length > 0) return 1;
+
+  if (input.coreOverlap.length > 0) {
+    if (input.genericOverlap.length === 0) return 0;
+
+    const taskCount = Math.max(
+      input.detectedTaskCount,
+      input.coreOverlap.length + input.adjacentOverlap.length + input.genericOverlap.length,
+      1
+    );
+    const genericShare = input.genericOverlap.length / taskCount;
+    const coreIsTargetedGeneric = input.coreOverlap.every((task) =>
+      genericTaskGroups.has(task)
+    );
+
+    if (coreIsTargetedGeneric) return 0.15;
+    if (input.adjacentOverlap.length === 0 && genericShare >= 0.5 && input.taskSpecificity < 0.55) return 0.45;
+    if (input.adjacentOverlap.length === 0 && genericShare >= 0.33 && input.taskSpecificity < 0.45) return 0.35;
+    if (genericShare >= 0.5 && input.taskSpecificity < 0.4) return 0.35;
+    return 0.15;
+  }
+
+  if (input.adjacentOverlap.length > 0 && input.genericOverlap.length > 0) return 0.35;
+  if (input.adjacentOverlap.length > 0) return 0.15;
+  if (input.genericOverlap.length > 0 && input.clearTargetTasks) return 0.9;
+  if (input.genericOverlap.length > 0) return 0.55;
+
+  return 0;
+}
+
+function buildJobFitDiagnostics(
+  job: Job,
+  profile: CvProfile,
+  cvFitModel: CvFitModel
+): JobFitDiagnostics {
+  void profile;
+
+  const sources = jobFitSources(job);
+  const jobDomainScores = scoreFitCatalog(fitDomainCatalog, sources);
+  const jobTaskScores = scoreFitCatalog(fitTaskCatalog, sources);
+  const detectedDomains = rankedFitNames(jobDomainScores, 0.8);
+  const detectedTasks = rankedFitNames(jobTaskScores, 0.8);
+  const primaryTasks = primaryFitNames(jobTaskScores, detectedTasks, genericTaskGroups);
+  const matchingDomains = fitIntersection(detectedDomains, cvFitModel.targetDomains);
+  const acceptableDomainMatches = fitIntersection(
+    detectedDomains,
+    cvFitModel.acceptableDomains
+  );
+  const adjacentDomains = detectedDomains.filter(
+    (domain) =>
+      !matchingDomains.includes(domain) &&
+      hasFitAdjacency(domain, cvFitModel.targetDomains, adjacentDomainGroups)
+  );
+  const mismatchingDomains = detectedDomains.filter(
+    (domain) =>
+      !matchingDomains.includes(domain) &&
+      !acceptableDomainMatches.includes(domain) &&
+      !adjacentDomains.includes(domain)
+  );
+  const coreTaskOverlap = fitIntersection(detectedTasks, cvFitModel.coreTasks);
+  const adjacentTaskOverlap = fitDifference(
+    fitIntersection(detectedTasks, cvFitModel.adjacentTasks),
+    coreTaskOverlap
+  );
+  const avoidTaskOverlap = fitIntersection(detectedTasks, cvFitModel.avoidTasks);
+  const genericTaskOverlap = detectedTasks.filter(
+    (task) =>
+      genericTaskGroups.has(task) &&
+      !coreTaskOverlap.includes(task) &&
+      !adjacentTaskOverlap.includes(task)
+  );
+  const taskSpecificity = taskSpecificityScore(jobTaskScores, detectedTasks);
+  const genericTaskShare =
+    detectedTasks.length > 0
+      ? Math.round((genericTaskOverlap.length / detectedTasks.length) * 1000) / 1000
+      : 0;
+  const depthScore = taskDepthScore(jobTaskScores, coreTaskOverlap);
+  const concreteEvidenceScore = taskEvidenceStrength(
+    jobTaskScores,
+    coreTaskOverlap.filter((task) => !genericTaskGroups.has(task))
+  );
+  const roleSpecificity =
+    coreTaskOverlap.length > 0
+      ? fitIntersection(coreTaskOverlap, primaryTasks).length / coreTaskOverlap.length
+      : 0;
+  const genericDrag =
+    coreTaskOverlap.length > 0
+      ? 0.1 * genericTaskShare +
+        (coreTaskOverlap.length <= 1 && adjacentTaskOverlap.length === 0 && genericTaskOverlap.length > 0 ? 0.06 : 0) +
+        (concreteEvidenceScore < 0.45 && genericTaskOverlap.length > 0 ? 0.04 : 0)
+      : 0;
+  let taskImportanceScore = 0;
+
+  if (coreTaskOverlap.length > 0) {
+    taskImportanceScore =
+      0.76 +
+      0.035 * Math.min(coreTaskOverlap.length, 3) +
+      0.08 * taskSpecificity +
+      0.06 * depthScore +
+      0.05 * concreteEvidenceScore +
+      0.04 * roleSpecificity -
+      genericDrag;
+    taskImportanceScore = Math.max(0.62, Math.min(1, taskImportanceScore));
+  } else if (adjacentTaskOverlap.length > 0) {
+    taskImportanceScore = Math.min(0.74, 0.58 + 0.05 * (adjacentTaskOverlap.length - 1));
+  } else if (genericTaskOverlap.length > 0) {
+    taskImportanceScore = cvFitModel.clearTargetTasks ? 0.28 : 0.38;
+  } else if (detectedTasks.length === 0) {
+    taskImportanceScore = cvFitModel.clearTargetTasks ? 0.3 : 0.5;
+  } else {
+    taskImportanceScore = cvFitModel.clearTargetTasks ? 0.18 : 0.45;
+  }
+
+  if (avoidTaskOverlap.length > 0) {
+    taskImportanceScore = Math.min(taskImportanceScore, 0.12);
+  }
+
+  const genericLeakageRisk = genericLeakageRiskFromImportance({
+    coreOverlap: coreTaskOverlap,
+    adjacentOverlap: adjacentTaskOverlap,
+    genericOverlap: genericTaskOverlap,
+    avoidOverlap: avoidTaskOverlap,
+    clearTargetTasks: cvFitModel.clearTargetTasks,
+    taskSpecificity,
+    detectedTaskCount: detectedTasks.length,
+  });
+
+  let domainAlignmentScore = 0;
+  let domainAlignmentType = "domain_mismatch";
+
+  if (matchingDomains.length > 0) {
+    domainAlignmentScore = 1;
+    domainAlignmentType = "exact_domain_alignment";
+  } else if (acceptableDomainMatches.length > 0) {
+    domainAlignmentScore = 0.72;
+    domainAlignmentType = "acceptable_domain_alignment";
+  } else if (adjacentDomains.length > 0) {
+    domainAlignmentScore = cvFitModel.clearTargetDomains ? 0.55 : 0.62;
+    domainAlignmentType = "adjacent_domain_alignment";
+  } else if (detectedDomains.length === 0) {
+    domainAlignmentScore = cvFitModel.clearTargetDomains ? 0.32 : 0.5;
+    domainAlignmentType = "unknown_job_domain";
+  } else if (!cvFitModel.clearTargetDomains) {
+    domainAlignmentScore = 0.45;
+    domainAlignmentType = "soft_domain_mismatch_unclear_cv";
+  } else {
+    domainAlignmentScore = 0.2;
+  }
+
+  let taskAlignmentScore = taskImportanceScore;
+
+  if (genericLeakageRisk >= 0.75 && coreTaskOverlap.length === 0) {
+    taskAlignmentScore = Math.min(taskAlignmentScore, 0.42);
+  }
+  if (genericLeakageRisk >= 0.35 && coreTaskOverlap.length > 0) {
+    taskAlignmentScore = Math.min(
+      taskAlignmentScore,
+      Math.max(0.66, taskImportanceScore + 0.04)
+    );
+  }
+
+  return {
+    domainAlignmentScore: Math.round(domainAlignmentScore * 1000) / 1000,
+    domainAlignmentType,
+    matchingDomains,
+    adjacentDomains,
+    mismatchingDomains,
+    taskAlignmentScore: Math.round(taskAlignmentScore * 1000) / 1000,
+    taskImportanceScore: Math.round(taskImportanceScore * 1000) / 1000,
+    coreTaskOverlap,
+    adjacentTaskOverlap,
+    genericTaskOverlap,
+    avoidTaskOverlap,
+    genericLeakageRisk: Math.round(genericLeakageRisk * 1000) / 1000,
+    taskSpecificityScore: taskSpecificity,
+    taskDepthScore: depthScore,
+    genericTaskShare,
+  };
 }
 
 type JobSectionKind = "requirements" | "responsibilities" | "benefits";
@@ -4152,6 +5032,122 @@ function createScoreTooLowDiagnostics(
   };
 }
 
+function createFitModelSummary(cvFitModel: CvFitModel) {
+  return {
+    targetDomains: cvFitModel.targetDomains,
+    acceptableDomains: cvFitModel.acceptableDomains,
+    avoidDomains: cvFitModel.avoidDomains,
+    coreTasks: cvFitModel.coreTasks,
+    adjacentTasks: cvFitModel.adjacentTasks,
+    genericTasks: cvFitModel.genericTasks,
+    avoidTasks: cvFitModel.avoidTasks,
+    missingFilterInformation: cvFitModel.missingFilterInformation,
+    clearTargetDomains: cvFitModel.clearTargetDomains,
+    clearTargetTasks: cvFitModel.clearTargetTasks,
+  };
+}
+
+function createFitDiagnosticSample(
+  job: Job,
+  diagnostics: JobFitDiagnostics,
+  jobWaveMetadata: WeakMap<Job, JobWaveMetadata>
+) {
+  const waveMetadata = jobWaveMetadata.get(job);
+
+  return {
+    title: cleanText(job.title).slice(0, 120),
+    company: cleanText(job.company).slice(0, 100),
+    score: job.score || 0,
+    fitLabel: job.fitLabel || "",
+    sourceName: job.sourceName || "",
+    waveId: waveMetadata?.id ?? null,
+    waveName: waveMetadata?.name ?? null,
+    domainAlignmentScore: diagnostics.domainAlignmentScore,
+    domainAlignmentType: diagnostics.domainAlignmentType,
+    matchingDomains: diagnostics.matchingDomains,
+    adjacentDomains: diagnostics.adjacentDomains,
+    taskAlignmentScore: diagnostics.taskAlignmentScore,
+    taskImportanceScore: diagnostics.taskImportanceScore,
+    coreTaskOverlap: diagnostics.coreTaskOverlap,
+    adjacentTaskOverlap: diagnostics.adjacentTaskOverlap,
+    genericTaskOverlap: diagnostics.genericTaskOverlap,
+    avoidTaskOverlap: diagnostics.avoidTaskOverlap,
+    genericLeakageRisk: diagnostics.genericLeakageRisk,
+    taskSpecificityScore: diagnostics.taskSpecificityScore,
+    taskDepthScore: diagnostics.taskDepthScore,
+    genericTaskShare: diagnostics.genericTaskShare,
+  };
+}
+
+function createFitDiagnosticsSummary(
+  finalJobs: Job[],
+  scoreTooLowJobs: Job[],
+  profile: CvProfile,
+  cvFitModel: CvFitModel,
+  jobWaveMetadata: WeakMap<Job, JobWaveMetadata>
+) {
+  const allJobs = uniqueArray(
+    [...finalJobs, ...scoreTooLowJobs].map((job) => normalizeUrl(job.url)),
+    200
+  )
+    .map((url) =>
+      [...finalJobs, ...scoreTooLowJobs].find(
+        (job) => normalizeUrl(job.url) === url
+      )
+    )
+    .filter((job): job is Job => Boolean(job));
+  const diagnosticItems = allJobs.map((job) => ({
+    job,
+    diagnostics: buildJobFitDiagnostics(job, profile, cvFitModel),
+  }));
+  const finalDiagnosticItems = finalJobs.map((job) => ({
+    job,
+    diagnostics: buildJobFitDiagnostics(job, profile, cvFitModel),
+  }));
+  const scoreTooLowDiagnosticItems = scoreTooLowJobs.slice(0, 12).map((job) => ({
+    job,
+    diagnostics: buildJobFitDiagnostics(job, profile, cvFitModel),
+  }));
+  const genericLeakageItems = diagnosticItems
+    .filter((item) => item.diagnostics.genericLeakageRisk >= 0.35)
+    .sort(
+      (a, b) =>
+        b.diagnostics.genericLeakageRisk - a.diagnostics.genericLeakageRisk ||
+        (b.job.score || 0) - (a.job.score || 0)
+    );
+  const avoidOverlapItems = diagnosticItems
+    .filter((item) => item.diagnostics.avoidTaskOverlap.length > 0)
+    .sort((a, b) => (b.job.score || 0) - (a.job.score || 0));
+
+  return {
+    analyzedJobs: diagnosticItems.length,
+    returnedJobsAnalyzed: finalDiagnosticItems.length,
+    scoreTooLowJobsAnalyzed: scoreTooLowDiagnosticItems.length,
+    genericLeakageJobs: genericLeakageItems.length,
+    avoidOverlapJobs: avoidOverlapItems.length,
+    topReturnedJobs: finalDiagnosticItems
+      .slice(0, 8)
+      .map((item) =>
+        createFitDiagnosticSample(item.job, item.diagnostics, jobWaveMetadata)
+      ),
+    scoreTooLowJobs: scoreTooLowDiagnosticItems
+      .slice(0, 8)
+      .map((item) =>
+        createFitDiagnosticSample(item.job, item.diagnostics, jobWaveMetadata)
+      ),
+    genericLeakageSamples: genericLeakageItems
+      .slice(0, 8)
+      .map((item) =>
+        createFitDiagnosticSample(item.job, item.diagnostics, jobWaveMetadata)
+      ),
+    avoidOverlapSamples: avoidOverlapItems
+      .slice(0, 8)
+      .map((item) =>
+        createFitDiagnosticSample(item.job, item.diagnostics, jobWaveMetadata)
+      ),
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -4186,6 +5182,13 @@ Deno.serve(async (req: Request) => {
 
       profile = await createProfileFromCv(fileName, fileBase64);
     }
+
+    const cvFitModel = buildCvFitModel(profile);
+
+    console.info("search-jobs fit model summary", {
+      runId,
+      ...createFitModelSummary(cvFitModel),
+    });
 
     const searchQueries = getSearchQueries(profile, new Set<string>());
     const {
@@ -4597,6 +5600,24 @@ Deno.serve(async (req: Request) => {
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+
+    try {
+      console.info("search-jobs fit diagnostics summary", {
+        runId,
+        ...createFitDiagnosticsSummary(
+          finalJobs,
+          scoreTooLowJobs,
+          profile,
+          cvFitModel,
+          jobWaveMetadata
+        ),
+      });
+    } catch (error) {
+      console.warn("search-jobs fit diagnostics failed", {
+        runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     const locationStats = createLocationStats(foundLinks, finalJobs);
