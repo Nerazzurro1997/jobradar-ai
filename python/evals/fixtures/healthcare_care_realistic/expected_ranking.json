@@ -1,0 +1,44 @@
+{
+  "profile_id": "cv_healthcare_care_realistic_001",
+  "description": "Ranking manuale per un profilo healthcare care/case management.",
+  "expected_top_job_ids": [
+    "job_healthcare_patient_coord_geneva",
+    "job_healthcare_case_manager_lausanne",
+    "job_healthcare_home_care_nurse",
+    "job_healthcare_clinical_coordinator",
+    "job_healthcare_medical_admin",
+    "job_healthcare_insurance_case_manager",
+    "job_healthcare_head_nurse_senior",
+    "job_healthcare_customer_care_generic",
+    "job_healthcare_pharma_sales",
+    "job_healthcare_it_support_wrong"
+  ],
+  "relevant_job_ids": [
+    "job_healthcare_patient_coord_geneva",
+    "job_healthcare_case_manager_lausanne",
+    "job_healthcare_home_care_nurse",
+    "job_healthcare_clinical_coordinator",
+    "job_healthcare_medical_admin",
+    "job_healthcare_insurance_case_manager",
+    "job_healthcare_head_nurse_senior"
+  ],
+  "graded_relevance": {
+    "job_healthcare_patient_coord_geneva": 3,
+    "job_healthcare_case_manager_lausanne": 3,
+    "job_healthcare_home_care_nurse": 3,
+    "job_healthcare_clinical_coordinator": 2,
+    "job_healthcare_medical_admin": 2,
+    "job_healthcare_insurance_case_manager": 2,
+    "job_healthcare_head_nurse_senior": 1
+  },
+  "minimum_precision_at_k": {
+    "5": 0.8,
+    "10": 0.7
+  },
+  "sanity_checks": {
+    "wrong_domain_job_id": "job_healthcare_it_support_wrong",
+    "avoid_task_job_id": "job_healthcare_pharma_sales",
+    "generic_keyword_only_job_id": "job_healthcare_customer_care_generic",
+    "task_domain_specific_job_id": "job_healthcare_patient_coord_geneva"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "id": "cv_it_backend_realistic_001",
+  "profileSummary": "Profilo anonimo con 5 anni in sviluppo backend Python, API REST, SQL e cloud. Cerca ruoli software/backend in Svizzera, preferibilmente Zurigo, remoto o ibrido.",
+  "targetDomains": [
+    "IT",
+    "software development"
+  ],
+  "searchTerms": [
+    "backend developer",
+    "python developer",
+    "software engineer",
+    "API developer",
+    "cloud backend"
+  ],
+  "strongKeywords": [
+    "Python",
+    "API REST",
+    "SQL",
+    "cloud",
+    "Docker",
+    "backend",
+    "testing"
+  ],
+  "avoidKeywords": [
+    "outbound sales",
+    "SDR",
+    "helpdesk only",
+    "commission",
+    "store manager"
+  ],
+  "locations": [
+    "Zurich",
+    "Winterthur",
+    "remote Switzerland"
+  ],
+  "workPreferences": [
+    "remote",
+    "hybrid"
+  ],
+  "workload": "80-100%",
+  "skills": {
+    "hardSkills": [
+      "software development",
+      "backend",
+      "Python",
+      "SQL",
+      "REST APIs",
+      "cloud infrastructure"
+    ],
+    "tools": [
+      "Docker",
+      "Git",
+      "PostgreSQL",
+      "AWS"
+    ],
+    "languages": [
+      "English C1",
+      "German B2"
+    ]
+  },
+  "matching": {
+    "bestFitRoles": [
+      "Backend Developer",
+      "Python Software Engineer",
+      "API Developer"
+    ],
+    "acceptableRoles": [
+      "DevOps Engineer",
+      "Data Engineer",
+      "Full Stack Developer"
+    ],
+    "weakFitRoles": [
+      "IT Support Specialist",
+      "Technical Product Owner"
+    ],
+    "dealBreakers": [
+      "pure outbound sales",
+      "helpdesk only",
+      "retail store management"
+    ]
+  }
+}

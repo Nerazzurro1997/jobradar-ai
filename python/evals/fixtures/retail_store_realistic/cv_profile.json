@@ -1,0 +1,81 @@
+{
+  "id": "cv_retail_store_realistic_001",
+  "profileSummary": "Profilo anonimo con 7 anni in vendita al dettaglio, store operations, merchandising e coordinamento team. Cerca ruoli retail in Ticino o Svizzera italiana.",
+  "industries": [
+    "retail",
+    "consumer goods"
+  ],
+  "searchTerms": [
+    "store manager",
+    "assistant store manager",
+    "retail sales",
+    "visual merchandising",
+    "shop manager"
+  ],
+  "strongKeywords": [
+    "retail",
+    "store operations",
+    "merchandising",
+    "stock planning",
+    "customer service",
+    "team coordination",
+    "Italiano"
+  ],
+  "avoidKeywords": [
+    "warehouse only",
+    "back office only",
+    "night shifts only",
+    "outbound sales"
+  ],
+  "locations": [
+    "Lugano",
+    "Bellinzona",
+    "Locarno",
+    "Ticino"
+  ],
+  "workPreferences": [
+    "on-site",
+    "hybrid for administration"
+  ],
+  "workload": "80-100%",
+  "skills": {
+    "hardSkills": [
+      "retail sales",
+      "store operations",
+      "merchandising",
+      "inventory control",
+      "cash desk"
+    ],
+    "tools": [
+      "POS",
+      "Excel",
+      "stock management"
+    ],
+    "languages": [
+      "Italiano C2",
+      "Tedesco B1",
+      "Inglese B1"
+    ]
+  },
+  "matching": {
+    "bestFitRoles": [
+      "Store Manager",
+      "Assistant Store Manager",
+      "Retail Team Lead"
+    ],
+    "acceptableRoles": [
+      "Visual Merchandiser",
+      "Luxury Sales Advisor",
+      "E-commerce Retail Operations"
+    ],
+    "weakFitRoles": [
+      "Customer Support Agent",
+      "Area Manager"
+    ],
+    "dealBreakers": [
+      "warehouse only",
+      "pure back office without customers",
+      "commission-only sales"
+    ]
+  }
+}

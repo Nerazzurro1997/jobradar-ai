@@ -1,0 +1,82 @@
+{
+  "id": "cv_healthcare_care_realistic_001",
+  "profileSummary": "Profilo anonimo con 6 anni in assistenza pazienti, coordinamento casi sanitari, documentazione clinica e lavoro in clinica. Cerca ruoli healthcare care o case management in Svizzera romanda.",
+  "targetDomains": [
+    "healthcare",
+    "sanita"
+  ],
+  "searchTerms": [
+    "patient care coordinator",
+    "healthcare case manager",
+    "infermiere",
+    "clinical coordinator",
+    "medical case management"
+  ],
+  "strongKeywords": [
+    "patient care",
+    "case management",
+    "documentazione clinica",
+    "coordinamento casi",
+    "healthcare",
+    "French",
+    "Italian"
+  ],
+  "avoidKeywords": [
+    "pharma sales",
+    "outbound sales",
+    "administration only",
+    "IT support",
+    "night shifts only"
+  ],
+  "locations": [
+    "Geneva",
+    "Lausanne",
+    "remote Switzerland"
+  ],
+  "workPreferences": [
+    "on-site",
+    "hybrid for case management"
+  ],
+  "workload": "80-100%",
+  "skills": {
+    "hardSkills": [
+      "healthcare care",
+      "patient care",
+      "case management",
+      "clinical documentation",
+      "triage",
+      "care coordination"
+    ],
+    "tools": [
+      "case management system",
+      "EMR",
+      "Excel"
+    ],
+    "languages": [
+      "French C2",
+      "Italian C1",
+      "English B2"
+    ]
+  },
+  "matching": {
+    "bestFitRoles": [
+      "Patient Care Coordinator",
+      "Healthcare Case Manager",
+      "Clinical Coordinator"
+    ],
+    "acceptableRoles": [
+      "Medical Administration Specialist",
+      "Home Care Nurse",
+      "Insurance Medical Case Manager"
+    ],
+    "weakFitRoles": [
+      "Healthcare Customer Support",
+      "Head Nurse"
+    ],
+    "dealBreakers": [
+      "pharma sales",
+      "administration only",
+      "IT support only"
+    ]
+  }
+}

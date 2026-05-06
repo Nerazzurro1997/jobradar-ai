@@ -1,0 +1,83 @@
+{
+  "id": "cv_marketing_content_realistic_001",
+  "profileSummary": "Profilo anonimo con 4 anni in content marketing, SEO, campagne digitali e social media. Cerca ruoli marketing/content in Svizzera, preferibilmente Zurigo o remoto.",
+  "targetDomains": [
+    "marketing",
+    "digital marketing"
+  ],
+  "searchTerms": [
+    "content marketing specialist",
+    "digital marketing specialist",
+    "SEO content",
+    "social media manager",
+    "campaign specialist"
+  ],
+  "strongKeywords": [
+    "content marketing",
+    "SEO",
+    "copywriting",
+    "campaign management",
+    "social media",
+    "analytics",
+    "newsletter"
+  ],
+  "avoidKeywords": [
+    "outbound sales",
+    "cold calling",
+    "commission only",
+    "store sales",
+    "pure customer support"
+  ],
+  "locations": [
+    "Zurich",
+    "Basel",
+    "remote Switzerland"
+  ],
+  "workPreferences": [
+    "remote",
+    "hybrid"
+  ],
+  "workload": "80-100%",
+  "skills": {
+    "hardSkills": [
+      "marketing",
+      "content creation",
+      "SEO",
+      "copywriting",
+      "campaign management",
+      "data analysis"
+    ],
+    "tools": [
+      "Google Analytics",
+      "CMS",
+      "Mailchimp",
+      "Excel"
+    ],
+    "languages": [
+      "English C1",
+      "German B2",
+      "Italian B2"
+    ]
+  },
+  "matching": {
+    "bestFitRoles": [
+      "Content Marketing Specialist",
+      "Digital Marketing Specialist",
+      "SEO Content Specialist"
+    ],
+    "acceptableRoles": [
+      "Social Media Manager",
+      "Marketing Analyst",
+      "Brand Communications Specialist"
+    ],
+    "weakFitRoles": [
+      "Customer Success Specialist",
+      "Marketing Director"
+    ],
+    "dealBreakers": [
+      "pure outbound sales",
+      "commission only",
+      "retail store sales"
+    ]
+  }
+}

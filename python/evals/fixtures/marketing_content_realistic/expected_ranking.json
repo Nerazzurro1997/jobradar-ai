@@ -1,0 +1,44 @@
+{
+  "profile_id": "cv_marketing_content_realistic_001",
+  "description": "Ranking manuale per un profilo content/digital marketing.",
+  "expected_top_job_ids": [
+    "job_marketing_content_zurich",
+    "job_marketing_campaign_remote",
+    "job_marketing_seo_copywriter",
+    "job_marketing_social_media",
+    "job_marketing_analyst",
+    "job_marketing_brand_comms",
+    "job_marketing_director_senior",
+    "job_marketing_hr_comms",
+    "job_marketing_customer_success_generic",
+    "job_marketing_saas_sdr"
+  ],
+  "relevant_job_ids": [
+    "job_marketing_content_zurich",
+    "job_marketing_campaign_remote",
+    "job_marketing_seo_copywriter",
+    "job_marketing_social_media",
+    "job_marketing_analyst",
+    "job_marketing_brand_comms",
+    "job_marketing_director_senior"
+  ],
+  "graded_relevance": {
+    "job_marketing_content_zurich": 3,
+    "job_marketing_campaign_remote": 3,
+    "job_marketing_seo_copywriter": 3,
+    "job_marketing_social_media": 2,
+    "job_marketing_analyst": 2,
+    "job_marketing_brand_comms": 2,
+    "job_marketing_director_senior": 1
+  },
+  "minimum_precision_at_k": {
+    "5": 0.8,
+    "10": 0.7
+  },
+  "sanity_checks": {
+    "wrong_domain_job_id": "job_marketing_retail_store_sales",
+    "avoid_task_job_id": "job_marketing_saas_sdr",
+    "generic_keyword_only_job_id": "job_marketing_customer_success_generic",
+    "task_domain_specific_job_id": "job_marketing_content_zurich"
+  }
+}

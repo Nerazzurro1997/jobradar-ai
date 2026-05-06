@@ -1,0 +1,387 @@
+[
+  {
+    "id": "job_ins_claims_lugano",
+    "title": "Claims Specialist Assicurazioni Danni",
+    "company": "Alpine Mutual Services",
+    "location": "Lugano",
+    "url": "https://example.invalid/jobs/job-ins-claims-lugano",
+    "snippet": "Gestione sinistri danni, contatto clienti, verifica documenti e coordinamento con periti.",
+    "score": 91,
+    "fitLabel": "Best Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "gestione sinistri",
+      "assicurazioni danni",
+      "italiano",
+      "tedesco B2"
+    ],
+    "requirements": [
+      "Esperienza in sinistri danni",
+      "Italiano fluente",
+      "Tedesco B2",
+      "CRM assicurativo"
+    ]
+  },
+  {
+    "id": "job_ins_customer_zurich",
+    "title": "Consulente Assicurativo Clientela Privata",
+    "company": "Nordsee Versicherung Services",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-customer-zurich",
+    "snippet": "Consulenza su coperture assicurative, rinnovi polizze e assistenza post vendita.",
+    "score": 83,
+    "fitLabel": "Good Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "consulente assicurativo",
+      "polizze",
+      "customer support",
+      "tedesco B2"
+    ],
+    "requirements": [
+      "Esperienza assicurativa",
+      "Orientamento cliente",
+      "Tedesco e italiano"
+    ]
+  },
+  {
+    "id": "job_bank_customer_lugano",
+    "title": "Customer Care Bancario",
+    "company": "Lago Bank Operations",
+    "location": "Lugano",
+    "url": "https://example.invalid/jobs/job-bank-customer-lugano",
+    "snippet": "Supporto clienti bancari, carte, conti e gestione richieste operative in CRM.",
+    "score": 78,
+    "fitLabel": "Good Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "customer support",
+      "CRM",
+      "italiano"
+    ],
+    "missingKeywords": [
+      "assicurazioni danni",
+      "gestione sinistri"
+    ]
+  },
+  {
+    "id": "job_ins_claims_property_zurich",
+    "title": "Liquidatore Sinistri Property",
+    "company": "Rhein Claims Group",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-claims-property-zurich",
+    "snippet": "Liquidazione sinistri property, analisi coperture, gestione pratiche e comunicazione con clienti.",
+    "score": 86,
+    "fitLabel": "Best Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "liquidazione sinistri",
+      "assicurazioni danni",
+      "analisi documentale",
+      "tedesco B2"
+    ],
+    "requirements": [
+      "Esperienza sinistri property",
+      "Documentazione assicurativa",
+      "Tedesco B2"
+    ]
+  },
+  {
+    "id": "job_ins_backoffice_remote",
+    "title": "Back Office Polizze Danni",
+    "company": "Swiss Lake Operations",
+    "location": "remoto Svizzera",
+    "url": "https://example.invalid/jobs/job-ins-backoffice-remote",
+    "snippet": "Aggiornamento polizze danni, controllo documenti e supporto ai team sinistri.",
+    "score": 84,
+    "fitLabel": "Good Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "back office",
+      "polizze",
+      "assicurazioni danni",
+      "analisi documentale"
+    ],
+    "requirements": [
+      "Back office assicurativo",
+      "Precisione documentale",
+      "CRM"
+    ]
+  },
+  {
+    "id": "job_sales_field_insurance",
+    "title": "Agente Assicurativo Esterno",
+    "company": "Helvetic Sales Partner",
+    "location": "Ticino",
+    "url": "https://example.invalid/jobs/job-sales-field-insurance",
+    "snippet": "Acquisizione clienti sul territorio, obiettivi commerciali mensili e componente variabile.",
+    "score": 76,
+    "fitLabel": "Medium Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "assicurativo",
+      "italiano"
+    ],
+    "riskFlags": [
+      "Field sales role",
+      "Commission pressure"
+    ]
+  },
+  {
+    "id": "job_ins_underwriting_assistant",
+    "title": "Underwriting Assistant Danni",
+    "company": "Summit Risk AG",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-underwriting-assistant",
+    "snippet": "Supporto underwriting, raccolta dati, controllo proposte e coordinamento con broker.",
+    "score": 74,
+    "fitLabel": "Medium Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "assicurazioni danni",
+      "analisi documentale",
+      "broker"
+    ],
+    "requirements": [
+      "Esperienza in assicurazioni",
+      "Tedesco B2",
+      "Precisione"
+    ]
+  },
+  {
+    "id": "job_ins_case_manager_health",
+    "title": "Case Manager Sinistri Malattia e Infortuni",
+    "company": "Care Claims SA",
+    "location": "Lugano",
+    "url": "https://example.invalid/jobs/job-ins-case-manager-health",
+    "snippet": "Gestione pratiche sinistri salute e infortuni, documentazione medica e contatto assicurati.",
+    "score": 73,
+    "fitLabel": "Good Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "gestione sinistri",
+      "analisi documentale",
+      "italiano"
+    ],
+    "requirements": [
+      "Esperienza sinistri",
+      "Gestione casi",
+      "Italiano e tedesco"
+    ]
+  },
+  {
+    "id": "job_hr_admin_bern",
+    "title": "Assistente Amministrativo HR",
+    "company": "People Desk AG",
+    "location": "Berna",
+    "url": "https://example.invalid/jobs/job-hr-admin-bern",
+    "snippet": "Gestione dossier personale, coordinamento appuntamenti e supporto amministrativo HR.",
+    "score": 70,
+    "fitLabel": "Medium Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "analisi documentale",
+      "tedesco B2"
+    ],
+    "missingKeywords": [
+      "assicurazioni",
+      "sinistri"
+    ]
+  },
+  {
+    "id": "job_ins_broker_support",
+    "title": "Broker Support Assicurazioni",
+    "company": "Linea Broker Services",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-broker-support",
+    "snippet": "Supporto ai broker, preparazione offerte, controllo polizze e aggiornamento CRM.",
+    "score": 69,
+    "fitLabel": "Good Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "broker",
+      "polizze",
+      "CRM",
+      "assicurazioni"
+    ],
+    "requirements": [
+      "Esperienza assicurativa",
+      "Back office",
+      "Tedesco B2"
+    ]
+  },
+  {
+    "id": "job_finance_ops_lausanne",
+    "title": "Finance Operations Specialist",
+    "company": "Blue Ledger SA",
+    "location": "Losanna",
+    "url": "https://example.invalid/jobs/job-finance-ops-lausanne",
+    "snippet": "Controllo fatture, riconciliazioni e supporto al team finance.",
+    "score": 66,
+    "fitLabel": "Medium Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "Excel",
+      "analisi documentale"
+    ],
+    "missingKeywords": [
+      "assicurazioni",
+      "sinistri",
+      "polizze"
+    ]
+  },
+  {
+    "id": "job_ins_policy_admin",
+    "title": "Policy Administration Specialist",
+    "company": "Monte Verde Assicurazioni",
+    "location": "remoto Svizzera",
+    "url": "https://example.invalid/jobs/job-ins-policy-admin",
+    "snippet": "Amministrazione polizze, controllo documentazione, modifiche contrattuali e supporto clienti.",
+    "score": 65,
+    "fitLabel": "Good Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "policy administration",
+      "polizze",
+      "CRM",
+      "customer support"
+    ],
+    "requirements": [
+      "Esperienza in polizze",
+      "Precisione operativa",
+      "Italiano"
+    ]
+  },
+  {
+    "id": "job_telco_call_center",
+    "title": "Call Center Agent Telecom",
+    "company": "VoiceNet Contact Center",
+    "location": "Lugano",
+    "url": "https://example.invalid/jobs/job-telco-call-center",
+    "snippet": "Gestione chiamate inbound, informazioni contrattuali e ticket tecnici di primo livello.",
+    "score": 62,
+    "fitLabel": "Low Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "customer support",
+      "italiano"
+    ],
+    "missingKeywords": [
+      "assicurazioni",
+      "sinistri"
+    ]
+  },
+  {
+    "id": "job_ins_fraud_analyst",
+    "title": "Insurance Fraud Analyst Junior",
+    "company": "Guard Risk Services",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-fraud-analyst",
+    "snippet": "Analisi anomalie sinistri, raccolta evidenze e preparazione dossier per revisione interna.",
+    "score": 61,
+    "fitLabel": "Medium Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "sinistri",
+      "analisi documentale",
+      "assicurazioni"
+    ],
+    "requirements": [
+      "Analisi casi",
+      "Documentazione",
+      "Tedesco B2"
+    ]
+  },
+  {
+    "id": "job_saas_sdr_remote",
+    "title": "Sales Development Representative SaaS",
+    "company": "Pipeline Cloud",
+    "location": "remoto Europa",
+    "url": "https://example.invalid/jobs/job-saas-sdr-remote",
+    "snippet": "Prospezione outbound, qualificazione lead e gestione pipeline commerciale.",
+    "score": 58,
+    "fitLabel": "Low Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "CRM"
+    ],
+    "riskFlags": [
+      "Outbound sales"
+    ]
+  },
+  {
+    "id": "job_ins_pensions_support",
+    "title": "Supporto Clienti Previdenza e Assicurazioni Vita",
+    "company": "Aurora Life Services",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-pensions-support",
+    "snippet": "Assistenza clienti su prodotti vita e previdenza, aggiornamento contratti e pratiche amministrative.",
+    "score": 56,
+    "fitLabel": "Medium Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "assicurazioni",
+      "customer support",
+      "polizze"
+    ],
+    "missingKeywords": [
+      "assicurazioni danni",
+      "gestione sinistri"
+    ]
+  },
+  {
+    "id": "job_legal_assistant_claims",
+    "title": "Assistente Legale Contenzioso",
+    "company": "Lex Office Lugano",
+    "location": "Lugano",
+    "url": "https://example.invalid/jobs/job-legal-assistant-claims",
+    "snippet": "Preparazione atti, gestione scadenze e supporto a pratiche di contenzioso civile.",
+    "score": 54,
+    "fitLabel": "Low Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "analisi documentale",
+      "italiano"
+    ],
+    "missingKeywords": [
+      "assicurazioni",
+      "sinistri"
+    ]
+  },
+  {
+    "id": "job_ins_claims_internship",
+    "title": "Stage Claims Operations",
+    "company": "Start Insurance Lab",
+    "location": "Zurigo",
+    "url": "https://example.invalid/jobs/job-ins-claims-internship",
+    "snippet": "Stage di sei mesi nel team claims operations con supporto ad attivita amministrative.",
+    "score": 52,
+    "fitLabel": "Low Match",
+    "source": "saved-search-jobs-output",
+    "sourceName": "local fixture",
+    "matchedKeywords": [
+      "claims",
+      "operations"
+    ],
+    "riskFlags": [
+      "Internship"
+    ]
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "id": "cv_insurance_claims_specialist_001",
+  "title": "Specialista sinistri assicurativi",
+  "language": "it",
+  "summary": "Profilo anonimo con esperienza in gestione sinistri, consulenza clienti e back office assicurativo.",
+  "experience_years": 6,
+  "target_roles": [
+    "Claims Specialist",
+    "Insurance Consultant",
+    "Back Office Insurance"
+  ],
+  "skills": [
+    "gestione sinistri",
+    "assicurazioni danni",
+    "consulenza clienti",
+    "analisi documentale",
+    "CRM",
+    "italiano",
+    "tedesco B2",
+    "francese B1"
+  ],
+  "locations": [
+    "Lugano",
+    "Zurigo",
+    "remoto Svizzera"
+  ]
+}

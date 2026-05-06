@@ -1,0 +1,73 @@
+{
+  "id": "cv_insurance_claims_specialist_realistic_001",
+  "profileSummary": "Profilo anonimo con 6 anni in assicurazioni danni, gestione sinistri, customer care e back office polizze. Cerca ruoli assicurativi operativi in Svizzera, preferibilmente Lugano, Zurigo o remoto.",
+  "searchTerms": [
+    "claims specialist",
+    "gestione sinistri",
+    "assicurazioni danni",
+    "insurance back office",
+    "consulente assicurativo"
+  ],
+  "strongKeywords": [
+    "gestione sinistri",
+    "liquidazione sinistri",
+    "assicurazioni danni",
+    "polizze",
+    "CRM",
+    "analisi documentale",
+    "italiano",
+    "tedesco B2"
+  ],
+  "avoidKeywords": [
+    "provvigioni",
+    "porta a porta",
+    "stage",
+    "praktikum",
+    "leadership senior"
+  ],
+  "locations": [
+    "Lugano",
+    "Zurigo",
+    "remoto Svizzera"
+  ],
+  "skills": {
+    "hardSkills": [
+      "claims handling",
+      "document review",
+      "policy administration",
+      "customer support"
+    ],
+    "tools": [
+      "CRM",
+      "Excel",
+      "case management"
+    ],
+    "languages": [
+      "Italiano C2",
+      "Tedesco B2",
+      "Francese B1",
+      "Inglese B1"
+    ]
+  },
+  "matching": {
+    "bestFitRoles": [
+      "Claims Specialist",
+      "Liquidatore sinistri",
+      "Back Office Insurance"
+    ],
+    "acceptableRoles": [
+      "Insurance Consultant",
+      "Underwriting Assistant",
+      "Broker Support"
+    ],
+    "weakFitRoles": [
+      "Banking Customer Care",
+      "Pensions Support"
+    ],
+    "dealBreakers": [
+      "field sales puro",
+      "stage",
+      "ruolo tecnico IT"
+    ]
+  }
+}

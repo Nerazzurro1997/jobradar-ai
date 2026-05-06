@@ -1,0 +1,102 @@
+[
+  {
+    "id": "job_001",
+    "title": "Claims Specialist Assicurazioni Danni",
+    "company": "Alpine Mutual",
+    "location": "Lugano",
+    "description": "Gestione sinistri danni, contatto con clienti e partner, verifica documentale e uso CRM interno.",
+    "requirements": [
+      "gestione sinistri",
+      "assicurazioni danni",
+      "italiano",
+      "tedesco B2"
+    ]
+  },
+  {
+    "id": "job_002",
+    "title": "Consulente Assicurativo Clientela Privata",
+    "company": "Helvetia Example Services",
+    "location": "Zurigo",
+    "description": "Consulenza assicurativa, rinnovi polizze e supporto post vendita per clienti privati.",
+    "requirements": [
+      "consulenza clienti",
+      "assicurazioni",
+      "tedesco B2",
+      "CRM"
+    ]
+  },
+  {
+    "id": "job_003",
+    "title": "Back Office Insurance Operations",
+    "company": "Riva Operations",
+    "location": "remoto Svizzera",
+    "description": "Controllo pratiche assicurative, aggiornamento anagrafiche e coordinamento con team sinistri.",
+    "requirements": [
+      "back office",
+      "analisi documentale",
+      "CRM",
+      "italiano"
+    ]
+  },
+  {
+    "id": "job_004",
+    "title": "Underwriting Assistant",
+    "company": "North Lake Risk",
+    "location": "Basilea",
+    "description": "Supporto ad underwriting, raccolta informazioni sui rischi e preparazione offerte.",
+    "requirements": [
+      "assicurazioni",
+      "analisi documentale",
+      "tedesco B2"
+    ]
+  },
+  {
+    "id": "job_005",
+    "title": "Customer Care Bancario",
+    "company": "Banking Desk SA",
+    "location": "Lugano",
+    "description": "Assistenza clienti bancari, gestione richieste operative e aggiornamento dati nel CRM.",
+    "requirements": [
+      "consulenza clienti",
+      "CRM",
+      "italiano"
+    ]
+  },
+  {
+    "id": "job_006",
+    "title": "Liquidatore Sinistri Senior",
+    "company": "Example Claims Group",
+    "location": "Zurigo",
+    "description": "Valutazione e liquidazione sinistri complessi, negoziazione con controparti e controllo coperture.",
+    "requirements": [
+      "gestione sinistri",
+      "assicurazioni danni",
+      "tedesco B2",
+      "negoziazione"
+    ]
+  },
+  {
+    "id": "job_007",
+    "title": "Assistente Amministrativo HR",
+    "company": "People Admin AG",
+    "location": "Berna",
+    "description": "Supporto amministrativo HR, archiviazione documenti e coordinamento appuntamenti.",
+    "requirements": [
+      "amministrazione",
+      "analisi documentale",
+      "tedesco B2"
+    ]
+  },
+  {
+    "id": "job_008",
+    "title": "Sales Development Representative SaaS",
+    "company": "Cloud Pipeline",
+    "location": "remoto Europa",
+    "description": "Prospezione outbound, qualificazione lead e gestione pipeline commerciale in CRM.",
+    "requirements": [
+      "vendite",
+      "CRM",
+      "inglese"
+    ]
+  }
+]

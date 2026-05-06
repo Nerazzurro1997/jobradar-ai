@@ -1,0 +1,44 @@
+{
+  "profile_id": "cv_retail_store_realistic_001",
+  "description": "Ranking manuale per un profilo retail/store operations.",
+  "expected_top_job_ids": [
+    "job_retail_store_manager_lugano",
+    "job_retail_assistant_manager_bellinzona",
+    "job_retail_luxury_advisor",
+    "job_retail_visual_merchandiser",
+    "job_retail_ecommerce_ops",
+    "job_retail_cashier_part_time",
+    "job_retail_area_manager_senior",
+    "job_retail_customer_care_generic",
+    "job_retail_warehouse_only",
+    "job_retail_bank_customer_support"
+  ],
+  "relevant_job_ids": [
+    "job_retail_store_manager_lugano",
+    "job_retail_luxury_advisor",
+    "job_retail_assistant_manager_bellinzona",
+    "job_retail_visual_merchandiser",
+    "job_retail_ecommerce_ops",
+    "job_retail_cashier_part_time",
+    "job_retail_area_manager_senior"
+  ],
+  "graded_relevance": {
+    "job_retail_store_manager_lugano": 3,
+    "job_retail_luxury_advisor": 3,
+    "job_retail_assistant_manager_bellinzona": 3,
+    "job_retail_visual_merchandiser": 2,
+    "job_retail_ecommerce_ops": 2,
+    "job_retail_cashier_part_time": 1,
+    "job_retail_area_manager_senior": 1
+  },
+  "minimum_precision_at_k": {
+    "5": 0.8,
+    "10": 0.7
+  },
+  "sanity_checks": {
+    "wrong_domain_job_id": "job_retail_bank_customer_support",
+    "avoid_task_job_id": "job_retail_warehouse_only",
+    "generic_keyword_only_job_id": "job_retail_customer_care_generic",
+    "task_domain_specific_job_id": "job_retail_store_manager_lugano"
+  }
+}

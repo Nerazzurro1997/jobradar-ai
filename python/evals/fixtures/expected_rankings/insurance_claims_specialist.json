@@ -1,0 +1,29 @@
+{
+  "profile_id": "cv_insurance_claims_specialist_001",
+  "description": "Ranking manuale per profilo assicurativo: priorita a ruoli sinistri e assicurativi, poi customer/back office affini.",
+  "relevant_job_ids": [
+    "job_001",
+    "job_006",
+    "job_002",
+    "job_003",
+    "job_004"
+  ],
+  "graded_relevance": {
+    "job_001": 3,
+    "job_006": 3,
+    "job_002": 2,
+    "job_003": 2,
+    "job_004": 1,
+    "job_005": 1
+  },
+  "ideal_ranking": [
+    "job_001",
+    "job_006",
+    "job_002",
+    "job_003",
+    "job_004",
+    "job_005",
+    "job_007",
+    "job_008"
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "profile_id": "cv_insurance_claims_specialist_realistic_001",
+  "description": "Ranking manuale per confrontare output salvati di search-jobs con i job attesi per un profilo assicurativo operativo.",
+  "expected_top_job_ids": [
+    "job_ins_claims_lugano",
+    "job_ins_claims_property_zurich",
+    "job_ins_case_manager_health",
+    "job_ins_backoffice_remote",
+    "job_ins_broker_support",
+    "job_ins_policy_admin",
+    "job_ins_underwriting_assistant",
+    "job_ins_customer_zurich",
+    "job_ins_fraud_analyst",
+    "job_ins_pensions_support"
+  ],
+  "relevant_job_ids": [
+    "job_ins_claims_lugano",
+    "job_ins_claims_property_zurich",
+    "job_ins_case_manager_health",
+    "job_ins_backoffice_remote",
+    "job_ins_broker_support",
+    "job_ins_policy_admin",
+    "job_ins_underwriting_assistant",
+    "job_ins_customer_zurich",
+    "job_ins_fraud_analyst",
+    "job_ins_pensions_support"
+  ],
+  "graded_relevance": {
+    "job_ins_claims_lugano": 3,
+    "job_ins_claims_property_zurich": 3,
+    "job_ins_case_manager_health": 3,
+    "job_ins_backoffice_remote": 2,
+    "job_ins_broker_support": 2,
+    "job_ins_policy_admin": 2,
+    "job_ins_underwriting_assistant": 2,
+    "job_ins_customer_zurich": 2,
+    "job_ins_fraud_analyst": 1,
+    "job_ins_pensions_support": 1
+  },
+  "minimum_precision_at_k": {
+    "5": 0.8,
+    "10": 0.7
+  },
+  "notes": [
+    "I job commerciali esterni, stage e ruoli non assicurativi sono volutamente non rilevanti.",
+    "jobs.json rappresenta un output salvato localmente, non una chiamata live."
+  ]
+}

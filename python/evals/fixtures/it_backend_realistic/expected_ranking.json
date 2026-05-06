@@ -1,0 +1,46 @@
+{
+  "profile_id": "cv_it_backend_realistic_001",
+  "description": "Ranking manuale per un profilo backend Python/cloud.",
+  "expected_top_job_ids": [
+    "job_it_backend_python_zurich",
+    "job_it_api_remote",
+    "job_it_devops_hybrid",
+    "job_it_data_engineer_adjacent",
+    "job_it_backend_java_bern",
+    "job_it_frontend_adjacent",
+    "job_it_technical_product_owner",
+    "job_it_healthcare_data_analyst",
+    "job_it_helpdesk_only",
+    "job_it_office_admin_generic"
+  ],
+  "relevant_job_ids": [
+    "job_it_backend_python_zurich",
+    "job_it_api_remote",
+    "job_it_devops_hybrid",
+    "job_it_data_engineer_adjacent",
+    "job_it_backend_java_bern",
+    "job_it_frontend_adjacent",
+    "job_it_technical_product_owner",
+    "job_it_healthcare_data_analyst"
+  ],
+  "graded_relevance": {
+    "job_it_backend_python_zurich": 3,
+    "job_it_api_remote": 3,
+    "job_it_devops_hybrid": 2,
+    "job_it_data_engineer_adjacent": 2,
+    "job_it_backend_java_bern": 2,
+    "job_it_frontend_adjacent": 1,
+    "job_it_technical_product_owner": 1,
+    "job_it_healthcare_data_analyst": 1
+  },
+  "minimum_precision_at_k": {
+    "5": 0.8,
+    "10": 0.7
+  },
+  "sanity_checks": {
+    "wrong_domain_job_id": "job_it_retail_store_manager",
+    "avoid_task_job_id": "job_it_saas_sdr",
+    "generic_keyword_only_job_id": "job_it_office_admin_generic",
+    "task_domain_specific_job_id": "job_it_backend_python_zurich"
+  }
+}
